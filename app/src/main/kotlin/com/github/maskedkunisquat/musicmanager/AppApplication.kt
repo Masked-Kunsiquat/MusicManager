@@ -32,7 +32,8 @@ class AppApplication : Application() {
     }
 
     private fun schedulePeriodicTick() {
-        val request = PeriodicWorkRequestBuilder<TickWorker>(15, TimeUnit.MINUTES).build()
+        // Fire every hour; TickWorker uses elapsed-time logic to advance 0–6 game ticks per fire.
+        val request = PeriodicWorkRequestBuilder<TickWorker>(1, TimeUnit.HOURS).build()
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             TICK_WORK_NAME,
             ExistingPeriodicWorkPolicy.KEEP,

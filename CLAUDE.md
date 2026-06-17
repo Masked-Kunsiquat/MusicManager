@@ -76,6 +76,12 @@ When a `CoroutineWorker` or the detail screen needs options, call
 There is no Hilt/WorkerFactory. `TickWorker` casts `applicationContext` directly.
 Don't introduce a custom `WorkerFactory` just to inject — the cast is intentional.
 
+**1 tick = 4 real hours (decided Phase 1). WorkManager fires every hour.**
+`TickWorker` uses elapsed-time logic (SharedPreferences `last_ticked_at`) rather
+than "one fire = one tick". Catchup is capped at 6 ticks (24h) to avoid flooding
+the inbox after a long absence. `TICK_INTERVAL_MS` is the source of truth — don't
+hardcode 4h elsewhere. A 180-tick contract expires in ~30 real days.
+
 ---
 
 ## Architecture constraints (see AGENTS.md for full rationale)
