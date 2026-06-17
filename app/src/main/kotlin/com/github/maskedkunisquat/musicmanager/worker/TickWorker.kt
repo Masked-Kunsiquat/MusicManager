@@ -27,15 +27,14 @@ class TickWorker(
             .coerceIn(0, MAX_CATCHUP_TICKS)
 
         if (ticksElapsed > 0) {
-            repeat(ticksElapsed) { app.simRepository.tick() }
-            // Preserve fractional time within the current 4h window so it carries into the next fire.
-            // When the cap fires (long absence), reset to now to avoid indefinite catchup.
-            val newLastTickedAt = if (ticksElapsed < MAX_CATCHUP_TICKS) {
-                lastTickedAt + ticksElapsed * TICK_INTERVAL_MS
-            } else {
-                now
+            repeat(ticksElapsed) { i ->
+                app.simRepository.tick()
+                // Commit synchronously after each tick so progress survives process death mid-loop.
+                // On the final cap tick, reset to now to prevent indefinite catchup after long absences.
+                val isCapTick = ticksElapsed == MAX_CATCHUP_TICKS && i + 1 == ticksElapsed
+                val checkpoint = if (isCapTick) now else lastTickedAt + (i + 1) * TICK_INTERVAL_MS
+                prefs.edit().putLong(KEY_LAST_TICKED_AT, checkpoint).commit()
             }
-            prefs.edit().putLong(KEY_LAST_TICKED_AT, newLastTickedAt).apply()
         }
 
         return Result.success()
