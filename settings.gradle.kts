@@ -24,4 +24,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "MusicManager"
 include(":app")
- 
+include(":core-logic")
+include(":core-data")
