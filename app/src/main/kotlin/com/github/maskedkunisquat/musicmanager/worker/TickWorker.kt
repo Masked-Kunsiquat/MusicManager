@@ -28,7 +28,14 @@ class TickWorker(
 
         if (ticksElapsed > 0) {
             repeat(ticksElapsed) { app.simRepository.tick() }
-            prefs.edit().putLong(KEY_LAST_TICKED_AT, now).apply()
+            // Preserve fractional time within the current 4h window so it carries into the next fire.
+            // When the cap fires (long absence), reset to now to avoid indefinite catchup.
+            val newLastTickedAt = if (ticksElapsed < MAX_CATCHUP_TICKS) {
+                lastTickedAt + ticksElapsed * TICK_INTERVAL_MS
+            } else {
+                now
+            }
+            prefs.edit().putLong(KEY_LAST_TICKED_AT, newLastTickedAt).apply()
         }
 
         return Result.success()

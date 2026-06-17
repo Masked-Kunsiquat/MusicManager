@@ -109,6 +109,13 @@ class ResponseApplicatorTest {
         assertEquals(baseWorld, result)
     }
 
+    @Test
+    fun `negative costFunds throws IllegalArgumentException`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            applyResponse(baseWorld, option(cost = -500_00L))
+        }
+    }
+
     // --- LabelFundsChange ---
 
     @Test
@@ -116,6 +123,14 @@ class ResponseApplicatorTest {
         val effect = StateEffect.LabelFundsChange(delta = 1_000_00L)
         val result = applyResponse(baseWorld, option(effects = listOf(effect)))
         assertEquals(baseWorld.label.funds + 1_000_00L, result.label.funds)
+    }
+
+    @Test
+    fun `LabelFundsChange with negative delta throws IllegalArgumentException`() {
+        val effect = StateEffect.LabelFundsChange(delta = -500_00L)
+        assertThrows(IllegalArgumentException::class.java) {
+            applyResponse(baseWorld, option(effects = listOf(effect)))
+        }
     }
 
     // --- RelationshipChange ---

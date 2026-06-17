@@ -41,7 +41,7 @@ The apply-time code will debit `costFunds` automatically.
 **`tickN()` aggregates events from ALL N ticks, world is the FINAL state**
 Both `tick()` and `tickN()` return `TickResult`. The `world` field in a
 `tickN` result is after N ticks; `events` is the full list from ticks 1–N.
-When passing world context to `LabelAiProvider.generateResponseOptions()`,
+When passing world context to `LabelAiProvider.generateEmail()`,
 the semantically correct value is the world snapshot *at the time of the
 event*, not the final world. Phase 0 ignores this (dimensions don't tick),
 but Phase 1 will need per-event snapshots.

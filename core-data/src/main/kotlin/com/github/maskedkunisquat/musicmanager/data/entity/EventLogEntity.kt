@@ -6,7 +6,10 @@ import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "event_log",
-    indices = [Index(value = ["dayOfGame", "recordedAt"])]
+    indices = [
+        Index(value = ["dayOfGame", "recordedAt"]),
+        Index(value = ["selectedOptionId", "dayOfGame", "recordedAt"])
+    ]
 )
 data class EventLogEntity(
     @PrimaryKey val id: String,

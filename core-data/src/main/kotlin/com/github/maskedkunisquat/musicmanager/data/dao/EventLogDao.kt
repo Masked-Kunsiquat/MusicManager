@@ -22,6 +22,7 @@ interface EventLogDao {
     @Query("SELECT * FROM event_log WHERE selectedOptionId IS NULL ORDER BY dayOfGame ASC, recordedAt ASC")
     fun observeUnresolved(): Flow<List<EventLogEntity>>
 
-    @Query("UPDATE event_log SET selectedOptionId = :optionId, resolvedAt = :resolvedAt WHERE id = :id")
+    // WHERE selectedOptionId IS NULL guards against double-resolve silently overwriting the first choice.
+    @Query("UPDATE event_log SET selectedOptionId = :optionId, resolvedAt = :resolvedAt WHERE id = :id AND selectedOptionId IS NULL")
     suspend fun markResolved(id: String, optionId: String, resolvedAt: Long)
 }

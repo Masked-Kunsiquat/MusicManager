@@ -25,7 +25,10 @@ class InboxViewModel(private val repository: SimRepository) : ViewModel() {
     private val optionsCache = mutableMapOf<String, List<ResponseOption>>()
 
     init {
-        viewModelScope.launch { repository.initializeIfEmpty() }
+        viewModelScope.launch {
+            repository.initializeIfEmpty()
+            _world.value = repository.world
+        }
     }
 
     // Phase 2: make this suspend + LaunchedEffect when real AI provider is wired in;

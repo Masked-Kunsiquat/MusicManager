@@ -5,6 +5,7 @@ import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
 import com.github.maskedkunisquat.musicmanager.logic.response.StateEffect
 
 fun applyResponse(world: SimWorld, option: ResponseOption): SimWorld {
+    require(option.costFunds >= 0L) { "costFunds must be non-negative, was ${option.costFunds}" }
     require(world.label.funds >= option.costFunds) {
         "Insufficient funds: need ${option.costFunds} cents, have ${world.label.funds}"
     }
@@ -29,6 +30,8 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): SimWorld = when (
         )
     }
     is StateEffect.LabelFundsChange -> {
+        // LabelFundsChange is income only — debits go through costFunds on ResponseOption.
+        require(effect.delta >= 0L) { "LabelFundsChange delta must be non-negative, was ${effect.delta}" }
         world.copy(label = world.label.copy(funds = world.label.funds + effect.delta))
     }
     is StateEffect.RelationshipChange -> {

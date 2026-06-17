@@ -23,6 +23,7 @@ class EventMapperTest {
         assertEquals("need_urgent", entity.eventType)
         assertEquals(5, entity.dayOfGame)
         assertEquals("subject", entity.emailSubject)
+        assertEquals("body", entity.emailBody)
         assertNull(entity.selectedOptionId)
         assertNull(entity.resolvedAt)
     }

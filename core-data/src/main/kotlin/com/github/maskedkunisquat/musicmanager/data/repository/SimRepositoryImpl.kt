@@ -36,7 +36,8 @@ class SimRepositoryImpl(
     override fun generateOptions(item: InboxItem): List<ResponseOption> =
         aiProvider.generateEmail(item.event, world).options
 
-    override suspend fun tick() = tickMutex.withLock {
+    // All world mutation goes through this; callers must already hold tickMutex.
+    private suspend fun tickUnderLock() {
         val result = engine.tick(world)
         world = result.world
         result.events.forEach { event ->
@@ -47,13 +48,15 @@ class SimRepositoryImpl(
         }
     }
 
-    override suspend fun initializeIfEmpty(days: Int) {
+    override suspend fun tick() = tickMutex.withLock { tickUnderLock() }
+
+    override suspend fun initializeIfEmpty(days: Int) = tickMutex.withLock {
         if (dao.getAll().isEmpty()) {
-            repeat(days) { tick() }
+            repeat(days) { tickUnderLock() }
         }
     }
 
-    override suspend fun resolveEvent(eventId: String, option: ResponseOption) {
+    override suspend fun resolveEvent(eventId: String, option: ResponseOption) = tickMutex.withLock {
         world = applyResponse(world, option)
         dao.markResolved(eventId, option.id, System.currentTimeMillis())
     }
