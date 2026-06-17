@@ -70,6 +70,17 @@ visibly change that artist's subsequent behavior/tone.
 - Signing flow: scout tip -> meeting request -> options-based negotiation
   across a few inbox exchanges
 
+**Content cadence design (decided Phase 1):** Each non-artist content type
+owns its own generation rate inside `EventGenerator.tick()` — no new WorkManager
+jobs needed. Rates are per-tick probabilities or counters, e.g.:
+  - `NeedUrgent` / `ContractExpiring` — deterministic threshold/countdown
+  - `MarketShift` — ~40% chance per tick (probabilistic)
+  - `IntelDrop` — ~25% chance per tick, weighted by genre relevance
+  - `ScoutReport` — every N ticks (counter-based)
+Add new `SimEvent` subtypes + `EventGenerator` arms; the inbox renders them
+all the same way. Tuning target: player gets meaningful content without feeling
+flooded across their ~20-day play arc.
+
 **Done when:** market pressure visibly shapes decisions independent of any
 single artist relationship.
 
