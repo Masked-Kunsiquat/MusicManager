@@ -12,6 +12,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,7 +38,13 @@ fun EmailDetailScreen(
 ) {
     val items by viewModel.inbox.collectAsStateWithLifecycle()
     val world by viewModel.world.collectAsStateWithLifecycle()
+    val allOptions by viewModel.options.collectAsStateWithLifecycle()
     val item = items.find { it.id == eventId }
+
+    // Trigger async options load when the item is available.
+    LaunchedEffect(item) {
+        item?.let { viewModel.requestOptionsFor(it) }
+    }
 
     // Guard against navigating back during the cold-start emptyList() window.
     val hasLoaded = remember { mutableStateOf(false) }
@@ -56,7 +63,7 @@ fun EmailDetailScreen(
     }
 
     val artistName = world.artists[item.event.artistId]?.name ?: item.event.artistId
-    val options = viewModel.optionsFor(item)
+    val options = allOptions[item.id]
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -99,33 +106,39 @@ fun EmailDetailScreen(
             )
         }
 
-        if (options.isNotEmpty()) {
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-            Column(modifier = Modifier.padding(12.dp)) {
-                options.forEachIndexed { index, option ->
-                    if (index == 0) {
-                        Button(
-                            onClick = {
-                                viewModel.resolveEvent(eventId, option)
-                                onBack()
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 8.dp)
-                        ) {
-                            Text(option.text)
-                        }
-                    } else {
-                        OutlinedButton(
-                            onClick = {
-                                viewModel.resolveEvent(eventId, option)
-                                onBack()
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 8.dp)
-                        ) {
-                            Text(option.text)
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+        Column(modifier = Modifier.padding(12.dp)) {
+            when {
+                options == null -> {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .padding(8.dp)
+                    )
+                }
+                options.isEmpty() -> Unit
+                else -> {
+                    options.forEachIndexed { index, option ->
+                        if (index == 0) {
+                            Button(
+                                onClick = {
+                                    viewModel.resolveEvent(eventId, option)
+                                    onBack()
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 8.dp)
+                            ) { Text(option.text) }
+                        } else {
+                            OutlinedButton(
+                                onClick = {
+                                    viewModel.resolveEvent(eventId, option)
+                                    onBack()
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 8.dp)
+                            ) { Text(option.text) }
                         }
                     }
                 }

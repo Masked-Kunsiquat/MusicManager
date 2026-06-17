@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class InboxViewModel(private val repository: SimRepository) : ViewModel() {
@@ -22,7 +23,9 @@ class InboxViewModel(private val repository: SimRepository) : ViewModel() {
     val inbox: StateFlow<List<InboxItem>> = repository.observeUnresolved()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private val optionsCache = mutableMapOf<String, List<ResponseOption>>()
+    // Keyed by event ID — populated asynchronously so real inference doesn't block composition.
+    private val _options = MutableStateFlow<Map<String, List<ResponseOption>>>(emptyMap())
+    val options: StateFlow<Map<String, List<ResponseOption>>> = _options.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -31,13 +34,16 @@ class InboxViewModel(private val repository: SimRepository) : ViewModel() {
         }
     }
 
-    // Phase 2: make this suspend + LaunchedEffect when real AI provider is wired in;
-    // StubAiProvider is synchronous so calling from composition is safe for now.
-    fun optionsFor(item: InboxItem): List<ResponseOption> =
-        optionsCache.getOrPut(item.id) { repository.generateOptions(item) }
+    fun requestOptionsFor(item: InboxItem) {
+        if (_options.value.containsKey(item.id)) return
+        viewModelScope.launch {
+            val opts = repository.generateOptions(item)
+            _options.update { it + (item.id to opts) }
+        }
+    }
 
     fun resolveEvent(eventId: String, option: ResponseOption) {
-        optionsCache.remove(eventId)
+        _options.update { it - eventId }
         viewModelScope.launch {
             repository.resolveEvent(eventId, option)
             _world.value = repository.world
