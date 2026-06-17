@@ -6,8 +6,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.github.maskedkunisquat.musicmanager.data.db.DatabaseFactory
 import com.github.maskedkunisquat.musicmanager.data.repository.SimRepositoryImpl
-import com.github.maskedkunisquat.musicmanager.logic.ai.LabelAiProvider
-import com.github.maskedkunisquat.musicmanager.logic.ai.StubAiProvider
+import com.github.maskedkunisquat.musicmanager.ai.GemmaLiteRtProvider
 import com.github.maskedkunisquat.musicmanager.logic.inbox.SimRepository
 import com.github.maskedkunisquat.musicmanager.logic.sim.SimEngine
 import com.github.maskedkunisquat.musicmanager.worker.TickWorker
@@ -15,7 +14,7 @@ import java.util.concurrent.TimeUnit
 
 class AppApplication : Application() {
 
-    val aiProvider: LabelAiProvider by lazy { StubAiProvider() }
+    val aiProvider: GemmaLiteRtProvider by lazy { GemmaLiteRtProvider(this) }
 
     val simRepository: SimRepository by lazy {
         SimRepositoryImpl(
@@ -28,6 +27,7 @@ class AppApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        aiProvider.initialize()
         schedulePeriodicTick()
     }
 
