@@ -1,18 +1,23 @@
 package com.github.maskedkunisquat.musicmanager.data.mapper
 
 import com.github.maskedkunisquat.musicmanager.data.entity.EventLogEntity
+import com.github.maskedkunisquat.musicmanager.logic.ai.GeneratedEmail
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.Locale
 import java.util.UUID
 
-fun SimEvent.toEntity(): EventLogEntity = EventLogEntity(
+fun SimEvent.toEntity(email: GeneratedEmail): EventLogEntity = EventLogEntity(
     id = UUID.randomUUID().toString(),
     dayOfGame = dayOfGame,
     eventType = eventTypeKey(),
     payload = toPayloadJson(),
-    recordedAt = System.currentTimeMillis()
+    recordedAt = System.currentTimeMillis(),
+    emailSubject = email.subject,
+    emailBody = email.body,
+    selectedOptionId = null,
+    resolvedAt = null
 )
 
 private fun SimEvent.eventTypeKey(): String = when (this) {
