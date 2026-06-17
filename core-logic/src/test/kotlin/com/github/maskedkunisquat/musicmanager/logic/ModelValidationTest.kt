@@ -54,6 +54,20 @@ class ModelValidationTest {
     }
 
     @Test
+    fun `ArtistDimensions rejects commercialAppetite above 1`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            ArtistDimensions(confidence = 0.5f, commercialAppetite = 1.1f, volatility = 0.5f, loyalty = 0.5f)
+        }
+    }
+
+    @Test
+    fun `ArtistDimensions rejects negative commercialAppetite`() {
+        assertThrows(IllegalArgumentException::class.java) {
+            ArtistDimensions(confidence = 0.5f, commercialAppetite = -0.1f, volatility = 0.5f, loyalty = 0.5f)
+        }
+    }
+
+    @Test
     fun `ArtistDimensions rejects negative volatility`() {
         assertThrows(IllegalArgumentException::class.java) {
             ArtistDimensions(confidence = 0.5f, commercialAppetite = 0.5f, volatility = -0.1f, loyalty = 0.5f)

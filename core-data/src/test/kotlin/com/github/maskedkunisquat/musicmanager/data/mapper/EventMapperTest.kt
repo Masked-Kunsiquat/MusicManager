@@ -47,7 +47,9 @@ class EventMapperTest {
         val event = SimEvent.WantSurfaced("artist_2", WantType.RECORD_ALBUM, urgency = 0.8f, dayOfGame = 20)
         val entity = event.toEntity()
         assertEquals("want_surfaced", entity.eventType)
+        assertEquals(20, entity.dayOfGame)
         val payload = Json.parseToJsonElement(entity.payload).jsonObject
+        assertEquals("artist_2", payload["artistId"]!!.jsonPrimitive.content)
         assertEquals("RECORD_ALBUM", payload["wantType"]!!.jsonPrimitive.content)
         assertEquals("0.8000", payload["urgency"]!!.jsonPrimitive.content)
     }
