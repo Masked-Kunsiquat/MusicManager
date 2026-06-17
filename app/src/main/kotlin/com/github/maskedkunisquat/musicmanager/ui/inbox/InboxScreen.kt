@@ -33,6 +33,7 @@ fun InboxScreen(
     onBack: () -> Unit
 ) {
     val items by viewModel.inbox.collectAsStateWithLifecycle()
+    val world by viewModel.world.collectAsStateWithLifecycle()
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -74,7 +75,7 @@ fun InboxScreen(
                 items(items, key = { it.id }) { item ->
                     InboxRow(
                         subject = item.email.subject,
-                        artistName = viewModel.world.artists[item.event.artistId]?.name
+                        artistName = world.artists[item.event.artistId]?.name
                             ?: item.event.artistId,
                         dayOfGame = item.dayOfGame,
                         onClick = { onOpenEmail(item.id) }

@@ -19,7 +19,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -33,7 +36,15 @@ fun EmailDetailScreen(
     onBack: () -> Unit
 ) {
     val items by viewModel.inbox.collectAsStateWithLifecycle()
+    val world by viewModel.world.collectAsStateWithLifecycle()
     val item = items.find { it.id == eventId }
+
+    // Guard against navigating back during the cold-start emptyList() window.
+    val hasLoaded = remember { mutableStateOf(false) }
+    LaunchedEffect(items.isNotEmpty()) { if (items.isNotEmpty()) hasLoaded.value = true }
+    LaunchedEffect(item) {
+        if (item == null && hasLoaded.value) onBack()
+    }
 
     if (item == null) {
         Text(
@@ -44,7 +55,7 @@ fun EmailDetailScreen(
         return
     }
 
-    val artistName = viewModel.world.artists[item.event.artistId]?.name ?: item.event.artistId
+    val artistName = world.artists[item.event.artistId]?.name ?: item.event.artistId
     val options = viewModel.optionsFor(item)
 
     Column(modifier = Modifier.fillMaxSize()) {

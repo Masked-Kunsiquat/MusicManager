@@ -5,9 +5,17 @@ import androidx.room.Room
 import com.github.maskedkunisquat.musicmanager.data.dao.EventLogDao
 
 object DatabaseFactory {
-    fun eventLogDao(context: Context): EventLogDao =
-        Room.databaseBuilder(context.applicationContext, SimDatabase::class.java, "sim.db")
+    @Volatile private var instance: EventLogDao? = null
+
+    fun eventLogDao(context: Context): EventLogDao = instance ?: synchronized(this) {
+        instance ?: Room.databaseBuilder(
+            context.applicationContext,
+            SimDatabase::class.java,
+            "sim.db"
+        )
             .fallbackToDestructiveMigration(true)
             .build()
             .eventLogDao()
+            .also { instance = it }
+    }
 }

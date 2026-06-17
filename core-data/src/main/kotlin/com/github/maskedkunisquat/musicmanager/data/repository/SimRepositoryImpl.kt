@@ -13,6 +13,8 @@ import com.github.maskedkunisquat.musicmanager.logic.sim.WorldInitializer
 import com.github.maskedkunisquat.musicmanager.logic.sim.applyResponse
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class SimRepositoryImpl(
     private val dao: EventLogDao,
@@ -26,16 +28,20 @@ class SimRepositoryImpl(
     override var world: SimWorld = WorldInitializer.initializeWorld(seed)
         private set
 
+    private val tickMutex = Mutex()
+
     override fun observeUnresolved(): Flow<List<InboxItem>> =
         dao.observeUnresolved().map { entities -> entities.mapNotNull { it.toInboxItemOrNull() } }
 
     override fun generateOptions(item: InboxItem): List<ResponseOption> =
         aiProvider.generateEmail(item.event, world).options
 
-    override suspend fun tick() {
+    override suspend fun tick() = tickMutex.withLock {
         val result = engine.tick(world)
         world = result.world
         result.events.forEach { event ->
+            // Phase 2: pass the world snapshot at the time of the event, not the post-tick world.
+            // Needs/dimensions don't tick yet so this is benign in Phase 1.
             val email = aiProvider.generateEmail(event, world)
             dao.insert(event.toEntity(email))
         }

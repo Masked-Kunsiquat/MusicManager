@@ -36,7 +36,7 @@ class AppApplication : Application() {
         val request = PeriodicWorkRequestBuilder<TickWorker>(1, TimeUnit.HOURS).build()
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             TICK_WORK_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
+            ExistingPeriodicWorkPolicy.UPDATE,
             request
         )
     }
