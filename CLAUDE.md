@@ -76,11 +76,11 @@ When a `CoroutineWorker` or the detail screen needs options, call
 There is no Hilt/WorkerFactory. `TickWorker` casts `applicationContext` directly.
 Don't introduce a custom `WorkerFactory` just to inject — the cast is intentional.
 
-**1 tick = 4 real hours (decided Phase 1). WorkManager fires every hour.**
+**1 tick = 160 min (2h 40min). WorkManager fires every hour.**
 `TickWorker` uses elapsed-time logic (SharedPreferences `last_ticked_at`) rather
-than "one fire = one tick". Catchup is capped at 6 ticks (24h) to avoid flooding
+than "one fire = one tick". Catchup is capped at 9 ticks (≈ 24h) to avoid flooding
 the inbox after a long absence. `TICK_INTERVAL_MS` is the source of truth — don't
-hardcode 4h elsewhere. A 180-tick contract expires in ~30 real days.
+hardcode 160 min elsewhere. A 180-tick contract expires in ~20 real days.
 
 ---
 
@@ -90,7 +90,7 @@ hardcode 4h elsewhere. A 180-tick contract expires in ~30 real days.
 - No server, no Firebase, no FCM. WorkManager for background polling.
 - Event log is append-only. Derive state by folding over events; don't CRUD
   rows in place.
-- `LabelAiProvider` is the AI seam. Swapping `StubAiProvider` →
-  `GemmaLiteRtProvider` in Phase 2 is a one-liner at the injection site in `AppApplication`.
+- `LabelAiProvider` is the AI seam. `GemmaLiteRtProvider` is already wired in
+  `AppApplication` (Phase 1 skeleton). Phase 1 remaining work fills in real inference.
 - Room types (`SimDatabase`, `RoomDatabase`) must not leak into `:app`. `DatabaseFactory`
   in `:core-data` returns `EventLogDao` directly. If `:app` needs Room, something is wrong.

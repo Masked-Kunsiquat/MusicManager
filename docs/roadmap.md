@@ -30,22 +30,33 @@ non-empty, context-appropriate set of response options.
 
 ## Phase 1 — The Inbox (v0.1, first real playable slice)
 
-- Fake-OS shell: minimal Compose scaffold, just enough to feel like a
-  device-within-a-device. Inbox app only — other apps can be stubbed/absent.
-- `LabelAiProvider` interface + `GemmaLiteRtProvider` implementation (primary
-  target — build/test against this since Gemini Nano isn't available on dev
-  hardware)
-- Model download-on-first-run flow: `filesDir` storage, resumable download,
-  SHA-256 verification, manifest fetched from a static R2-hosted JSON file
-- Inbox renders artist events as emails using AI-generated prose
-- Response options rendered under each email; selecting one feeds the
-  decision back into the sim and triggers the next event
-- Basic label finances (can the player afford to keep this artist)
-- WorkManager polling for "new mail" checks — no FCM, no push
+**Completed:**
+- Fake-OS shell: Compose scaffold, device-within-a-device chrome, inbox nav
+- `LabelAiProvider` interface + `StubAiProvider` with personality-driven prose
+  (loyalty, confidence, volatility inflect tone; choices move loyalty; subsequent
+  emails reflect changed relationship)
+- `GemmaLiteRtProvider` skeleton wired into `AppApplication` (delegates to stub,
+  `modelLoadState` StateFlow in place for Phase 1 download UI)
+- `ModelLoadState` + `ModelDownloader` interfaces in `:core-logic`
+- `GemmaModelConfig` constants (HF base URL, filename for Gemma 4 E4B)
+- Inbox renders artist events as emails; response options under each email; selecting
+  one feeds the decision back into the sim and triggers the next event
+- Basic label finances gating (can the player afford this response option)
+- WorkManager polling: fires hourly, elapsed-time logic, 160 min per tick,
+  9-tick catchup cap (≈ 24h). 180 ticks ≈ 20 real days.
+- Event log: append-only Room schema, `initializeIfEmpty` seeds 10 days on first run
+
+**Remaining:**
+- `GemmaLiteRtProvider` full implementation: LiteRT-LM SDK integration,
+  NPU → GPU (OpenCL) → CPU backend cascade, `generateEmail()` via real inference
+- Model download flow: resumable HTTP to `filesDir`, SHA-256 verification,
+  model manifest version-pinned from a static R2-hosted JSON file
+- Download/load state UI: progress indicator in DeviceScreen chrome while
+  model is absent or loading (maps to `modelLoadState` StateFlow)
 
 **Done when:** one artist feels alive through their emails across multiple
-in-game days, and a player's choices visibly change that artist's subsequent
-behavior/tone.
+in-game days, powered by on-device Gemma 4 E4B inference, and a player's choices
+visibly change that artist's subsequent behavior/tone.
 
 ## Phase 2 — The Market (v0.2)
 
