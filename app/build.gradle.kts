@@ -64,6 +64,10 @@ dependencies {
     // WorkManager
     implementation(libs.workmanager)
 
+    // LiteRT-LM (on-device Gemma inference)
+    implementation(libs.litert)
+    implementation(libs.litertlm.android)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
