@@ -22,9 +22,11 @@ directory is configured. Don't silently remove it.
 It's an Android library module. The bare `:test` task doesn't exist.
 `:core-logic:test` is a JVM module and uses the normal task.
 
-**Don't add `kotlin-android` plugin to `core-data/build.gradle.kts`**
-AGP 9.x handles Kotlin compilation there via the `disallowKotlinSourceSets`
-flag. Adding the plugin explicitly causes conflicts.
+**Don't add `kotlin-android` plugin to any Android module (`core-data`, `:app`)**
+AGP 9.x registers its own `kotlin` extension. Adding `kotlin-android` causes
+"Cannot add extension with name 'kotlin', as there is an extension already
+registered." For `:app`, use only `android.application` + `kotlin-compose`.
+Remove `kotlinOptions { jvmTarget = "..." }` too — it's a `kotlin-android`-only DSL.
 
 ---
 
@@ -64,6 +66,16 @@ Calling `toEntity()` twice on the same `SimEvent` produces two entities with
 different IDs. The event log is append-only by design; this is intentional,
 not a bug.
 
+**`EntityMapper.toInboxItemOrNull()` always returns `options = emptyList()`**
+Options aren't persisted — only `emailSubject` and `emailBody` are stored.
+When a `CoroutineWorker` or the detail screen needs options, call
+`SimRepository.generateOptions(item)` (which re-calls `aiProvider.generateEmail`).
+`InboxViewModel` caches results by event ID so recompositions don't re-generate.
+
+**`CoroutineWorker` gets its repository via `applicationContext as AppApplication`**
+There is no Hilt/WorkerFactory. `TickWorker` casts `applicationContext` directly.
+Don't introduce a custom `WorkerFactory` just to inject — the cast is intentional.
+
 ---
 
 ## Architecture constraints (see AGENTS.md for full rationale)
@@ -73,4 +85,6 @@ not a bug.
 - Event log is append-only. Derive state by folding over events; don't CRUD
   rows in place.
 - `LabelAiProvider` is the AI seam. Swapping `StubAiProvider` →
-  `GemmaLiteRtProvider` in Phase 1 is a one-liner at the injection site.
+  `GemmaLiteRtProvider` in Phase 2 is a one-liner at the injection site in `AppApplication`.
+- Room types (`SimDatabase`, `RoomDatabase`) must not leak into `:app`. `DatabaseFactory`
+  in `:core-data` returns `EventLogDao` directly. If `:app` needs Room, something is wrong.
