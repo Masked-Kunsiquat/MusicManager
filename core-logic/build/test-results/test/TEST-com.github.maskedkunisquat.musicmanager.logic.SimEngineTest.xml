@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.github.maskedkunisquat.musicmanager.logic.SimEngineTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-06-17T03:53:36.394Z" hostname="BB_PC2" time="0.017">
+  <properties/>
+  <testcase name="urgent need events are emitted after enough ticks" classname="com.github.maskedkunisquat.musicmanager.logic.SimEngineTest" time="0.003"/>
+  <testcase name="tick advances the day by one" classname="com.github.maskedkunisquat.musicmanager.logic.SimEngineTest" time="0.001"/>
+  <testcase name="tickN is deterministic for the same seed" classname="com.github.maskedkunisquat.musicmanager.logic.SimEngineTest" time="0.003"/>
+  <testcase name="contract expiry events fire when approaching expiry" classname="com.github.maskedkunisquat.musicmanager.logic.SimEngineTest" time="0.008"/>
+  <testcase name="needs decay on every tick" classname="com.github.maskedkunisquat.musicmanager.logic.SimEngineTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
