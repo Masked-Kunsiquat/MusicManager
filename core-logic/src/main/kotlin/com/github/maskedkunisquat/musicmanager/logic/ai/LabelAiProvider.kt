@@ -4,5 +4,5 @@ import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 
 interface LabelAiProvider {
-    fun generateEmail(event: SimEvent, world: SimWorld): GeneratedEmail
+    suspend fun generateEmail(event: SimEvent, world: SimWorld): GeneratedEmail
 }

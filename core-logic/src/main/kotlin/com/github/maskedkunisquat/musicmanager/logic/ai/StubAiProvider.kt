@@ -12,7 +12,7 @@ import com.github.maskedkunisquat.musicmanager.logic.response.StateEffect
 // Reserve LabelFundsChange in effects for income/revenue (positive deltas) only.
 class StubAiProvider : LabelAiProvider {
 
-    override fun generateEmail(event: SimEvent, world: SimWorld): GeneratedEmail {
+    override suspend fun generateEmail(event: SimEvent, world: SimWorld): GeneratedEmail {
         val artist = world.artists[event.artistId]
         val artistName = artist?.name ?: "your artist"
         val loyalty = artist?.dimensions?.loyalty ?: 0.5f

@@ -33,7 +33,7 @@ class SimRepositoryImpl(
     override fun observeUnresolved(): Flow<List<InboxItem>> =
         dao.observeUnresolved().map { entities -> entities.mapNotNull { it.toInboxItemOrNull() } }
 
-    override fun generateOptions(item: InboxItem): List<ResponseOption> =
+    override suspend fun generateOptions(item: InboxItem): List<ResponseOption> =
         aiProvider.generateEmail(item.event, world).options
 
     // All world mutation goes through this; callers must already hold tickMutex.
