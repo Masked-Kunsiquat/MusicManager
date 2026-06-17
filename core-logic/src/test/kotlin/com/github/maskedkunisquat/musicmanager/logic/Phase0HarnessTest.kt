@@ -14,13 +14,13 @@ class Phase0HarnessTest {
         val engine = SimEngine()
         val ai = StubAiProvider()
 
-        val world = WorldInitializer.initializeWorld(seed)
-        val (_, events) = engine.tickN(world, 60)
+        val initialWorld = WorldInitializer.initializeWorld(seed)
+        val (finalWorld, events) = engine.tickN(initialWorld, 60)
 
         assertTrue("No events generated in 60 ticks — needs decay math may be broken", events.isNotEmpty())
 
         for (event in events) {
-            val options = ai.generateResponseOptions(event, world)
+            val options = ai.generateResponseOptions(event, finalWorld)
             assertTrue(
                 "Event ${event::class.simpleName} produced ${options.size} option(s), expected ≥ 2",
                 options.size >= 2
@@ -29,11 +29,11 @@ class Phase0HarnessTest {
 
         // Print harness output for manual inspection during development
         println("=== Phase 0 Harness: seed=$seed, 60 ticks ===")
-        println("Roster: ${world.artists.values.map { "${it.name} (${it.genre})" }}")
+        println("Roster: ${initialWorld.artists.values.map { "${it.name} (${it.genre})" }}")
         println("Events: ${events.size} total")
         events.take(5).forEach { event ->
             println("  [day ${event.dayOfGame}] ${event::class.simpleName}")
-            ai.generateResponseOptions(event, world).forEach { opt ->
+            ai.generateResponseOptions(event, finalWorld).forEach { opt ->
                 println("    > ${opt.text}")
             }
         }

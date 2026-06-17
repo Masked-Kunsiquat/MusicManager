@@ -15,6 +15,7 @@ import kotlin.random.Random
 
 object WorldInitializer {
 
+    private const val CENTS_PER_DOLLAR = 100L
     private val GENRES = listOf("indie-rock", "pop", "hip-hop", "electronic", "folk", "r&b")
     private val ADJECTIVES = listOf("Young", "Dark", "Golden", "Wild", "Restless", "Silent", "Bright", "New")
     private val NOUNS = listOf("Lions", "Birds", "Waves", "Stars", "Flowers", "Rivers", "Tides", "Ghosts")
@@ -58,7 +59,7 @@ object WorldInitializer {
                 decayRate = 0.02f + rng.nextFloat() * 0.03f
             )
         },
-        activeWants = emptyList(),
+        activeWants = emptyList(), // Phase 1: populate from artist archetype + context
         contractId = contractId
     )
 
@@ -72,7 +73,7 @@ object WorldInitializer {
     )
 
     private fun buildLabel(rosterIds: Set<String>, rng: Random): LabelState = LabelState(
-        funds = rng.nextLong(50_000_00L, 100_000_00L),  // $50k–$100k in cents
+        funds = rng.nextLong(50_000 * CENTS_PER_DOLLAR, 100_000 * CENTS_PER_DOLLAR),
         reputation = ReputationCommunity.entries.associateWith { 0.3f + rng.nextFloat() * 0.2f },
         rosterIds = rosterIds
     )

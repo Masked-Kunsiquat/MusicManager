@@ -42,6 +42,7 @@ private fun contractEvents(artist: ArtistState, world: SimWorld): List<SimEvent>
     )
 }
 
+// Phase 1: activeWants is always empty until WorldInitializer populates it from archetypes.
 private fun wantEvents(artist: ArtistState, day: Int): List<SimEvent> =
     artist.activeWants
         .filter { it.urgency >= 0.7f }

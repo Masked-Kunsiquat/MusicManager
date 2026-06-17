@@ -24,7 +24,7 @@ private fun SimEvent.toPayloadJson(): String = when (this) {
     is SimEvent.NeedUrgent -> buildJsonObject {
         put("artistId", artistId)
         put("needType", needType.name)
-        put("currentValue", currentValue.toDouble())
+        put("currentValue", "%.4f".format(currentValue))
     }
     is SimEvent.ContractExpiring -> buildJsonObject {
         put("artistId", artistId)
@@ -34,6 +34,6 @@ private fun SimEvent.toPayloadJson(): String = when (this) {
     is SimEvent.WantSurfaced -> buildJsonObject {
         put("artistId", artistId)
         put("wantType", wantType.name)
-        put("urgency", urgency.toDouble())
+        put("urgency", "%.4f".format(urgency))
     }
 }.toString()
