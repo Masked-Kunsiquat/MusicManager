@@ -4,6 +4,7 @@ import com.github.maskedkunisquat.musicmanager.data.entity.EventLogEntity
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.util.Locale
 import java.util.UUID
 
 fun SimEvent.toEntity(): EventLogEntity = EventLogEntity(
@@ -24,7 +25,7 @@ private fun SimEvent.toPayloadJson(): String = when (this) {
     is SimEvent.NeedUrgent -> buildJsonObject {
         put("artistId", artistId)
         put("needType", needType.name)
-        put("currentValue", "%.4f".format(currentValue))
+        put("currentValue", String.format(Locale.US, "%.4f", currentValue))
     }
     is SimEvent.ContractExpiring -> buildJsonObject {
         put("artistId", artistId)
@@ -34,6 +35,6 @@ private fun SimEvent.toPayloadJson(): String = when (this) {
     is SimEvent.WantSurfaced -> buildJsonObject {
         put("artistId", artistId)
         put("wantType", wantType.name)
-        put("urgency", "%.4f".format(urgency))
+        put("urgency", String.format(Locale.US, "%.4f", urgency))
     }
 }.toString()

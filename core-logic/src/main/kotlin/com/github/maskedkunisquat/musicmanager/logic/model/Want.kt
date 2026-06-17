@@ -12,4 +12,8 @@ data class Want(
     val type: WantType,
     val urgency: Float,     // 0f..1f
     val expiryDay: Int?
-)
+) {
+    init {
+        require(urgency in 0f..1f) { "urgency must be in 0f..1f, was $urgency" }
+    }
+}

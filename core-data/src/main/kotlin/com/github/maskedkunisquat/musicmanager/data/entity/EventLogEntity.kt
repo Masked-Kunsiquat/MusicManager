@@ -1,9 +1,13 @@
 package com.github.maskedkunisquat.musicmanager.data.entity
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "event_log")
+@Entity(
+    tableName = "event_log",
+    indices = [Index(value = ["dayOfGame", "recordedAt"])]
+)
 data class EventLogEntity(
     @PrimaryKey val id: String,
     val dayOfGame: Int,

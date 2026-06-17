@@ -14,6 +14,6 @@ interface EventLogDao {
     @Query("SELECT * FROM event_log ORDER BY dayOfGame ASC, recordedAt ASC")
     suspend fun getAll(): List<EventLogEntity>
 
-    @Query("SELECT * FROM event_log WHERE dayOfGame >= :fromDay ORDER BY dayOfGame ASC")
+    @Query("SELECT * FROM event_log WHERE dayOfGame >= :fromDay ORDER BY dayOfGame ASC, recordedAt ASC")
     suspend fun getFromDay(fromDay: Int): List<EventLogEntity>
 }

@@ -31,7 +31,7 @@ private fun contractEvents(artist: ArtistState, world: SimWorld): List<SimEvent>
     val contractId = artist.contractId ?: return emptyList()
     val contract = world.contracts[contractId] ?: return emptyList()
     val daysRemaining = contract.expiryDay - world.currentDay
-    if (daysRemaining > CONTRACT_EXPIRY_WARNING_DAYS) return emptyList()
+    if (daysRemaining !in 1..CONTRACT_EXPIRY_WARNING_DAYS) return emptyList()
     return listOf(
         SimEvent.ContractExpiring(
             artistId = artist.id,

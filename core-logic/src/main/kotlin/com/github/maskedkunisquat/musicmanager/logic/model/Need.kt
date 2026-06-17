@@ -12,4 +12,9 @@ data class NeedState(
     val type: NeedType,
     val value: Float,       // 0f..1f; 1f = fully satisfied
     val decayRate: Float    // units lost per tick, before volatility scaling
-)
+) {
+    init {
+        require(value in 0f..1f) { "value must be in 0f..1f, was $value" }
+        require(decayRate >= 0f) { "decayRate must be non-negative, was $decayRate" }
+    }
+}

@@ -59,8 +59,8 @@ class SimEngineTest {
         val ticksToWarning = (shortestExpiry - 29).coerceAtLeast(1)
         val (_, events) = engine.tickN(world, ticksToWarning)
         assertTrue(
-            "Expected ContractExpiring event near day $shortestExpiry",
-            events.any { it is SimEvent.ContractExpiring }
+            "Expected ContractExpiring event with daysRemaining in 1..30",
+            events.any { it is SimEvent.ContractExpiring && it.daysRemaining in 1..30 }
         )
     }
 }
