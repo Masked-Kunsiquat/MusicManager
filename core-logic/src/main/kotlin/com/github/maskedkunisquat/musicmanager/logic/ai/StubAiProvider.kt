@@ -13,95 +13,161 @@ import com.github.maskedkunisquat.musicmanager.logic.response.StateEffect
 class StubAiProvider : LabelAiProvider {
 
     override fun generateEmail(event: SimEvent, world: SimWorld): GeneratedEmail {
-        val artistName = world.artists[event.artistId]?.name ?: "your artist"
-        val (subject, body) = prose(event, artistName)
+        val artist = world.artists[event.artistId]
+        val artistName = artist?.name ?: "your artist"
+        val loyalty = artist?.dimensions?.loyalty ?: 0.5f
+        val confidence = artist?.dimensions?.confidence ?: 0.5f
+        val volatility = artist?.dimensions?.volatility ?: 0.5f
+        val (subject, body) = prose(event, artistName, loyalty, confidence, volatility)
         return GeneratedEmail(subject = subject, body = body, options = options(event, world))
     }
 
-    // --- Prose templates ---
+    // --- Tone helpers (all three are injected into prose based on artist dimensions) ---
 
-    private fun prose(event: SimEvent, name: String): Pair<String, String> = when (event) {
-        is SimEvent.NeedUrgent -> needUrgentProse(event.needType, name)
-        is SimEvent.ContractExpiring -> contractExpiringProse(name, event.daysRemaining)
-        is SimEvent.WantSurfaced -> wantSurfacedProse(event.wantType, name)
+    // Low-confidence artists hedge before asking; high-confidence artists don't.
+    private fun hedge(confidence: Float): String = when {
+        confidence < 0.30f -> "I've been going back and forth about sending this. "
+        confidence < 0.45f -> "I'm not sure how to say this, so I'll just say it. "
+        else -> ""
     }
 
-    private fun needUrgentProse(needType: NeedType, name: String): Pair<String, String> = when (needType) {
-        NeedType.CREATIVE_FULFILLMENT -> Pair(
-            "creative direction — can we talk?",
-            "Hey — I don't want to make this weird but I need to be honest. I've been going " +
-            "through the motions lately and it's starting to show in the demos. I need to make " +
-            "something I actually care about. Can we block off some proper creative time — no " +
-            "brief, no deadline, just space to work? I think it'll pay off.\n\n— $name"
-        )
-        NeedType.FINANCIAL_SECURITY -> Pair(
-            "royalties / advance — overdue conversation",
-            "Hi. My manager's been on me to bring this up and I keep putting it off because it's " +
-            "awkward, but here we are. The current setup isn't sustainable for me. Between releases " +
-            "I'm covering basics out of my own pocket and it's stressing me out in ways that " +
-            "affect the work. Can we look at the numbers together?\n\n— $name"
-        )
-        NeedType.RECOGNITION -> Pair(
-            "feeling invisible lately",
-            "I probably shouldn't send this but I will anyway. It's starting to feel like we're " +
-            "doing good work in a room with no windows. Other artists — on smaller labels, with " +
-            "less — are getting write-ups, festival slots, interviews. What's the strategy here? " +
-            "I just need to understand the plan.\n\n— $name"
-        )
-        NeedType.BELONGING -> Pair(
-            "honest question",
-            "Is everything okay between us? I might be overthinking it but there's been a " +
-            "distance lately that I can't quite name. I see the label posting about other artists " +
-            "and the energy in the room when we meet feels different. I'm not going anywhere — " +
-            "I just want to make sure we're still on the same page.\n\n— $name"
-        )
-        NeedType.AUTONOMY -> Pair(
-            "re: next single",
-            "I've been sitting on something. The last three decisions on this album have gone the " +
-            "label's way and I've been okay with that — but this one feels different. I have a " +
-            "specific vision for the next single and I need it to be mine. Not a fight, not a " +
-            "power move — I just need one real win creatively. Can we talk?\n\n— $name"
-        )
+    // Urgency prefix for NeedUrgent: currentValue drives desperation, volatility drives emotionality.
+    private fun urgencyPrefix(currentValue: Float, volatility: Float): String = when {
+        currentValue < 0.15f && volatility > 0.65f -> "I'm not in a good place and I need to be honest about it. "
+        currentValue < 0.15f -> "This has been building for too long and I need to address it now. "
+        currentValue < 0.25f && volatility > 0.65f -> "This is getting to me more than I want to admit. "
+        else -> ""
     }
 
-    private fun contractExpiringProse(name: String, daysRemaining: Int): Pair<String, String> = Pair(
-        "re: contract renewal",
-        "My manager flagged that we're coming up on the window — about $daysRemaining days out. " +
-        "I wanted to reach out directly before it gets too formal. I'm not in panic mode but I'm " +
-        "also not going to pretend I don't have other conversations in my back pocket. If we're " +
-        "doing this, let's figure it out soon.\n\n— $name"
-    )
+    // Loyalty shapes the closing — warmth or distance.
+    private fun signing(name: String, loyalty: Float): String = when {
+        loyalty >= 0.70f -> "\n\nThanks for hearing me out,\n$name"
+        loyalty >= 0.40f -> "\n\n— $name"
+        loyalty >= 0.20f -> "\n\n$name"
+        else -> "\n\n$name"  // cold: no dash, just the name
+    }
+
+    // --- Prose dispatch ---
+
+    private fun prose(
+        event: SimEvent,
+        name: String,
+        loyalty: Float,
+        confidence: Float,
+        volatility: Float
+    ): Pair<String, String> = when (event) {
+        is SimEvent.NeedUrgent ->
+            needUrgentProse(event.needType, event.currentValue, name, loyalty, confidence, volatility)
+        is SimEvent.ContractExpiring ->
+            contractExpiringProse(name, event.daysRemaining, loyalty, confidence)
+        is SimEvent.WantSurfaced ->
+            wantSurfacedProse(event.wantType, name, loyalty, confidence)
+    }
+
+    private fun needUrgentProse(
+        needType: NeedType,
+        currentValue: Float,
+        name: String,
+        loyalty: Float,
+        confidence: Float,
+        volatility: Float
+    ): Pair<String, String> {
+        val h = hedge(confidence)
+        val u = urgencyPrefix(currentValue, volatility)
+        val s = signing(name, loyalty)
+        return when (needType) {
+            NeedType.CREATIVE_FULFILLMENT -> Pair(
+                "creative direction — can we talk?",
+                "${h}${u}Hey — I don't want to make this weird but I need to be honest. I've been going " +
+                "through the motions lately and it's starting to show in the demos. I need to make " +
+                "something I actually care about. Can we block off some proper creative time — no " +
+                "brief, no deadline, just space to work? I think it'll pay off.$s"
+            )
+            NeedType.FINANCIAL_SECURITY -> Pair(
+                "royalties / advance — overdue conversation",
+                "${h}${u}My manager's been on me to bring this up and I keep putting it off because it's " +
+                "awkward, but here we are. The current setup isn't sustainable for me. Between releases " +
+                "I'm covering basics out of my own pocket and it's stressing me out in ways that " +
+                "affect the work. Can we look at the numbers together?$s"
+            )
+            NeedType.RECOGNITION -> Pair(
+                "feeling invisible lately",
+                "${h}${u}It's starting to feel like we're doing good work in a room with no windows. " +
+                "Other artists — on smaller labels, with less — are getting write-ups, festival slots, " +
+                "interviews. What's the strategy here? I just need to understand the plan.$s"
+            )
+            NeedType.BELONGING -> Pair(
+                "honest question",
+                "${h}${u}Is everything okay between us? I might be overthinking it but there's been a " +
+                "distance lately that I can't quite name. I see the label posting about other artists " +
+                "and the energy in the room when we meet feels different. I'm not going anywhere — " +
+                "I just want to make sure we're still on the same page.$s"
+            )
+            NeedType.AUTONOMY -> Pair(
+                "re: next single",
+                "${h}${u}The last three decisions on this album have gone the label's way and I've been " +
+                "okay with that — but this one feels different. I have a specific vision for the next " +
+                "single and I need it to be mine. Not a fight, not a power move — I just need one " +
+                "real win creatively. Can we talk?$s"
+            )
+        }
+    }
+
+    private fun contractExpiringProse(
+        name: String,
+        daysRemaining: Int,
+        loyalty: Float,
+        confidence: Float
+    ): Pair<String, String> {
+        val h = hedge(confidence)
+        val s = signing(name, loyalty)
+        return Pair(
+            "re: contract renewal",
+            "${h}My manager flagged that we're coming up on the window — about $daysRemaining days out. " +
+            "I wanted to reach out directly before it gets too formal. I'm not in panic mode but I'm " +
+            "also not going to pretend I don't have other conversations in my back pocket. If we're " +
+            "doing this, let's figure it out soon.$s"
+        )
+    }
 
     // Phase 1: wants are populated from artist archetypes; this path is unreachable until then.
-    private fun wantSurfacedProse(wantType: WantType, name: String): Pair<String, String> = when (wantType) {
-        WantType.MAJOR_VENUE_TOUR -> Pair(
-            "headline tour — serious question",
-            "I've been talking to some people about a headline run and I think the timing is right. " +
-            "Not a support slot — a real tour, proper venues. I want to know if you're behind this. " +
-            "The momentum exists right now.\n\n— $name"
-        )
-        WantType.COLLAB_WITH_PRODUCER -> Pair(
-            "producer collab — I have someone in mind",
-            "There's a producer I've been in conversation with and I think it could be something " +
-            "special. Different sound than what we've done — that's the point. Are you in?\n\n— $name"
-        )
-        WantType.GENRE_EXPERIMENT -> Pair(
-            "re: experimental direction",
-            "I know this might catch you off guard but I need to explore some different territory. " +
-            "Not instead of what we're doing — alongside it. One project, one chance to see where " +
-            "this goes.\n\n— $name"
-        )
-        WantType.RECORD_ALBUM -> Pair(
-            "album — I'm ready",
-            "I've got enough material for a full record and I think the moment is right. I don't " +
-            "want to keep releasing singles and watching the story go nowhere. Are you?\n\n— $name"
-        )
-        WantType.INCREASED_ROYALTIES -> Pair(
-            "royalty rate — let's revisit",
-            "The deal made sense when we signed it. A lot has changed. The streams are up, the " +
-            "shows are bigger. I think you know the split needs to reflect where things are " +
-            "now.\n\n— $name"
-        )
+    private fun wantSurfacedProse(
+        wantType: WantType,
+        name: String,
+        loyalty: Float,
+        confidence: Float
+    ): Pair<String, String> {
+        val h = hedge(confidence)
+        val s = signing(name, loyalty)
+        return when (wantType) {
+            WantType.MAJOR_VENUE_TOUR -> Pair(
+                "headline tour — serious question",
+                "${h}I've been talking to some people about a headline run and I think the timing is right. " +
+                "Not a support slot — a real tour, proper venues. I want to know if you're behind this. " +
+                "The momentum exists right now.$s"
+            )
+            WantType.COLLAB_WITH_PRODUCER -> Pair(
+                "producer collab — I have someone in mind",
+                "${h}There's a producer I've been in conversation with and I think it could be something " +
+                "special. Different sound than what we've done — that's the point. Are you in?$s"
+            )
+            WantType.GENRE_EXPERIMENT -> Pair(
+                "re: experimental direction",
+                "${h}I know this might catch you off guard but I need to explore some different territory. " +
+                "Not instead of what we're doing — alongside it. One project, one chance to see where " +
+                "this goes.$s"
+            )
+            WantType.RECORD_ALBUM -> Pair(
+                "album — I'm ready",
+                "${h}I've got enough material for a full record and I think the moment is right. I don't " +
+                "want to keep releasing singles and watching the story go nowhere. Are you?$s"
+            )
+            WantType.INCREASED_ROYALTIES -> Pair(
+                "royalty rate — let's revisit",
+                "${h}The deal made sense when we signed it. A lot has changed. The streams are up, the " +
+                "shows are bigger. I think you know the split needs to reflect where things are now.$s"
+            )
+        }
     }
 
     // --- Option generation ---
@@ -117,9 +183,9 @@ class StubAiProvider : LabelAiProvider {
         return when (event.needType) {
             NeedType.CREATIVE_FULFILLMENT -> listOf(
                 option("$a:creative_studio", "Schedule an unstructured studio session this week",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.35f))),
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.35f), RC(a, +0.05f))),
                 option("$a:creative_ep", "Green-light the experimental EP pitch",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.55f), NC(a, NeedType.AUTONOMY, +0.15f)),
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.55f), NC(a, NeedType.AUTONOMY, +0.15f), RC(a, +0.10f)),
                     cost = 800 * CENTS),
                 option("$a:creative_retreat", "Book a writing retreat for next month",
                     listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.25f)),
@@ -127,10 +193,10 @@ class StubAiProvider : LabelAiProvider {
             )
             NeedType.FINANCIAL_SECURITY -> listOf(
                 option("$a:finance_advance", "Offer a \$5,000 advance against future royalties",
-                    listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.50f)),
+                    listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.50f), RC(a, +0.10f)),
                     cost = 5_000 * CENTS),
                 option("$a:finance_royalty", "Renegotiate the royalty split to 60/40 in their favor",
-                    listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.30f))),
+                    listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.30f), RC(a, +0.08f))),
                 option("$a:finance_tour_support", "Promise guaranteed tour support next quarter",
                     listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.20f))),
                 option("$a:finance_meeting", "Schedule a finances review to discuss options",
@@ -138,7 +204,7 @@ class StubAiProvider : LabelAiProvider {
             )
             NeedType.RECOGNITION -> listOf(
                 option("$a:recog_press", "Push for a feature in key genre press outlets",
-                    listOf(NC(a, NeedType.RECOGNITION, +0.40f)),
+                    listOf(NC(a, NeedType.RECOGNITION, +0.40f), RC(a, +0.05f)),
                     cost = 300 * CENTS),
                 option("$a:recog_festival", "Submit for festival consideration this season",
                     listOf(NC(a, NeedType.RECOGNITION, +0.30f))),
@@ -148,17 +214,17 @@ class StubAiProvider : LabelAiProvider {
             )
             NeedType.BELONGING -> listOf(
                 option("$a:belong_dinner", "Host a label family dinner this week",
-                    listOf(NC(a, NeedType.BELONGING, +0.40f))),
+                    listOf(NC(a, NeedType.BELONGING, +0.40f), RC(a, +0.15f))),
                 option("$a:belong_collab", "Arrange a collab session with another roster artist",
-                    listOf(NC(a, NeedType.BELONGING, +0.35f), NC(a, NeedType.CREATIVE_FULFILLMENT, +0.10f))),
+                    listOf(NC(a, NeedType.BELONGING, +0.35f), NC(a, NeedType.CREATIVE_FULFILLMENT, +0.10f), RC(a, +0.10f))),
                 option("$a:belong_checkin", "Send a personal check-in and schedule a call",
-                    listOf(NC(a, NeedType.BELONGING, +0.15f)))
+                    listOf(NC(a, NeedType.BELONGING, +0.15f), RC(a, +0.05f)))
             )
             NeedType.AUTONOMY -> listOf(
                 option("$a:auto_full", "Grant full creative control for their next single",
-                    listOf(NC(a, NeedType.AUTONOMY, +0.55f), NC(a, NeedType.CREATIVE_FULFILLMENT, +0.15f))),
+                    listOf(NC(a, NeedType.AUTONOMY, +0.55f), NC(a, NeedType.CREATIVE_FULFILLMENT, +0.15f), RC(a, +0.10f))),
                 option("$a:auto_choose", "Let them choose the lead single from the shortlist",
-                    listOf(NC(a, NeedType.AUTONOMY, +0.30f))),
+                    listOf(NC(a, NeedType.AUTONOMY, +0.30f), RC(a, +0.05f))),
                 option("$a:auto_meeting", "Schedule a creative direction meeting to hear them out",
                     listOf(NC(a, NeedType.AUTONOMY, +0.10f)))
             )
@@ -170,12 +236,12 @@ class StubAiProvider : LabelAiProvider {
         val lowLoyalty = (world.artists[a]?.dimensions?.loyalty ?: 0.5f) < 0.35f
         return buildList {
             add(option("$a:contract_proactive", "Open renewal talks now — lead with better terms",
-                listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.10f))))
+                listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.10f), RC(a, +0.08f))))
             add(option("$a:contract_premium", "Prepare a premium renewal offer with a signing bonus",
-                listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.25f)),
+                listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.25f), RC(a, +0.15f)),
                 cost = 2_000 * CENTS))
             add(option("$a:contract_wait", "Wait — let their team make the first move",
-                listOf(StateEffect.RelationshipChange(a, -0.05f))))
+                listOf(RC(a, -0.10f))))
             if (lowLoyalty) {
                 add(option("$a:contract_scout", "Quietly start scouting a replacement in the meantime",
                     emptyList()))
@@ -188,47 +254,47 @@ class StubAiProvider : LabelAiProvider {
         return when (event.wantType) {
             WantType.MAJOR_VENUE_TOUR -> listOf(
                 option("$a:tour_book", "Start venue negotiations for a headline tour",
-                    listOf(NC(a, NeedType.RECOGNITION, +0.30f), NC(a, NeedType.FINANCIAL_SECURITY, +0.20f)),
+                    listOf(NC(a, NeedType.RECOGNITION, +0.30f), NC(a, NeedType.FINANCIAL_SECURITY, +0.20f), RC(a, +0.10f)),
                     cost = 1_500 * CENTS),
                 option("$a:tour_support_slot", "Lock in a support slot on a bigger act's tour instead",
                     listOf(NC(a, NeedType.RECOGNITION, +0.15f))),
                 option("$a:tour_defer", "Not yet — focus on the record first",
-                    listOf(NC(a, NeedType.AUTONOMY, -0.10f)))
+                    listOf(NC(a, NeedType.AUTONOMY, -0.10f), RC(a, -0.05f)))
             )
             WantType.COLLAB_WITH_PRODUCER -> listOf(
                 option("$a:collab_network", "Reach out to producers in their network",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.25f))),
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.25f), RC(a, +0.05f))),
                 option("$a:collab_label", "Suggest a producer from the label's existing relationships",
                     listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.15f))),
                 option("$a:collab_budget", "Allocate budget for an outside producer",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.35f)),
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.35f), RC(a, +0.08f)),
                     cost = 500 * CENTS)
             )
             WantType.GENRE_EXPERIMENT -> listOf(
                 option("$a:genre_ep", "Green-light a genre-experiment EP, separate from main release",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.40f), NC(a, NeedType.AUTONOMY, +0.20f)),
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.40f), NC(a, NeedType.AUTONOMY, +0.20f), RC(a, +0.10f)),
                     cost = 600 * CENTS),
                 option("$a:genre_one_track", "Allow one experimental track on the main album",
                     listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.20f))),
                 option("$a:genre_stay", "Not this cycle — stay on brand",
-                    listOf(NC(a, NeedType.AUTONOMY, -0.15f)))
+                    listOf(NC(a, NeedType.AUTONOMY, -0.15f), RC(a, -0.08f)))
             )
             WantType.RECORD_ALBUM -> listOf(
                 option("$a:album_greenlight", "Approve full album budget and timeline",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.50f), NC(a, NeedType.RECOGNITION, +0.10f)),
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.50f), NC(a, NeedType.RECOGNITION, +0.10f), RC(a, +0.15f)),
                     cost = 3_000 * CENTS),
                 option("$a:album_ep_first", "Propose an EP first to build momentum",
                     listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.20f))),
                 option("$a:album_defer", "Not enough catalog depth yet — table it",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, -0.10f), NC(a, NeedType.AUTONOMY, -0.10f)))
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, -0.10f), NC(a, NeedType.AUTONOMY, -0.10f), RC(a, -0.08f)))
             )
             WantType.INCREASED_ROYALTIES -> listOf(
                 option("$a:royalties_agree", "Agree to a better royalty rate on the next deal",
-                    listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.35f))),
+                    listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.35f), RC(a, +0.12f))),
                 option("$a:royalties_partial", "Offer a smaller bump now, revisit at renewal",
                     listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.15f))),
                 option("$a:royalties_decline", "The deal stands — redirect to performance bonuses instead",
-                    listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.05f), NC(a, NeedType.AUTONOMY, -0.10f)))
+                    listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.05f), NC(a, NeedType.AUTONOMY, -0.10f), RC(a, -0.10f)))
             )
         }
     }
@@ -238,6 +304,9 @@ class StubAiProvider : LabelAiProvider {
 
     private fun NC(artistId: String, needType: NeedType, delta: Float) =
         StateEffect.NeedChange(artistId, needType, delta)
+
+    private fun RC(artistId: String, delta: Float) =
+        StateEffect.RelationshipChange(artistId, delta)
 
     companion object {
         private const val CENTS = 100L
