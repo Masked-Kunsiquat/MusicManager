@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.Flow
 interface SimRepository {
     val world: SimWorld
     fun observeUnresolved(): Flow<List<InboxItem>>
+    fun generateOptions(item: InboxItem): List<ResponseOption>
     suspend fun tick()
     suspend fun initializeIfEmpty(days: Int = 10)
     suspend fun resolveEvent(eventId: String, option: ResponseOption)
