@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
 import com.github.maskedkunisquat.musicmanager.navigation.AppNavGraph
 import com.github.maskedkunisquat.musicmanager.ui.device.DeviceScreen
@@ -23,8 +24,14 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             AppTheme {
+                val app = application as AppApplication
+                val modelLoadState by app.aiProvider.modelLoadState.collectAsStateWithLifecycle()
                 val navController = rememberNavController()
-                DeviceScreen(labelName = "Untitled Label") {
+                DeviceScreen(
+                    labelName = "Untitled Label",
+                    modelLoadState = modelLoadState,
+                    onDownloadModel = { app.aiProvider.downloadModel(app.modelDownloader) }
+                ) {
                     AppNavGraph(navController = navController, viewModel = inboxViewModel)
                 }
             }
