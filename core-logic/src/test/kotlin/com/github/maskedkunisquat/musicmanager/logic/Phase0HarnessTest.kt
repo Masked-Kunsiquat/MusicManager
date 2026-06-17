@@ -20,10 +20,18 @@ class Phase0HarnessTest {
         assertTrue("No events generated in 60 ticks — needs decay math may be broken", events.isNotEmpty())
 
         for (event in events) {
-            val options = ai.generateResponseOptions(event, finalWorld)
+            val email = ai.generateEmail(event, finalWorld)
             assertTrue(
-                "Event ${event::class.simpleName} produced ${options.size} option(s), expected ≥ 2",
-                options.size >= 2
+                "Event ${event::class.simpleName} produced ${email.options.size} option(s), expected ≥ 2",
+                email.options.size >= 2
+            )
+            assertTrue(
+                "Event ${event::class.simpleName} produced empty subject",
+                email.subject.isNotBlank()
+            )
+            assertTrue(
+                "Event ${event::class.simpleName} produced empty body",
+                email.body.isNotBlank()
             )
         }
 
