@@ -22,6 +22,7 @@ dependencies {
     implementation(project(":core-logic"))
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
+    implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     ksp(libs.room.compiler)
     testImplementation(libs.junit)

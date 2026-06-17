@@ -15,6 +15,6 @@ data class NeedState(
 ) {
     init {
         require(value in 0f..1f) { "value must be in 0f..1f, was $value" }
-        require(decayRate >= 0f) { "decayRate must be non-negative, was $decayRate" }
+        require(decayRate in 0f..1f) { "decayRate must be in 0f..1f, was $decayRate" }
     }
 }

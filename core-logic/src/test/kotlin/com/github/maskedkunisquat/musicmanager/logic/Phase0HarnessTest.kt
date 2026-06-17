@@ -27,15 +27,5 @@ class Phase0HarnessTest {
             )
         }
 
-        // Print harness output for manual inspection during development
-        println("=== Phase 0 Harness: seed=$seed, 60 ticks ===")
-        println("Roster: ${initialWorld.artists.values.map { "${it.name} (${it.genre})" }}")
-        println("Events: ${events.size} total")
-        events.take(5).forEach { event ->
-            println("  [day ${event.dayOfGame}] ${event::class.simpleName}")
-            ai.generateResponseOptions(event, finalWorld).forEach { opt ->
-                println("    > ${opt.text}")
-            }
-        }
     }
 }
