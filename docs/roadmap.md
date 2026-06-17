@@ -116,6 +116,10 @@ Polish existing systems before adding scope.
   surface to the player
 - Full audit pass: no two emails/decisions should feel mechanically
   identical
+- Event log hash chain: each appended event stores `SHA-256(prev_hash || payload)`,
+  verified on load. Detects direct DB edits without collecting user data; fits
+  naturally with the append-only architecture. Also a prerequisite for any
+  future multiplayer/co-op save-state sync (see v-infinity.md).
 
 **Done when:** the game has texture, not just mechanics — playtesting
 doesn't feel repetitive within a season.

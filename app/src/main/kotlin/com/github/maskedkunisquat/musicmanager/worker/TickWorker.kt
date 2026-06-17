@@ -1,6 +1,7 @@
 package com.github.maskedkunisquat.musicmanager.worker
 
 import android.content.Context
+import android.os.SystemClock
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.github.maskedkunisquat.musicmanager.AppApplication
@@ -13,11 +14,15 @@ class TickWorker(
     override suspend fun doWork(): Result {
         val app = applicationContext as AppApplication
         val prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val now = System.currentTimeMillis()
+        // elapsedRealtime() is monotonic within a boot — immune to system clock changes.
+        // It resets on reboot, so a negative delta means the device rebooted since our
+        // last checkpoint; in that case we reset the baseline and skip ticking rather
+        // than granting free ticks or crashing.
+        val now = SystemClock.elapsedRealtime()
         val lastTickedAt = prefs.getLong(KEY_LAST_TICKED_AT, -1L)
 
-        if (lastTickedAt == -1L) {
-            // First worker fire — record baseline without ticking; ViewModel.initializeIfEmpty handles seed ticks.
+        if (lastTickedAt == -1L || now < lastTickedAt) {
+            // First fire, or device rebooted — establish fresh baseline.
             prefs.edit().putLong(KEY_LAST_TICKED_AT, now).apply()
             return Result.success()
         }
