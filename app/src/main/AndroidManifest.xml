@@ -35,6 +35,15 @@
             </intent-filter>
         </receiver>
 
+        <!-- Debug only: adb shell am broadcast -a com.github.maskedkunisquat.DEBUG_TICK -p <pkg> -->
+        <receiver
+            android:name=".DebugTickReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.github.maskedkunisquat.DEBUG_TICK" />
+            </intent-filter>
+        </receiver>
+
     </application>
 
 </manifest>
