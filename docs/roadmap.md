@@ -30,22 +30,33 @@ non-empty, context-appropriate set of response options.
 
 ## Phase 1 — The Inbox (v0.1, first real playable slice)
 
-- Fake-OS shell: minimal Compose scaffold, just enough to feel like a
-  device-within-a-device. Inbox app only — other apps can be stubbed/absent.
-- `LabelAiProvider` interface + `GemmaLiteRtProvider` implementation (primary
-  target — build/test against this since Gemini Nano isn't available on dev
-  hardware)
-- Model download-on-first-run flow: `filesDir` storage, resumable download,
-  SHA-256 verification, manifest fetched from a static R2-hosted JSON file
-- Inbox renders artist events as emails using AI-generated prose
-- Response options rendered under each email; selecting one feeds the
-  decision back into the sim and triggers the next event
-- Basic label finances (can the player afford to keep this artist)
-- WorkManager polling for "new mail" checks — no FCM, no push
+**Completed:**
+- Fake-OS shell: Compose scaffold, device-within-a-device chrome, inbox nav
+- `LabelAiProvider` interface + `StubAiProvider` with personality-driven prose
+  (loyalty, confidence, volatility inflect tone; choices move loyalty; subsequent
+  emails reflect changed relationship)
+- `GemmaLiteRtProvider` skeleton wired into `AppApplication` (delegates to stub,
+  `modelLoadState` StateFlow in place for Phase 1 download UI)
+- `ModelLoadState` + `ModelDownloader` interfaces in `:core-logic`
+- `GemmaModelConfig` constants (HF base URL, filename for Gemma 4 E4B)
+- Inbox renders artist events as emails; response options under each email; selecting
+  one feeds the decision back into the sim and triggers the next event
+- Basic label finances gating (can the player afford this response option)
+- WorkManager polling: fires hourly, elapsed-time logic, 160 min per tick,
+  9-tick catchup cap (≈ 24h). 180 ticks ≈ 20 real days.
+- Event log: append-only Room schema, `initializeIfEmpty` seeds 10 days on first run
+
+**Remaining:**
+- `GemmaLiteRtProvider` full implementation: LiteRT-LM SDK integration,
+  NPU → GPU (OpenCL) → CPU backend cascade, `generateEmail()` via real inference
+- Model download flow: resumable HTTP to `filesDir`, SHA-256 verification,
+  model manifest version-pinned from a static R2-hosted JSON file
+- Download/load state UI: progress indicator in DeviceScreen chrome while
+  model is absent or loading (maps to `modelLoadState` StateFlow)
 
 **Done when:** one artist feels alive through their emails across multiple
-in-game days, and a player's choices visibly change that artist's subsequent
-behavior/tone.
+in-game days, powered by on-device Gemma 4 E4B inference, and a player's choices
+visibly change that artist's subsequent behavior/tone.
 
 ## Phase 2 — The Market (v0.2)
 
@@ -58,6 +69,17 @@ behavior/tone.
 - Unsigned artist pool, procedurally generated
 - Signing flow: scout tip -> meeting request -> options-based negotiation
   across a few inbox exchanges
+
+**Content cadence design (decided Phase 1):** Each non-artist content type
+owns its own generation rate inside `EventGenerator.tick()` — no new WorkManager
+jobs needed. Rates are per-tick probabilities or counters, e.g.:
+  - `NeedUrgent` / `ContractExpiring` — deterministic threshold/countdown
+  - `MarketShift` — ~40% chance per tick (probabilistic)
+  - `IntelDrop` — ~25% chance per tick, weighted by genre relevance
+  - `ScoutReport` — every N ticks (counter-based)
+Add new `SimEvent` subtypes + `EventGenerator` arms; the inbox renders them
+all the same way. Tuning target: player gets meaningful content without feeling
+flooded across their ~20-day play arc.
 
 **Done when:** market pressure visibly shapes decisions independent of any
 single artist relationship.
@@ -94,6 +116,10 @@ Polish existing systems before adding scope.
   surface to the player
 - Full audit pass: no two emails/decisions should feel mechanically
   identical
+- Event log hash chain: each appended event stores `SHA-256(prev_hash || payload)`,
+  verified on load. Detects direct DB edits without collecting user data; fits
+  naturally with the append-only architecture. Also a prerequisite for any
+  future multiplayer/co-op save-state sync (see v-infinity.md).
 
 **Done when:** the game has texture, not just mechanics — playtesting
 doesn't feel repetitive within a season.

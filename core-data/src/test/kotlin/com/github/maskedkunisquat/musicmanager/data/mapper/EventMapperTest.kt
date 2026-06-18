@@ -1,5 +1,6 @@
 package com.github.maskedkunisquat.musicmanager.data.mapper
 
+import com.github.maskedkunisquat.musicmanager.logic.ai.GeneratedEmail
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.WantType
@@ -8,22 +9,29 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
+
+private val STUB_EMAIL = GeneratedEmail("subject", "body", emptyList())
 
 class EventMapperTest {
 
     @Test
     fun `NeedUrgent maps to correct event type and day`() {
         val event = SimEvent.NeedUrgent("artist_1", NeedType.BELONGING, 0.25f, dayOfGame = 5)
-        val entity = event.toEntity()
+        val entity = event.toEntity(STUB_EMAIL)
         assertEquals("need_urgent", entity.eventType)
         assertEquals(5, entity.dayOfGame)
+        assertEquals("subject", entity.emailSubject)
+        assertEquals("body", entity.emailBody)
+        assertNull(entity.selectedOptionId)
+        assertNull(entity.resolvedAt)
     }
 
     @Test
     fun `NeedUrgent payload formats currentValue to 4 decimal places`() {
         val event = SimEvent.NeedUrgent("artist_1", NeedType.BELONGING, 0.3f, dayOfGame = 1)
-        val payload = Json.parseToJsonElement(event.toEntity().payload).jsonObject
+        val payload = Json.parseToJsonElement(event.toEntity(STUB_EMAIL).payload).jsonObject
         // Without formatting, 0.3f.toDouble() → "0.30000001192092896"
         assertEquals("0.3000", payload["currentValue"]!!.jsonPrimitive.content)
         assertEquals("BELONGING", payload["needType"]!!.jsonPrimitive.content)
@@ -33,7 +41,7 @@ class EventMapperTest {
     @Test
     fun `ContractExpiring maps correctly`() {
         val event = SimEvent.ContractExpiring("artist_1", "contract_42", daysRemaining = 15, dayOfGame = 10)
-        val entity = event.toEntity()
+        val entity = event.toEntity(STUB_EMAIL)
         assertEquals("contract_expiring", entity.eventType)
         assertEquals(10, entity.dayOfGame)
         val payload = Json.parseToJsonElement(entity.payload).jsonObject
@@ -45,7 +53,7 @@ class EventMapperTest {
     @Test
     fun `WantSurfaced payload formats urgency to 4 decimal places`() {
         val event = SimEvent.WantSurfaced("artist_2", WantType.RECORD_ALBUM, urgency = 0.8f, dayOfGame = 20)
-        val entity = event.toEntity()
+        val entity = event.toEntity(STUB_EMAIL)
         assertEquals("want_surfaced", entity.eventType)
         assertEquals(20, entity.dayOfGame)
         val payload = Json.parseToJsonElement(entity.payload).jsonObject

@@ -57,14 +57,16 @@ real forcing reason:
    the dev's own hardware (S25U) and excludes most users. Build an interface
    (working name `LabelAiProvider`, mirrors the closet app's
    `OutfitAiProvider` pattern) with implementations:
-    - `GemmaLiteRtProvider` — Gemma 3 1B via LiteRT/TFLite. **Primary target,
-      build and test against this first.**
+    - `GemmaLiteRtProvider` — **Gemma 4 E4B Instruct** (`gemma-4-E4B-it.litertlm`,
+      ~3.66 GB) via LiteRT-LM SDK. **Primary target, build and test against this.**
+      Model from `litert-community/gemma-4-E4B-it-litert-lm` on HuggingFace.
+      Backend cascade: NPU (SM8750/SM8650) → GPU (OpenCL) → CPU.
     - `GeminiNanoProvider` — used when device supports it, behind the same
       interface.
     - Build flavors: `foss` (Gemma only, F-Droid eligible) and `full` (tries
       Gemini Nano, falls back to Gemma).
 
-4. **On-device model, downloaded not bundled.** ~600MB for Gemma 3 1B is too
+4. **On-device model, downloaded not bundled.** ~3.66 GB for Gemma 4 E4B is too
    large to ship in-APK. Download-on-first-run to `filesDir` (not external
    storage), resumable via HTTP range requests, SHA-256 verified before load.
    Model manifest (version, hash, URL) hosted as a static JSON file on

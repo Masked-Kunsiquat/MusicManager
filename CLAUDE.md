@@ -22,9 +22,11 @@ directory is configured. Don't silently remove it.
 It's an Android library module. The bare `:test` task doesn't exist.
 `:core-logic:test` is a JVM module and uses the normal task.
 
-**Don't add `kotlin-android` plugin to `core-data/build.gradle.kts`**
-AGP 9.x handles Kotlin compilation there via the `disallowKotlinSourceSets`
-flag. Adding the plugin explicitly causes conflicts.
+**Don't add `kotlin-android` plugin to any Android module (`core-data`, `:app`)**
+AGP 9.x registers its own `kotlin` extension. Adding `kotlin-android` causes
+"Cannot add extension with name 'kotlin', as there is an extension already
+registered." For `:app`, use only `android.application` + `kotlin-compose`.
+Remove `kotlinOptions { jvmTarget = "..." }` too — it's a `kotlin-android`-only DSL.
 
 ---
 
@@ -39,7 +41,7 @@ The apply-time code will debit `costFunds` automatically.
 **`tickN()` aggregates events from ALL N ticks, world is the FINAL state**
 Both `tick()` and `tickN()` return `TickResult`. The `world` field in a
 `tickN` result is after N ticks; `events` is the full list from ticks 1–N.
-When passing world context to `LabelAiProvider.generateResponseOptions()`,
+When passing world context to `LabelAiProvider.generateEmail()`,
 the semantically correct value is the world snapshot *at the time of the
 event*, not the final world. Phase 0 ignores this (dimensions don't tick),
 but Phase 1 will need per-event snapshots.
@@ -64,6 +66,22 @@ Calling `toEntity()` twice on the same `SimEvent` produces two entities with
 different IDs. The event log is append-only by design; this is intentional,
 not a bug.
 
+**`EntityMapper.toInboxItemOrNull()` always returns `options = emptyList()`**
+Options aren't persisted — only `emailSubject` and `emailBody` are stored.
+When a `CoroutineWorker` or the detail screen needs options, call
+`SimRepository.generateOptions(item)` (which re-calls `aiProvider.generateEmail`).
+`InboxViewModel` caches results by event ID so recompositions don't re-generate.
+
+**`CoroutineWorker` gets its repository via `applicationContext as AppApplication`**
+There is no Hilt/WorkerFactory. `TickWorker` casts `applicationContext` directly.
+Don't introduce a custom `WorkerFactory` just to inject — the cast is intentional.
+
+**1 tick = 160 min (2h 40min). WorkManager fires every hour.**
+`TickWorker` uses elapsed-time logic (SharedPreferences `last_ticked_at`) rather
+than "one fire = one tick". Catchup is capped at 9 ticks (≈ 24h) to avoid flooding
+the inbox after a long absence. `TICK_INTERVAL_MS` is the source of truth — don't
+hardcode 160 min elsewhere. A 180-tick contract expires in ~20 real days.
+
 ---
 
 ## Architecture constraints (see AGENTS.md for full rationale)
@@ -72,5 +90,7 @@ not a bug.
 - No server, no Firebase, no FCM. WorkManager for background polling.
 - Event log is append-only. Derive state by folding over events; don't CRUD
   rows in place.
-- `LabelAiProvider` is the AI seam. Swapping `StubAiProvider` →
-  `GemmaLiteRtProvider` in Phase 1 is a one-liner at the injection site.
+- `LabelAiProvider` is the AI seam. `GemmaLiteRtProvider` is already wired in
+  `AppApplication` (Phase 1 skeleton). Phase 1 remaining work fills in real inference.
+- Room types (`SimDatabase`, `RoomDatabase`) must not leak into `:app`. `DatabaseFactory`
+  in `:core-data` returns `EventLogDao` directly. If `:app` needs Room, something is wrong.
