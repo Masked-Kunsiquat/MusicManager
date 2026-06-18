@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,9 +67,10 @@ private fun DeviceStatusBar(labelName: String) {
 
 @Composable
 private fun ModelStateBanner(state: ModelLoadState, onDownload: () -> Unit) {
+    val context = LocalContext.current
     val (message, showButton) = when (state) {
         ModelLoadState.IDLE -> "AI model not downloaded" to true
-        ModelLoadState.DOWNLOADING -> "Downloading ${com.github.maskedkunisquat.musicmanager.ai.GemmaModelConfig.modelFilename()}…" to false
+        ModelLoadState.DOWNLOADING -> "Downloading ${com.github.maskedkunisquat.musicmanager.ai.GemmaModelConfig.modelFilename(context)}…" to false
         ModelLoadState.LOADING -> "Loading AI model…" to false
         ModelLoadState.READY -> return  // nothing to show
         ModelLoadState.ERROR -> "Model error — tap to retry" to true
