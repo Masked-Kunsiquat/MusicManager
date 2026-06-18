@@ -1,13 +1,26 @@
 package com.github.maskedkunisquat.musicmanager.ai
 
 import android.content.Context
+import android.os.Build
 import java.io.File
+import java.util.Locale
 
 object GemmaModelConfig {
     const val HF_BASE_URL =
-        "https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/main"
-    const val MODEL_FILENAME = "gemma-4-E4B-it.litertlm"
+        "https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert/resolve/main"
+
+    fun modelFilename(): String {
+        val board = Build.BOARD.lowercase(Locale.ROOT)
+        return when {
+            board == "sun" || board == "kailua" || board.startsWith("sm8750") ->
+                "gemma3-1b-it-elite.litertlm"
+            board == "kalama" || board.startsWith("sm8650") ->
+                "gemma3-1b-it-ultra.litertlm"
+            else ->
+                "gemma3-1b-it-universal.litertlm"
+        }
+    }
 
     fun modelFile(context: Context): File =
-        File(context.getExternalFilesDir(null) ?: context.filesDir, MODEL_FILENAME)
+        File(context.getExternalFilesDir(null) ?: context.filesDir, modelFilename())
 }

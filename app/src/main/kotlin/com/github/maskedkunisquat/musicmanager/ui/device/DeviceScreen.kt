@@ -68,7 +68,7 @@ private fun DeviceStatusBar(labelName: String) {
 private fun ModelStateBanner(state: ModelLoadState, onDownload: () -> Unit) {
     val (message, showButton) = when (state) {
         ModelLoadState.IDLE -> "AI model not downloaded" to true
-        ModelLoadState.DOWNLOADING -> "Downloading AI model… (~3.66 GB)" to false
+        ModelLoadState.DOWNLOADING -> "Downloading ${com.github.maskedkunisquat.musicmanager.ai.GemmaModelConfig.modelFilename()}…" to false
         ModelLoadState.LOADING -> "Loading AI model…" to false
         ModelLoadState.READY -> return  // nothing to show
         ModelLoadState.ERROR -> "Model error — tap to retry" to true

@@ -18,7 +18,7 @@ class AndroidModelDownloader(private val context: Context) : ModelDownloader {
 
         val request = DownloadManager.Request(Uri.parse(url))
             .setTitle("Downloading AI model")
-            .setDescription("Gemma 4 E4B — one-time download (~3.66 GB)")
+            .setDescription("${dest.name} — one-time download")
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             .setDestinationUri(Uri.fromFile(dest))
             .setAllowedOverRoaming(false)
