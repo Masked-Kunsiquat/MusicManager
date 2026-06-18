@@ -222,13 +222,6 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
         }
     }
 
-    private fun isQualcommDevice(): Boolean {
-        val hw = Build.HARDWARE.lowercase(Locale.ROOT)
-        val board = Build.BOARD.lowercase(Locale.ROOT)
-        return hw == "qcom" || board.contains("sm8") || board.contains("sdm") ||
-            board == "sun" || board == "kailua" || board == "pineapple" || board == "kalama"
-    }
-
     companion object {
         private const val TAG = "GemmaLiteRtProvider"
         private val CONTROL_CHARS = Regex("[\\p{Cntrl}&&[^\n\r\t]]")
