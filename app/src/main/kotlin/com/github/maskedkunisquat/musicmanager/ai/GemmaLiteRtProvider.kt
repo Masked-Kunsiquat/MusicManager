@@ -37,7 +37,6 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
     val modelLoadState: StateFlow<ModelLoadState> = _modelLoadState.asStateFlow()
 
     @Volatile private var engine: Engine? = null
-    @Volatile private var openClFailed = false
     private val engineLock = ReentrantReadWriteLock()
     private val initLock = Any()
     private val initScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -116,24 +115,8 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
         return withContext(Dispatchers.IO) {
             runCatching { infer(eng, event, artist, world) }
                 .getOrElse { e ->
-                    if (!openClFailed && e.message?.contains("OpenCL", ignoreCase = true) == true) {
-                        Log.w(TAG, "OpenCL failure — switching to CPU fallback")
-                        openClFailed = true
-                        engineLock.writeLock().withLock {
-                            (engine as? AutoCloseable)?.runCatching { close() }
-                            engine = null
-                        }
-                        _modelLoadState.value = ModelLoadState.IDLE
-                        doInitialize()
-                        // Re-check engine after CPU reinit; fall back to stub if it failed.
-                        val cpuEng = engineLock.readLock().run { lock(); try { engine } finally { unlock() } }
-                        if (cpuEng != null) runCatching { infer(cpuEng, event, artist, world) }
-                            .getOrElse { stub.generateEmail(event, world) }
-                        else stub.generateEmail(event, world)
-                    } else {
-                        Log.w(TAG, "Inference error — stub fallback: ${e.message}")
-                        stub.generateEmail(event, world)
-                    }
+                    Log.w(TAG, "Inference error — stub fallback: ${e.message}")
+                    stub.generateEmail(event, world)
                 }
         }
     }
@@ -227,13 +210,14 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
         val board = Build.BOARD.lowercase(Locale.ROOT)
         val nativeLibDir = context.applicationInfo.nativeLibraryDir
         val hasNpu = File(nativeLibDir, "libpenguin.so").exists()
+        // GPU (WebGPU) backend native-crashes on Adreno 830 when loading this model due to
+        // GPU memory exhaustion — the JVM can't catch a SIGSEGV, so GPU is excluded until
+        // LiteRT WebGPU stability improves or we move init to an isolated process.
         return when {
             (board == "sun" || board == "kailua" || board.startsWith("sm8750")) && hasNpu ->
-                listOf(Backend.NPU(nativeLibraryDir = nativeLibDir), Backend.GPU(), Backend.CPU())
+                listOf(Backend.NPU(nativeLibraryDir = nativeLibDir), Backend.CPU())
             (board == "kalama" || board.startsWith("sm8650")) && hasNpu ->
-                listOf(Backend.NPU(nativeLibraryDir = nativeLibDir), Backend.GPU(), Backend.CPU())
-            isQualcommDevice() ->
-                if (!openClFailed) listOf(Backend.GPU(), Backend.CPU()) else listOf(Backend.CPU())
+                listOf(Backend.NPU(nativeLibraryDir = nativeLibDir), Backend.CPU())
             else -> listOf(Backend.CPU())
         }
     }
