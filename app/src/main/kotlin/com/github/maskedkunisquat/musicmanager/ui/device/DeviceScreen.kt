@@ -73,6 +73,7 @@ private fun ModelStateBanner(state: ModelLoadState, onDownload: () -> Unit) {
         ModelLoadState.READY -> return  // nothing to show
         ModelLoadState.ERROR -> "Model error — tap to retry" to true
     }
+    val buttonText = if (state == ModelLoadState.ERROR) "Retry" else "Download"
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -93,7 +94,7 @@ private fun ModelStateBanner(state: ModelLoadState, onDownload: () -> Unit) {
                     containerColor = MaterialTheme.colorScheme.primary
                 )
             ) {
-                Text("Download", style = MaterialTheme.typography.labelSmall)
+                Text(buttonText, style = MaterialTheme.typography.labelSmall)
             }
         }
     }

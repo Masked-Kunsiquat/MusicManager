@@ -86,8 +86,6 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
 
             _modelLoadState.value = ModelLoadState.ERROR
             Log.e(TAG, "All backends failed", lastException)
-            // Corrupt model file — remove so a fresh download can succeed next time.
-            modelFile.runCatching { delete() }
         }
     }
 
@@ -97,11 +95,17 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
             return -1L
         }
         _modelLoadState.value = ModelLoadState.DOWNLOADING
-        return downloader.enqueue(
-            modelFile = GemmaModelConfig.MODEL_FILENAME,
-            url = "${GemmaModelConfig.HF_BASE_URL}/${GemmaModelConfig.MODEL_FILENAME}",
-            sha256 = null  // Phase 2: fill in from HF model card
-        )
+        return runCatching {
+            downloader.enqueue(
+                modelFile = GemmaModelConfig.MODEL_FILENAME,
+                url = "${GemmaModelConfig.HF_BASE_URL}/${GemmaModelConfig.MODEL_FILENAME}",
+                sha256 = null  // Phase 2: fill in from HF model card
+            )
+        }.getOrElse { e ->
+            Log.e(TAG, "Failed to enqueue model download", e)
+            _modelLoadState.value = ModelLoadState.ERROR
+            -1L
+        }
     }
 
     override suspend fun generateEmail(event: SimEvent, world: SimWorld): GeneratedEmail {
@@ -225,9 +229,9 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
         val hasNpu = File(nativeLibDir, "libpenguin.so").exists()
         return when {
             (board == "sun" || board == "kailua" || board.startsWith("sm8750")) && hasNpu ->
-                listOf(Backend.NPU(nativeLibraryDir = nativeLibDir))
+                listOf(Backend.NPU(nativeLibraryDir = nativeLibDir), Backend.GPU(), Backend.CPU())
             (board == "kalama" || board.startsWith("sm8650")) && hasNpu ->
-                listOf(Backend.NPU(nativeLibraryDir = nativeLibDir))
+                listOf(Backend.NPU(nativeLibraryDir = nativeLibDir), Backend.GPU(), Backend.CPU())
             isQualcommDevice() ->
                 if (!openClFailed) listOf(Backend.GPU(), Backend.CPU()) else listOf(Backend.CPU())
             else -> listOf(Backend.CPU())

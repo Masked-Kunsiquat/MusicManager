@@ -1,5 +1,6 @@
 package com.github.maskedkunisquat.musicmanager.ui.inbox
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -27,6 +28,9 @@ class InboxViewModel(private val repository: SimRepository) : ViewModel() {
     private val _options = MutableStateFlow<Map<String, List<ResponseOption>>>(emptyMap())
     val options: StateFlow<Map<String, List<ResponseOption>>> = _options.asStateFlow()
 
+    // Tracks IDs currently being fetched to prevent duplicate coroutine launches on rapid recomposition.
+    private val inFlightOptions = mutableSetOf<String>()
+
     init {
         viewModelScope.launch {
             repository.initializeIfEmpty()
@@ -35,19 +39,32 @@ class InboxViewModel(private val repository: SimRepository) : ViewModel() {
     }
 
     fun requestOptionsFor(item: InboxItem) {
-        if (_options.value.containsKey(item.id)) return
+        if (_options.value.containsKey(item.id) || item.id in inFlightOptions) return
+        inFlightOptions.add(item.id)
         viewModelScope.launch {
-            val opts = repository.generateOptions(item)
-            _options.update { it + (item.id to opts) }
+            try {
+                val opts = repository.generateOptions(item)
+                _options.update { it + (item.id to opts) }
+            } finally {
+                inFlightOptions.remove(item.id)
+            }
         }
     }
 
     fun resolveEvent(eventId: String, option: ResponseOption) {
         _options.update { it - eventId }
         viewModelScope.launch {
-            repository.resolveEvent(eventId, option)
-            _world.value = repository.world
+            runCatching {
+                repository.resolveEvent(eventId, option)
+                _world.value = repository.world
+            }.onFailure { e ->
+                Log.e(TAG, "resolveEvent failed for $eventId", e)
+            }
         }
+    }
+
+    companion object {
+        private const val TAG = "InboxViewModel"
     }
 }
 
