@@ -13,6 +13,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.ArtistState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.google.ai.edge.litertlm.Backend
+import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
@@ -45,7 +46,6 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
 
     private val modelFile: File get() = GemmaModelConfig.modelFile(context)
 
-    // Called from AppApplication.onCreate() and DownloadCompleteReceiver — non-blocking.
     fun initialize() {
         val state = _modelLoadState.value
         if (state == ModelLoadState.LOADING || state == ModelLoadState.READY) return
@@ -127,38 +127,45 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
         artist: ArtistState?,
         world: SimWorld
     ): GeneratedEmail {
-        val tokens = StringBuilder()
+        val fallback = stub.generateEmail(event, world)
         val config = ConversationConfig(systemInstruction = Contents.of(systemInstruction()))
-        eng.createConversation(config).use { conv ->
-            conv.sendMessageAsync(buildPrompt(event, artist)).collect { msg ->
-                val text = msg.toString().stripControlChars()
-                if (text.isNotEmpty()) tokens.append(text)
-            }
+        val raw = eng.createConversation(config).use { conv ->
+            conv.sendMessage(buildPrompt(event, artist))
+                .contents.contents
+                .filterIsInstance<Content.Text>()
+                .joinToString("") { it.text }
         }
-        return parseResponse(tokens.toString(), event, world)
+        Log.i(TAG, "Gemma raw: ${raw.take(200)}")
+        return parseEmail(raw, fallback)
     }
 
-    private suspend fun parseResponse(raw: String, event: SimEvent, world: SimWorld): GeneratedEmail {
-        val fallback = stub.generateEmail(event, world)
-        return try {
-            val json = raw.trim()
-                .removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
-            val obj = JSONObject(json)
-            val subject = obj.optString("subject").ifEmpty { fallback.subject }
-            val body = obj.optString("body").ifEmpty { fallback.body }
+    // Extracts the first {...} block from raw output and parses subject/body.
+    // The 1B model often wraps JSON in markdown fences — first/last brace search handles that.
+    private fun parseEmail(raw: String, fallback: GeneratedEmail): GeneratedEmail {
+        val start = raw.indexOf('{')
+        val end = raw.lastIndexOf('}')
+        if (start == -1 || end <= start) {
+            Log.w(TAG, "No JSON found — stub fallback")
+            return fallback
+        }
+        return runCatching {
+            val obj = JSONObject(raw.substring(start, end + 1))
+            val subject = obj.optString("subject").trim()
+            val body = obj.optString("body").trim()
+            if (subject.isBlank() || body.isBlank()) return fallback
             GeneratedEmail(subject = subject, body = body, options = fallback.options)
-        } catch (e: Exception) {
-            Log.w(TAG, "JSON parse failed — stub fallback: ${e.message}")
+        }.getOrElse {
+            Log.w(TAG, "JSON parse failed — stub fallback: ${it.message}")
             fallback
         }
     }
 
     private fun systemInstruction() =
-        "You are a music artist writing a real email to your label manager. " +
-        "Respond ONLY with a JSON object, no markdown, no code blocks: " +
-        "{\"subject\": \"subject here\", \"body\": \"body here\"}\n" +
-        "Subject: 5-10 words, lowercase, no punctuation at end. " +
-        "Body: 3-5 sentences, first-person. End with your name on its own line: — [name]."
+        "You are a music artist writing emails. " +
+        "Respond with ONLY a JSON object — no other text, no markdown, no code fences:\n" +
+        "{\"subject\": \"...\", \"body\": \"...\"}\n" +
+        "subject: 5-10 words, all lowercase, no terminal punctuation. " +
+        "body: 3-5 sentences, first person."
 
     private fun buildPrompt(event: SimEvent, artist: ArtistState?): String = buildString {
         val name = artist?.name ?: "the artist"
@@ -224,7 +231,5 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
 
     companion object {
         private const val TAG = "GemmaLiteRtProvider"
-        private val CONTROL_CHARS = Regex("[\\p{Cntrl}&&[^\n\r\t]]")
-        private fun String.stripControlChars() = replace(CONTROL_CHARS, "")
     }
 }
