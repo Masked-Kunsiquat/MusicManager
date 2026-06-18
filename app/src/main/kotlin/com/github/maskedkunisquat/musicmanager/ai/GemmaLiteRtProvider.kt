@@ -97,7 +97,7 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
         return runCatching {
             downloader.enqueue(
                 modelFile = GemmaModelConfig.modelFilename(),
-                url = "${GemmaModelConfig.HF_BASE_URL}/${GemmaModelConfig.modelFilename()}",
+                url = "${GemmaModelConfig.RELEASE_BASE_URL}/${GemmaModelConfig.modelFilename()}",
                 sha256 = null  // Phase 2: fill in from HF model card
             )
         }.getOrElse { e ->

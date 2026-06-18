@@ -6,8 +6,8 @@ import java.io.File
 import java.util.Locale
 
 object GemmaModelConfig {
-    const val HF_BASE_URL =
-        "https://huggingface.co/masked-kunsiquat/gemma-3-1b-it-litert/resolve/main"
+    const val RELEASE_BASE_URL =
+        "https://github.com/Masked-Kunsiquat/MusicManager/releases/download/models-v1"
 
     fun modelFilename(): String {
         val board = Build.BOARD.lowercase(Locale.ROOT)
