@@ -66,7 +66,7 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
             _modelLoadState.value = ModelLoadState.LOADING
             Log.i(TAG, "Loading engine — file=${modelFile.name} board=${Build.BOARD}")
 
-            var lastException: Exception? = null
+            var lastException: Throwable? = null
             for (backend in selectBackends()) {
                 var eng: Engine? = null
                 try {
@@ -80,7 +80,7 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
                     _modelLoadState.value = ModelLoadState.READY
                     Log.i(TAG, "Engine ready — backend=${backend::class.simpleName}")
                     return
-                } catch (e: Exception) {
+                } catch (e: Throwable) {
                     lastException = e
                     Log.w(TAG, "Init failed with ${backend::class.simpleName}: ${e.message}")
                     (eng as? AutoCloseable)?.runCatching { close() }
@@ -132,7 +132,7 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
         world: SimWorld
     ): GeneratedEmail {
         val fallback = stub.generateEmail(event, world)
-        val config = ConversationConfig(systemInstruction = Contents.of(systemInstruction()))
+        val config = ConversationConfig(systemInstruction = Contents.of(systemInstruction(fallback.options.size)))
         val raw = eng.createConversation(config).use { conv ->
             conv.sendMessage(buildPrompt(event, artist, fallback.options.size))
                 .contents.contents
@@ -156,7 +156,7 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
             val obj = JSONObject(raw.substring(start, end + 1))
             val subject = obj.optString("subject").trim()
             val body = obj.optString("body").trim()
-                .replace(Regex("\\*{1,2}([^*]+)\\*{1,2}"), "$1")
+                .replace(MARKDOWN_BOLD_ITALIC_RE, "$1")
             if (subject.isBlank() || body.isBlank()) return fallback
 
             // Merge Gemma option labels onto stub effects. Stub owns game logic (effects,
@@ -179,14 +179,15 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
         }
     }
 
-    private fun systemInstruction() =
-        "You are a music artist writing emails to your label manager. " +
-        "Respond with ONLY a JSON object — no other text, no markdown, no code fences:\n" +
-        "{\"subject\": \"...\", \"body\": \"...\", \"options\": [\"...\", \"...\"]}\n" +
-        "subject: 5-10 words, all lowercase, no terminal punctuation. " +
-        "body: 3-5 sentences, first person, no asterisks. " +
-        "options: exactly N short action phrases (5-10 words each) the label manager could offer in response. " +
-        "N is specified in the prompt."
+    private fun systemInstruction(optionCount: Int): String {
+        val optionSlots = (1..optionCount).joinToString(", ") { "\"...\"" }
+        return "You are a music artist writing emails to your label manager. " +
+            "Respond with ONLY a JSON object — no other text, no markdown, no code fences:\n" +
+            "{\"subject\": \"...\", \"body\": \"...\", \"options\": [$optionSlots]}\n" +
+            "subject: 5-10 words, all lowercase, no terminal punctuation. " +
+            "body: 3-5 sentences, first person, no asterisks. " +
+            "options: exactly $optionCount short action phrases (5-10 words each) the label manager could offer in response."
+    }
 
     private fun buildPrompt(event: SimEvent, artist: ArtistState?, optionCount: Int = 3): String = buildString {
         val name = artist?.name ?: "the artist"
@@ -253,5 +254,6 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
 
     companion object {
         private const val TAG = "GemmaLiteRtProvider"
+        private val MARKDOWN_BOLD_ITALIC_RE = Regex("\\*{1,2}([^*]+)\\*{1,2}")
     }
 }
