@@ -3,6 +3,7 @@ package com.github.maskedkunisquat.musicmanager.data.repository
 import com.github.maskedkunisquat.musicmanager.data.dao.EventLogDao
 import com.github.maskedkunisquat.musicmanager.data.mapper.eventSignature
 import com.github.maskedkunisquat.musicmanager.data.mapper.toInboxItemOrNull
+import com.github.maskedkunisquat.musicmanager.data.mapper.toResponseEntity
 import com.github.maskedkunisquat.musicmanager.data.mapper.toSimEventOrNull
 import com.github.maskedkunisquat.musicmanager.data.mapper.toEntity
 import com.github.maskedkunisquat.musicmanager.logic.ai.LabelAiProvider
@@ -77,7 +78,9 @@ class SimRepositoryImpl(
 
     override suspend fun resolveEvent(eventId: String, option: ResponseOption) = tickMutex.withLock {
         world = applyResponse(world, option)
-        dao.markResolved(eventId, option.id, System.currentTimeMillis())
+        val now = System.currentTimeMillis()
+        dao.markResolved(eventId, option.id, now)
+        dao.insert(option.toResponseEntity(eventId, world.currentDay))
         saveWorld(world)
     }
 }

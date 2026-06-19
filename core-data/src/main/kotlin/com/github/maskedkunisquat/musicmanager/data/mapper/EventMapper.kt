@@ -3,6 +3,9 @@ package com.github.maskedkunisquat.musicmanager.data.mapper
 import com.github.maskedkunisquat.musicmanager.data.entity.EventLogEntity
 import com.github.maskedkunisquat.musicmanager.logic.ai.GeneratedEmail
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
+import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
+import com.github.maskedkunisquat.musicmanager.logic.response.StateEffect
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.Locale
@@ -27,6 +30,50 @@ fun SimEvent.toEntity(email: GeneratedEmail): EventLogEntity = EventLogEntity(
     selectedOptionId = null,
     resolvedAt = null
 )
+
+fun ResponseOption.toResponseEntity(originalEventId: String, dayOfGame: Int): EventLogEntity {
+    val now = System.currentTimeMillis()
+    val payload = buildJsonObject {
+        put("originalEventId", originalEventId)
+        put("optionId", id)
+        put("optionText", text)
+        put("costFunds", costFunds)
+        put("effects", buildJsonArray {
+            effects.forEach { effect ->
+                add(buildJsonObject {
+                    when (effect) {
+                        is StateEffect.NeedChange -> {
+                            put("type", "need_change")
+                            put("artistId", effect.artistId)
+                            put("needType", effect.needType.name)
+                            put("delta", String.format(Locale.US, "%.4f", effect.delta))
+                        }
+                        is StateEffect.LabelFundsChange -> {
+                            put("type", "funds_change")
+                            put("delta", effect.delta)
+                        }
+                        is StateEffect.RelationshipChange -> {
+                            put("type", "relationship_change")
+                            put("artistId", effect.artistId)
+                            put("delta", String.format(Locale.US, "%.4f", effect.delta))
+                        }
+                    }
+                })
+            }
+        })
+    }.toString()
+    return EventLogEntity(
+        id = UUID.randomUUID().toString(),
+        dayOfGame = dayOfGame,
+        eventType = "response_applied",
+        payload = payload,
+        recordedAt = now,
+        emailSubject = "",
+        emailBody = "",
+        selectedOptionId = id,  // pre-resolved — this event IS the decision, not a pending item
+        resolvedAt = now
+    )
+}
 
 private fun SimEvent.eventTypeKey(): String = when (this) {
     is SimEvent.NeedUrgent -> "need_urgent"
