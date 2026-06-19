@@ -156,6 +156,74 @@ class ResponseApplicatorTest {
         assertEquals(0.0f, result.artists[artistId]!!.dimensions.loyalty, 0.001f)
     }
 
+    // --- RosterNeedChange ---
+
+    private val secondArtistId = "artist_1"
+
+    private val twoArtistWorld = baseWorld.copy(
+        artists = baseWorld.artists + (secondArtistId to baseWorld.artists[artistId]!!.copy(
+            id = secondArtistId,
+            name = "Second Artist"
+        )),
+        label = baseWorld.label.copy(rosterIds = setOf(artistId, secondArtistId))
+    )
+
+    @Test
+    fun `RosterNeedChange applies to all artists`() {
+        val effect = StateEffect.RosterNeedChange(NeedType.CREATIVE_FULFILLMENT, +0.20f)
+        val result = applyResponse(twoArtistWorld, option(effects = listOf(effect)))
+        assertEquals(0.80f, result.artists[artistId]!!.needs[NeedType.CREATIVE_FULFILLMENT]!!.value, 0.001f)
+        assertEquals(0.80f, result.artists[secondArtistId]!!.needs[NeedType.CREATIVE_FULFILLMENT]!!.value, 0.001f)
+    }
+
+    @Test
+    fun `RosterNeedChange clamps each artist at 1f`() {
+        val effect = StateEffect.RosterNeedChange(NeedType.CREATIVE_FULFILLMENT, +0.90f)
+        val result = applyResponse(twoArtistWorld, option(effects = listOf(effect)))
+        assertEquals(1.0f, result.artists[artistId]!!.needs[NeedType.CREATIVE_FULFILLMENT]!!.value, 0.001f)
+        assertEquals(1.0f, result.artists[secondArtistId]!!.needs[NeedType.CREATIVE_FULFILLMENT]!!.value, 0.001f)
+    }
+
+    @Test
+    fun `RosterNeedChange is no-op for artists missing that need type`() {
+        val worldWithoutFinancialNeed = baseWorld.copy(
+            artists = mapOf(artistId to baseWorld.artists[artistId]!!.copy(
+                needs = mapOf(NeedType.CREATIVE_FULFILLMENT to NeedState(NeedType.CREATIVE_FULFILLMENT, 0.6f, 0.03f))
+            ))
+        )
+        val effect = StateEffect.RosterNeedChange(NeedType.FINANCIAL_SECURITY, +0.30f)
+        val result = applyResponse(worldWithoutFinancialNeed, option(effects = listOf(effect)))
+        // Artist doesn't have FINANCIAL_SECURITY need — world unchanged for that artist
+        assertEquals(worldWithoutFinancialNeed.artists[artistId], result.artists[artistId])
+    }
+
+    // --- PairedNeedChange ---
+
+    @Test
+    fun `PairedNeedChange applies to the partner artist only`() {
+        val effect = StateEffect.PairedNeedChange(secondArtistId, NeedType.CREATIVE_FULFILLMENT, +0.20f)
+        val result = applyResponse(twoArtistWorld, option(effects = listOf(effect)))
+        // Partner gets the boost
+        assertEquals(0.80f, result.artists[secondArtistId]!!.needs[NeedType.CREATIVE_FULFILLMENT]!!.value, 0.001f)
+        // Triggering artist is unaffected
+        assertEquals(twoArtistWorld.artists[artistId]!!.needs[NeedType.CREATIVE_FULFILLMENT]!!.value,
+            result.artists[artistId]!!.needs[NeedType.CREATIVE_FULFILLMENT]!!.value, 0.001f)
+    }
+
+    @Test
+    fun `PairedNeedChange clamps partner need at 1f`() {
+        val effect = StateEffect.PairedNeedChange(secondArtistId, NeedType.CREATIVE_FULFILLMENT, +0.90f)
+        val result = applyResponse(twoArtistWorld, option(effects = listOf(effect)))
+        assertEquals(1.0f, result.artists[secondArtistId]!!.needs[NeedType.CREATIVE_FULFILLMENT]!!.value, 0.001f)
+    }
+
+    @Test
+    fun `PairedNeedChange for unknown partner is a no-op`() {
+        val effect = StateEffect.PairedNeedChange("unknown_artist", NeedType.CREATIVE_FULFILLMENT, +0.50f)
+        val result = applyResponse(baseWorld, option(effects = listOf(effect)))
+        assertEquals(baseWorld, result)
+    }
+
     // --- Effect ordering ---
 
     @Test

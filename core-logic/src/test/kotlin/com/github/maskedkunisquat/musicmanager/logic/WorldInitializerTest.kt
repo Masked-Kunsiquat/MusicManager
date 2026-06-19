@@ -56,4 +56,76 @@ class WorldInitializerTest {
                 world.contracts[artist.contractId])
         }
     }
+
+    // --- Prospects ---
+
+    @Test
+    fun `prospect count is between 6 and 10`() {
+        val world = WorldInitializer.initializeWorld(7L)
+        assertTrue("Expected 6–10 prospects, got ${world.prospects.size}", world.prospects.size in 6..10)
+    }
+
+    @Test
+    fun `prospect IDs are unique`() {
+        val world = WorldInitializer.initializeWorld(42L)
+        assertEquals(world.prospects.size, world.prospects.keys.toSet().size)
+    }
+
+    @Test
+    fun `all prospect signabilityScores are in valid range`() {
+        val world = WorldInitializer.initializeWorld(55L)
+        for (prospect in world.prospects.values) {
+            assertTrue(
+                "${prospect.name} signabilityScore out of range: ${prospect.signabilityScore}",
+                prospect.signabilityScore in 0f..1f
+            )
+        }
+    }
+
+    @Test
+    fun `all prospect signabilityScores are between 0_2 and 0_9`() {
+        // WorldInitializer constrains to 0.2–0.9 so negotiations are never trivially impossible/trivial.
+        val world = WorldInitializer.initializeWorld(77L)
+        for (prospect in world.prospects.values) {
+            assertTrue(
+                "${prospect.name} signabilityScore outside 0.2–0.9: ${prospect.signabilityScore}",
+                prospect.signabilityScore in 0.2f..0.9f
+            )
+        }
+    }
+
+    @Test
+    fun `prospect genres are valid market genres`() {
+        val knownGenres = setOf("indie-rock", "pop", "hip-hop", "electronic", "folk", "r&b")
+        val world = WorldInitializer.initializeWorld(33L)
+        for (prospect in world.prospects.values) {
+            assertTrue(
+                "Unknown genre '${prospect.genre}' for prospect ${prospect.name}",
+                prospect.genre in knownGenres
+            )
+        }
+    }
+
+    @Test
+    fun `prospects are deterministic for same seed`() {
+        val a = WorldInitializer.initializeWorld(99L).prospects
+        val b = WorldInitializer.initializeWorld(99L).prospects
+        assertEquals(a, b)
+    }
+
+    @Test
+    fun `prospects differ across seeds`() {
+        val a = WorldInitializer.initializeWorld(1L).prospects
+        val b = WorldInitializer.initializeWorld(2L).prospects
+        assertNotEquals(a, b)
+    }
+
+    @Test
+    fun `no prospect ID collides with artist IDs`() {
+        val world = WorldInitializer.initializeWorld(42L)
+        val artistIds = world.artists.keys
+        for (id in world.prospects.keys) {
+            assertTrue("Prospect ID $id collides with an artist ID", id !in artistIds)
+        }
+    }
 }

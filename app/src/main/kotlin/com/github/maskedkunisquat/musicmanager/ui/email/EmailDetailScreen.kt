@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxViewModel
 
 @Composable
@@ -62,7 +63,12 @@ fun EmailDetailScreen(
         return
     }
 
-    val artistName = world.artists[item.event.artistId]?.name ?: item.event.artistId
+    val artistName = when (val e = item.event) {
+        is SimEvent.MarketShift -> e.genre
+        is SimEvent.IntelDrop -> "industry intel"
+        is SimEvent.ScoutReport -> world.scouts[e.scoutId]?.name ?: "scout"
+        else -> world.artists[e.artistId]?.name ?: e.artistId.orEmpty()
+    }
     val options = allOptions[item.id]
 
     Column(modifier = Modifier.fillMaxSize()) {

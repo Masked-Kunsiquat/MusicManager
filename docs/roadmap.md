@@ -60,29 +60,130 @@ visibly change that artist's subsequent behavior/tone.
 
 ## Phase 2 — The Market (v0.2)
 
-- Genre trend macro layer (self-balancing, slow-moving, see design
-  philosophy's underdog-bet rule)
-- Charts app: intentionally delayed/stale data
-- Press app: in-game trade press, market signals, occasional artist mentions
-- Scout network: reports arrive in inbox, scouts have hidden per-genre
-  reliability weights
-- Unsigned artist pool, procedurally generated
-- Signing flow: scout tip -> meeting request -> options-based negotiation
-  across a few inbox exchanges
+Work is ordered by dependency. Domain layer must land before UI; scout model
+before signing flow; new event types before their app screens.
 
-**Content cadence design (decided Phase 1):** Each non-artist content type
-owns its own generation rate inside `EventGenerator.tick()` — no new WorkManager
-jobs needed. Rates are per-tick probabilities or counters, e.g.:
-  - `NeedUrgent` / `ContractExpiring` — deterministic threshold/countdown
-  - `MarketShift` — ~40% chance per tick (probabilistic)
-  - `IntelDrop` — ~25% chance per tick, weighted by genre relevance
-  - `ScoutReport` — every N ticks (counter-based)
-Add new `SimEvent` subtypes + `EventGenerator` arms; the inbox renders them
-all the same way. Tuning target: player gets meaningful content without feeling
-flooded across their ~20-day play arc.
+### 2-A — Market domain layer (`:core-logic`)
+
+1. **Genre trend ticking** — `MarketState.genreTrends` already exists as a
+   `Map<String, Float>` stub. Add tick logic: each genre drifts by a small
+   seed-driven random delta each tick, with mean-reversion toward 0.5f.
+   Self-balancing rule (design philosophy): when a trend exceeds 0.7f its
+   downward drift rate doubles; below 0.3f its upward drift rate doubles.
+   Genres are seeded from world init — same genres as the roster's artists,
+   plus 2-3 extra to represent unsigned/rival territory.
+
+2. **New `SimEvent` subtypes** — add to `SimEvent.kt`:
+   - `MarketShift(genre: String, direction: Float, dayOfGame: Int)` — trend
+     moved meaningfully this tick (threshold-gated, not every drift)
+   - `IntelDrop(genre: String, headline: String, dayOfGame: Int)` — a market
+     signal; `headline` is AI-generated flavor ("indie-folk momentum stalling",
+     "hyperpop crossover moment building")
+   - `ScoutReport(scoutId: String, prospectId: String, dayOfGame: Int)` — a
+     scout surfaces an unsigned artist worth looking at
+
+3. **`EventGenerator` arms** — wire the three new types into `tick()`:
+   - `MarketShift`: emit when any genre trend moves by ≥ 0.08f in one tick
+   - `IntelDrop`: ~25% chance per tick, weighted toward genres where the label
+     has roster artists (more relevant signal)
+   - `ScoutReport`: every 8 ticks per active scout (counter-based, not
+     probabilistic — scouts are reliable in cadence, unreliable in accuracy)
+
+4. **Unsigned artist pool** — add `prospects: Map<String, ProspectState>` to
+   `SimWorld`. `ProspectState` holds: `id`, `name`, `genre`, `dimensions`
+   (same type as signed artists), `signabilityScore: Float` (0–1, hidden from
+   player — drives which negotiation options appear). Populate 6-10 prospects
+   at world init; `WorldInitializer` seeds them deterministically. Prospects
+   do not tick (no need decay) until signed.
+
+5. **Scout model** — add `scouts: Map<String, ScoutState>` to `SimWorld`.
+   `ScoutState` holds: `id`, `name`, `genreWeights: Map<String, Float>` (hidden
+   per-genre reliability; higher = better signal accuracy in `IntelDrop`s they
+   source). Start with 2 scouts wired at world init. Scouts are not hired/fired
+   until Phase 3.
+
+**Known tech debt from 2-A review:**
+- **RNG seed correlation** — `scoutRng` uses `seed xor (currentDay + 2)` and `eventRng` uses
+  `seed xor nextDay`, so `scoutRng(N)` == `eventRng(N+1)`. Scout prospect selection on day N is
+  fully correlated with IntelDrop emission on day N+1. Low impact now; revisit when tuning content
+  cadence in 2-B.
+- **`IntelDrop.headline` baked at event creation** — `EventGenerator.intelDropEvents()` calls
+  `stubHeadline()` at event creation time. When AI goes live in 2-B, `EventGenerator` must stop
+  setting this field; the `generateEmail()` path is the correct home for AI copy. Stub headlines
+  baked into existing DB rows will persist until the player's DB is cleared.
+
+### 2-B — Data + content pipeline (`:core-data` + `:core-logic`)
+
+1. **`StubAiProvider` arms** — prose + options for each new event type:
+   - `MarketShift`: label-perspective narrator ("the momentum is shifting —
+     here's what you could do"); options affect label strategy/funds allocation
+   - `IntelDrop`: scout or contact voice; options are informational reactions
+     (file away, share with roster artists, act on it with spend)
+   - `ScoutReport`: scout voice pitching a prospect; options open the signing
+     flow or pass
+
+2. **Mapper + entity updates** — `EventMapper.toEntity()` payload arms for the
+   three new `SimEvent` subtypes; `EntityMapper.toSimEventOrNull()` decode arms.
+   Follow the existing `"%.4f"` float formatting convention.
+
+3. **`MarketState` serialization** — `MarketState` is already `@Serializable`
+   (added in the Phase 1 gap fixes). Verify `genreTrends`, `ProspectState`, and
+   `ScoutState` are all covered; add `@Serializable` where missing. World
+   snapshot round-trip test.
+
+### 2-C — Signing flow (`:core-logic` + `:core-data`)
+
+1. **Multi-turn negotiation events** — signing unfolds across 2-4 inbox
+   exchanges. Add `SimEvent.NegotiationRound(prospectId, round: Int, ...)`.
+   Round 1 is triggered by accepting a `ScoutReport`; each subsequent round
+   is generated by `resolveEvent` when the chosen option has a
+   `StateEffect.AdvanceNegotiation` effect. Negotiation ends at accept
+   (`StateEffect.SignArtist`) or walk-away (`StateEffect.NegotiationFailed`).
+
+2. **`StateEffect` additions for signing**:
+   - `AdvanceNegotiation(prospectId)` — triggers the next negotiation round
+   - `SignArtist(prospectId)` — moves prospect → signed artist, adds to
+     `world.artists`, removes from `world.prospects`, creates a `Contract`
+   - `NegotiationFailed(prospectId)` — marks prospect as unavailable for N ticks
+
+3. **`applyResponse` wiring** — add arms for the three new effects above.
+   `SignArtist` constructs a full `ArtistState` from `ProspectState` + seeds
+   initial needs from dimensions (high volatility → needs start lower).
+
+### 2-D — App screens (`:app`)
+
+1. **Charts app** — `ChartsScreen` Compose screen accessible from `HomeScreen`.
+   Shows a ranked list of genres by trend value. Data is **intentionally
+   delayed**: the screen reads a `chartSnapshot` stored in the world that
+   updates every 3 ticks (not in real-time), so the player always sees
+   slightly stale data. Nav wired in `AppNavGraph`.
+
+2. **Press app** — `PressScreen`. Renders a scrollable feed of `IntelDrop`
+   headlines, reverse-chronological, styled as a trade blog. No interaction
+   beyond reading — the value is accumulating genre intuition over time.
+   Pulls from `dao.observeByType("intel_drop")`.
+
+3. **Partner picker (Phase 2B)** — When an email's options contain a
+   `PairedNeedChange` effect with an empty `partnerId`, gate the resolve
+   button and show an artist picker overlay. Player selects a roster artist;
+   the ViewModel fills in `partnerId` before calling `resolveEvent`. Domain
+   model already in place — this is UI-only.
+
+### Content cadence targets (tune during 2-A/2-B)
+
+| Event type | Mechanism | Target rate |
+|---|---|---|
+| `NeedUrgent` / `ContractExpiring` | deterministic threshold / countdown | unchanged |
+| `MarketShift` | threshold on tick delta | ~1 per 2-3 ticks when market is moving |
+| `IntelDrop` | 25% per tick, genre-weighted | ~1 per 4 ticks on average |
+| `ScoutReport` | every 8 ticks per scout | ~1 per 4 ticks with 2 scouts |
+
+Tuning target: player gets 1-2 market items per in-game day alongside
+their artist emails — signal without noise.
 
 **Done when:** market pressure visibly shapes decisions independent of any
-single artist relationship.
+single artist relationship; at least one unsigned artist has been signed
+through the inbox flow.
 
 ## Phase 3 — The Label (v0.3)
 

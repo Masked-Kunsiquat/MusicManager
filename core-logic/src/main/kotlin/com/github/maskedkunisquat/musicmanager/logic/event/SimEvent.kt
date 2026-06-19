@@ -4,7 +4,8 @@ import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.WantType
 
 sealed class SimEvent {
-    abstract val artistId: String
+    // null for market events (MarketShift, IntelDrop, ScoutReport) that have no roster artist.
+    open val artistId: String? = null
     abstract val dayOfGame: Int
 
     data class NeedUrgent(
@@ -25,6 +26,25 @@ sealed class SimEvent {
         override val artistId: String,
         val wantType: WantType,
         val urgency: Float,
+        override val dayOfGame: Int
+    ) : SimEvent()
+
+    data class MarketShift(
+        val genre: String,
+        val previousTrend: Float,
+        val currentTrend: Float,
+        override val dayOfGame: Int
+    ) : SimEvent()
+
+    data class IntelDrop(
+        val genre: String,
+        val headline: String,
+        override val dayOfGame: Int
+    ) : SimEvent()
+
+    data class ScoutReport(
+        val scoutId: String,
+        val prospectId: String,
         override val dayOfGame: Int
     ) : SimEvent()
 }

@@ -9,5 +9,8 @@ data class SimWorld(
     val artists: Map<String, ArtistState>,
     val label: LabelState,
     val market: MarketState,
-    val contracts: Map<String, Contract>
+    val contracts: Map<String, Contract>,
+    // Defaults so snapshots written before these fields existed still deserialize.
+    val prospects: Map<String, ProspectState> = emptyMap(),
+    val scouts: Map<String, ScoutState> = emptyMap()
 )

@@ -13,12 +13,15 @@ import kotlinx.serialization.json.put
 import java.util.Locale
 import java.util.UUID
 
-// Stable identity key for deduplication — one unresolved event per (artist, need/want type)
-// or per contract. Used in tickUnderLock to skip events already in the inbox.
+// Stable identity key for deduplication — one unresolved event per (artist, need/want type),
+// per contract, per genre shift, or per scout/prospect pair.
 fun SimEvent.eventSignature(): String = when (this) {
     is SimEvent.NeedUrgent -> "need_urgent:$artistId:${needType.name}"
     is SimEvent.ContractExpiring -> "contract_expiring:$contractId"
     is SimEvent.WantSurfaced -> "want_surfaced:$artistId:${wantType.name}"
+    is SimEvent.MarketShift -> "market_shift:$genre:$dayOfGame"
+    is SimEvent.IntelDrop -> "intel_drop:$genre:$dayOfGame"
+    is SimEvent.ScoutReport -> "scout_report:$scoutId:$prospectId"
 }
 
 fun SimEvent.toEntity(email: GeneratedEmail): EventLogEntity = EventLogEntity(
@@ -61,6 +64,17 @@ fun ResponseOption.toResponseEntity(originalEventId: String, dayOfGame: Int): Ev
                             put("artistId", effect.artistId)
                             put("delta", String.format(Locale.US, "%.4f", effect.delta))
                         }
+                        is StateEffect.RosterNeedChange -> {
+                            put("type", "roster_need_change")
+                            put("needType", effect.needType.name)
+                            put("delta", String.format(Locale.US, "%.4f", effect.delta))
+                        }
+                        is StateEffect.PairedNeedChange -> {
+                            put("type", "paired_need_change")
+                            put("partnerId", effect.partnerId)
+                            put("needType", effect.needType.name)
+                            put("delta", String.format(Locale.US, "%.4f", effect.delta))
+                        }
                     }
                 })
             }
@@ -85,6 +99,9 @@ private fun SimEvent.eventTypeKey(): String = when (this) {
     is SimEvent.NeedUrgent -> "need_urgent"
     is SimEvent.ContractExpiring -> "contract_expiring"
     is SimEvent.WantSurfaced -> "want_surfaced"
+    is SimEvent.MarketShift -> "market_shift"
+    is SimEvent.IntelDrop -> "intel_drop"
+    is SimEvent.ScoutReport -> "scout_report"
 }
 
 private fun SimEvent.toPayloadJson(): String = when (this) {
@@ -102,5 +119,18 @@ private fun SimEvent.toPayloadJson(): String = when (this) {
         put("artistId", artistId)
         put("wantType", wantType.name)
         put("urgency", String.format(Locale.US, "%.4f", urgency))
+    }
+    is SimEvent.MarketShift -> buildJsonObject {
+        put("genre", genre)
+        put("previousTrend", String.format(Locale.US, "%.4f", previousTrend))
+        put("currentTrend", String.format(Locale.US, "%.4f", currentTrend))
+    }
+    is SimEvent.IntelDrop -> buildJsonObject {
+        put("genre", genre)
+        put("headline", headline)
+    }
+    is SimEvent.ScoutReport -> buildJsonObject {
+        put("scoutId", scoutId)
+        put("prospectId", prospectId)
     }
 }.toString()

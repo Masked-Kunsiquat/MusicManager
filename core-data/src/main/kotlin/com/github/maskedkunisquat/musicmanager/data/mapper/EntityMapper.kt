@@ -45,6 +45,22 @@ fun EventLogEntity.toSimEventOrNull(): SimEvent? = try {
             urgency = json["urgency"]!!.jsonPrimitive.content.toFloat(),
             dayOfGame = dayOfGame
         )
+        "market_shift" -> SimEvent.MarketShift(
+            genre = json["genre"]!!.jsonPrimitive.content,
+            previousTrend = json["previousTrend"]!!.jsonPrimitive.content.toFloat(),
+            currentTrend = json["currentTrend"]!!.jsonPrimitive.content.toFloat(),
+            dayOfGame = dayOfGame
+        )
+        "intel_drop" -> SimEvent.IntelDrop(
+            genre = json["genre"]!!.jsonPrimitive.content,
+            headline = json["headline"]!!.jsonPrimitive.content,
+            dayOfGame = dayOfGame
+        )
+        "scout_report" -> SimEvent.ScoutReport(
+            scoutId = json["scoutId"]!!.jsonPrimitive.content,
+            prospectId = json["prospectId"]!!.jsonPrimitive.content,
+            dayOfGame = dayOfGame
+        )
         else -> null
     }
 } catch (_: Exception) {
