@@ -62,6 +62,9 @@ class StubAiProvider : LabelAiProvider {
             contractExpiringProse(name, event.daysRemaining, loyalty, confidence)
         is SimEvent.WantSurfaced ->
             wantSurfacedProse(event.wantType, name, loyalty, confidence)
+        is SimEvent.MarketShift -> marketShiftProse(event)
+        is SimEvent.IntelDrop -> intelDropProse(event)
+        is SimEvent.ScoutReport -> scoutReportProse(event)
     }
 
     private fun needUrgentProse(
@@ -176,6 +179,9 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.NeedUrgent -> needUrgentOptions(event, world)
         is SimEvent.ContractExpiring -> contractExpiringOptions(event, world)
         is SimEvent.WantSurfaced -> wantSurfacedOptions(event, world)
+        is SimEvent.MarketShift -> marketShiftOptions(event)
+        is SimEvent.IntelDrop -> intelDropOptions(event)
+        is SimEvent.ScoutReport -> scoutReportOptions(event)
     }
 
     private fun needUrgentOptions(event: SimEvent.NeedUrgent, world: SimWorld): List<ResponseOption> {
@@ -304,6 +310,57 @@ class StubAiProvider : LabelAiProvider {
             )
         }
     }
+
+    // --- Market event prose + options (Phase 2 stubs — fleshed out in 2-B) ---
+
+    private fun marketShiftProse(event: SimEvent.MarketShift): Pair<String, String> {
+        val direction = if (event.currentTrend > event.previousTrend) "gaining momentum" else "cooling off"
+        return Pair(
+            "${event.genre} is $direction",
+            "The ${event.genre} scene is shifting. Trend moved from " +
+            "${(event.previousTrend * 100).toInt()}% to ${(event.currentTrend * 100).toInt()}% " +
+            "this cycle. Worth factoring into your roster decisions."
+        )
+    }
+
+    private fun intelDropProse(event: SimEvent.IntelDrop): Pair<String, String> = Pair(
+        "industry note: ${event.genre}",
+        event.headline
+    )
+
+    private fun scoutReportProse(event: SimEvent.ScoutReport): Pair<String, String> = Pair(
+        "prospect worth a look",
+        "Got eyes on someone in the ${event.prospectId.take(8)} circuit. " +
+        "Early stages but the instinct is there. Worth a conversation?"
+    )
+
+    private fun marketShiftOptions(event: SimEvent.MarketShift): List<ResponseOption> {
+        val rising = event.currentTrend > event.previousTrend
+        return listOf(
+            option("market:${event.genre}:lean_in",
+                if (rising) "Prioritize ${event.genre} signings this cycle"
+                else "Pull back ${event.genre} marketing spend",
+                emptyList()),
+            option("market:${event.genre}:watch",
+                "Note it and watch for another cycle",
+                emptyList()),
+            option("market:${event.genre}:ignore",
+                "Ignore — stay the course",
+                emptyList())
+        )
+    }
+
+    private fun intelDropOptions(event: SimEvent.IntelDrop): List<ResponseOption> = listOf(
+        option("intel:${event.genre}:file", "File it — useful context", emptyList()),
+        option("intel:${event.genre}:share", "Share with roster artists in this genre", emptyList()),
+        option("intel:${event.genre}:act", "Act on it — brief the team", emptyList())
+    )
+
+    private fun scoutReportOptions(event: SimEvent.ScoutReport): List<ResponseOption> = listOf(
+        option("scout:${event.prospectId}:meet", "Set up a meeting", emptyList()),
+        option("scout:${event.prospectId}:pass", "Pass for now", emptyList()),
+        option("scout:${event.prospectId}:more", "Ask the scout for more intel first", emptyList())
+    )
 
     private fun option(id: String, text: String, effects: List<StateEffect>, cost: Long = 0L) =
         ResponseOption(id = id, text = text, effects = effects, costFunds = cost)

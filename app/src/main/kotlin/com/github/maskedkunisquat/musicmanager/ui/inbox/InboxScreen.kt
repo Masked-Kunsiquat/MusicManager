@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
 
 @Composable
@@ -79,8 +80,12 @@ fun InboxScreen(
                 items(items, key = { it.id }) { item ->
                     InboxRow(
                         subject = item.email.subject,
-                        artistName = world.artists[item.event.artistId]?.name
-                            ?: item.event.artistId,
+                        artistName = when (val e = item.event) {
+                            is SimEvent.MarketShift -> e.genre
+                            is SimEvent.IntelDrop -> "industry intel"
+                            is SimEvent.ScoutReport -> "scout"
+                            else -> world.artists[e.artistId]?.name ?: e.artistId.orEmpty()
+                        },
                         dayOfGame = item.dayOfGame,
                         isRead = item.isRead,
                         onClick = {
