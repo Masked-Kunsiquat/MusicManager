@@ -8,6 +8,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.LabelState
 import com.github.maskedkunisquat.musicmanager.logic.model.MarketState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
+import com.github.maskedkunisquat.musicmanager.logic.model.ProspectState
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.model.RevenueSplit
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
@@ -32,13 +33,20 @@ object WorldInitializer {
             artistId to buildArtist(artistId, contractId, rng)
         }
 
+        val prospectCount = 6 + rng.nextInt(5) // 6–10
+        val prospects = (0 until prospectCount).associate { i ->
+            val id = "prospect_${seed}_$i"
+            id to buildProspect(id, rng)
+        }
+
         return SimWorld(
             seed = seed,
             currentDay = 0,
             artists = artists,
             label = buildLabel(artists.keys.toSet(), rng),
             market = buildMarket(rng),
-            contracts = contracts
+            contracts = contracts,
+            prospects = prospects
         )
     }
 
@@ -80,5 +88,19 @@ object WorldInitializer {
 
     private fun buildMarket(rng: Random): MarketState = MarketState(
         genreTrends = GENRES.associateWith { rng.nextFloat() }
+    )
+
+    private fun buildProspect(id: String, rng: Random): ProspectState = ProspectState(
+        id = id,
+        name = "${ADJECTIVES.random(rng)} ${NOUNS.random(rng)}",
+        genre = GENRES.random(rng),
+        dimensions = ArtistDimensions(
+            confidence = rng.nextFloat(),
+            commercialAppetite = rng.nextFloat(),
+            volatility = rng.nextFloat(),
+            loyalty = rng.nextFloat()
+        ),
+        // 0.2–0.9: avoids trivially impossible or trivially easy negotiations.
+        signabilityScore = 0.2f + rng.nextFloat() * 0.7f
     )
 }
