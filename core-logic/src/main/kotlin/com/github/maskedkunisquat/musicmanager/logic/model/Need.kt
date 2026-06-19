@@ -1,5 +1,8 @@
 package com.github.maskedkunisquat.musicmanager.logic.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 enum class NeedType {
     CREATIVE_FULFILLMENT,
     FINANCIAL_SECURITY,
@@ -8,6 +11,7 @@ enum class NeedType {
     AUTONOMY
 }
 
+@Serializable
 data class NeedState(
     val type: NeedType,
     val value: Float,       // 0f..1f; 1f = fully satisfied

@@ -1,5 +1,8 @@
 package com.github.maskedkunisquat.musicmanager.logic.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 enum class WantType {
     MAJOR_VENUE_TOUR,
     COLLAB_WITH_PRODUCER,
@@ -8,6 +11,7 @@ enum class WantType {
     INCREASED_ROYALTIES
 }
 
+@Serializable
 data class Want(
     val type: WantType,
     val urgency: Float,     // 0f..1f

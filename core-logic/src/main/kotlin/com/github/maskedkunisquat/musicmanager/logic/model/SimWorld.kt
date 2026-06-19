@@ -1,5 +1,8 @@
 package com.github.maskedkunisquat.musicmanager.logic.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class SimWorld(
     val seed: Long,
     val currentDay: Int,

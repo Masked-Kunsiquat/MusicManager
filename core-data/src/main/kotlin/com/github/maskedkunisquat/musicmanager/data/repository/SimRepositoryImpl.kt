@@ -22,12 +22,12 @@ class SimRepositoryImpl(
     private val dao: EventLogDao,
     private val engine: SimEngine,
     private val aiProvider: LabelAiProvider,
-    seed: Long
+    seed: Long,
+    private val saveWorld: (SimWorld) -> Unit = {},
+    private val loadWorld: () -> SimWorld? = { null }
 ) : SimRepository {
 
-    // World is in-memory for Phase 1. On process restart it re-initializes from seed.
-    // Phase 2: persist world snapshot and restore on cold start.
-    override var world: SimWorld = WorldInitializer.initializeWorld(seed)
+    override var world: SimWorld = loadWorld() ?: WorldInitializer.initializeWorld(seed)
         private set
 
     private val tickMutex = Mutex()
@@ -44,6 +44,7 @@ class SimRepositoryImpl(
     private suspend fun tickUnderLock() {
         val result = engine.tick(world)
         world = result.world
+        saveWorld(world)
         // Build a signature set from currently-open events so the same (artist, need/want/contract)
         // doesn't flood the inbox across ticks while the player hasn't responded yet.
         val queued = dao.getUnresolved()
@@ -77,5 +78,6 @@ class SimRepositoryImpl(
     override suspend fun resolveEvent(eventId: String, option: ResponseOption) = tickMutex.withLock {
         world = applyResponse(world, option)
         dao.markResolved(eventId, option.id, System.currentTimeMillis())
+        saveWorld(world)
     }
 }

@@ -1,5 +1,8 @@
 package com.github.maskedkunisquat.musicmanager.logic.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class Contract(
     val id: String,
     val artistId: String,
@@ -15,6 +18,7 @@ data class Contract(
     }
 }
 
+@Serializable
 data class RevenueSplit(val artistPercent: Int) {
     init {
         require(artistPercent in 0..100) {
@@ -23,4 +27,5 @@ data class RevenueSplit(val artistPercent: Int) {
     }
 }
 
+@Serializable
 enum class CreativeControl { FULL_ARTIST, SHARED, FULL_LABEL }
