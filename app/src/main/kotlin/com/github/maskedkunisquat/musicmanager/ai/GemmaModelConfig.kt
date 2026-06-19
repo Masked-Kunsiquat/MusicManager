@@ -23,8 +23,7 @@ object GemmaModelConfig {
                 "Gemma3-1B-IT_q4_ekv1280_sm8750.litertlm"
             board == "kalama" || board.startsWith("sm8650") ->
                 "Gemma3-1B-IT_q4_ekv1280_sm8650.litertlm"
-            else ->
-                "Gemma3-1B-IT_q4_ekv1280_sm8850.litertlm"
+            else -> "gemma3-1b-it-universal.litertlm"  // unrecognized NPU board — safe CPU fallback
         }
     }
 
