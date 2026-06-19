@@ -9,6 +9,9 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+// Mirrors worldJson in core-data/WorldSerializer.kt — must stay in sync if that config changes.
+private val testJson = Json { ignoreUnknownKeys = true }
+
 class WorldInitializerTest {
 
     @Test
@@ -136,24 +139,24 @@ class WorldInitializerTest {
     @Test
     fun `SimWorld round-trips through JSON losslessly`() {
         val original = WorldInitializer.initializeWorld(42L)
-        val json = Json.encodeToString(SimWorld.serializer(), original)
-        val restored = Json.decodeFromString(SimWorld.serializer(), json)
+        val json = testJson.encodeToString(SimWorld.serializer(), original)
+        val restored = testJson.decodeFromString(SimWorld.serializer(), json)
         assertEquals(original, restored)
     }
 
     @Test
     fun `prospects survive JSON round-trip`() {
         val original = WorldInitializer.initializeWorld(77L)
-        val json = Json.encodeToString(SimWorld.serializer(), original)
-        val restored = Json.decodeFromString(SimWorld.serializer(), json)
+        val json = testJson.encodeToString(SimWorld.serializer(), original)
+        val restored = testJson.decodeFromString(SimWorld.serializer(), json)
         assertEquals(original.prospects, restored.prospects)
     }
 
     @Test
     fun `scouts survive JSON round-trip`() {
         val original = WorldInitializer.initializeWorld(55L)
-        val json = Json.encodeToString(SimWorld.serializer(), original)
-        val restored = Json.decodeFromString(SimWorld.serializer(), json)
+        val json = testJson.encodeToString(SimWorld.serializer(), original)
+        val restored = testJson.decodeFromString(SimWorld.serializer(), json)
         assertEquals(original.scouts, restored.scouts)
     }
 
@@ -161,7 +164,7 @@ class WorldInitializerTest {
     fun `world without prospects and scouts deserializes from legacy snapshot`() {
         // Snapshots written before 2-A omit prospects/scouts; defaults must kick in.
         val legacy = """{"seed":1,"currentDay":0,"artists":{},"label":{"funds":0,"reputation":{},"rosterIds":[]},"market":{"genreTrends":{}},"contracts":{}}"""
-        val world = Json.decodeFromString(SimWorld.serializer(), legacy)
+        val world = testJson.decodeFromString(SimWorld.serializer(), legacy)
         assertEquals(emptyMap<String, Any>(), world.prospects)
         assertEquals(emptyMap<String, Any>(), world.scouts)
     }

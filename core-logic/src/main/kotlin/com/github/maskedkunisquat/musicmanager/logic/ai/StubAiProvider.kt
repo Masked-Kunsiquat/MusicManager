@@ -322,38 +322,37 @@ class StubAiProvider : LabelAiProvider {
         val prev = (event.previousTrend * 100).toInt()
         val curr = (event.currentTrend * 100).toInt()
 
-        val subject = when {
-            magnitude >= 0.15f && rising -> "${event.genre} — strong upswing"
-            rising                        -> "${event.genre} — gaining ground"
-            magnitude >= 0.15f            -> "${event.genre} — sharp pullback"
-            else                          -> "${event.genre} — cooling off"
-        }
-
-        val body = when {
-            magnitude >= 0.15f && rising ->
+        return when {
+            magnitude >= 0.15f && rising -> Pair(
+                "${event.genre} — strong upswing",
                 "${event.genre} moved hard this cycle — $prev% to $curr%. " +
                 "Streaming velocity is up and live turnout is following. " +
                 "If you have unsigned artists in this lane, the window is open now."
-            rising ->
+            )
+            rising -> Pair(
+                "${event.genre} — gaining ground",
                 "${event.genre} trending up — $prev% to $curr%. " +
                 "Steady build rather than a spike. " +
                 "If you're already in this space, the momentum is working for you."
-            magnitude >= 0.15f ->
+            )
+            magnitude >= 0.15f -> Pair(
+                "${event.genre} — sharp pullback",
                 "${event.genre} pulled back sharply — $prev% to $curr%. " +
                 "Labels are cooling spend here. " +
                 "Could be a correction or the start of a longer slide — worth checking your exposure."
-            else ->
+            )
+            else -> Pair(
+                "${event.genre} — cooling off",
                 "${event.genre} is losing ground — $prev% to $curr%. " +
                 "Nothing dramatic, but the numbers are dipping. " +
                 "Keep an eye on your roster artists in this space."
+            )
         }
-
-        return Pair(subject, body)
     }
 
     private fun intelDropProse(event: SimEvent.IntelDrop): Pair<String, String> = Pair(
         "intel: ${event.genre}",
-        "Flagged this from the trades — ${event.headline}. " +
+        "Flagged this from the trades — ${event.headline.trimEnd('.')}. " +
         "Passing it along in case it shifts how you're thinking about ${event.genre} this cycle."
     )
 
