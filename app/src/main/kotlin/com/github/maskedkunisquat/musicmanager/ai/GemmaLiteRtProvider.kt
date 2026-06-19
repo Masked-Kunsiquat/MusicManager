@@ -29,6 +29,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.withLock
@@ -60,6 +61,24 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
         if (!modelFile.exists()) {
             _modelLoadState.value = ModelLoadState.IDLE
             return
+        }
+        val expectedHash = GemmaModelConfig.expectedSha256For(GemmaModelConfig.modelFilename(context))
+        if (expectedHash != null) {
+            val actual = try {
+                computeSha256(modelFile)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to read model file for SHA-256 verification", e)
+                _modelLoadState.value = ModelLoadState.ERROR
+                return
+            }
+            if (actual != expectedHash) {
+                Log.e(TAG, "SHA-256 mismatch for ${modelFile.name} — deleting corrupted download")
+                if (!modelFile.delete()) {
+                    Log.w(TAG, "Failed to delete corrupted file — manual removal may be required: ${modelFile.absolutePath}")
+                }
+                _modelLoadState.value = ModelLoadState.ERROR
+                return
+            }
         }
         synchronized(initLock) {
             if (_modelLoadState.value == ModelLoadState.READY) return
@@ -99,10 +118,11 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
         }
         _modelLoadState.value = ModelLoadState.DOWNLOADING
         return runCatching {
+            val filename = GemmaModelConfig.modelFilename(context)
             downloader.enqueue(
-                modelFile = GemmaModelConfig.modelFilename(context),
-                url = "${GemmaModelConfig.RELEASE_BASE_URL}/${GemmaModelConfig.modelFilename(context)}",
-                sha256 = null  // Phase 2: fill in from HF model card
+                modelFile = filename,
+                url = "${GemmaModelConfig.RELEASE_BASE_URL}/$filename",
+                sha256 = GemmaModelConfig.expectedSha256For(filename)
             )
         }.getOrElse { e ->
             Log.e(TAG, "Failed to enqueue model download", e)
@@ -234,6 +254,16 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
                 dims.volatility < 0.35f -> append("You are composed and restrained.")
             }
         }
+    }
+
+    private fun computeSha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { stream ->
+            val buf = ByteArray(65_536)
+            var read: Int
+            while (stream.read(buf).also { read = it } != -1) digest.update(buf, 0, read)
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private fun selectBackends(): List<Backend> {

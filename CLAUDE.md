@@ -66,11 +66,12 @@ Calling `toEntity()` twice on the same `SimEvent` produces two entities with
 different IDs. The event log is append-only by design; this is intentional,
 not a bug.
 
-**`EntityMapper.toInboxItemOrNull()` always returns `options = emptyList()`**
-Options aren't persisted — only `emailSubject` and `emailBody` are stored.
+**`EntityMapper.toInboxItemOrNull()` deserializes `options` from `optionsJson`**
+Options are persisted as a JSON column in `EventLogEntity` since DB v4. `toInboxItemOrNull`
+decodes them; `GeneratedEmail.options` is non-empty for any row written after that migration.
 When a `CoroutineWorker` or the detail screen needs options, call
-`SimRepository.generateOptions(item)` (which re-calls `aiProvider.generateEmail`).
-`InboxViewModel` caches results by event ID so recompositions don't re-generate.
+`SimRepository.generateOptions(item)` — it short-circuits if `item.email.options.isNotEmpty()`
+and only re-runs inference for pre-migration rows or deserialization failures.
 
 **`CoroutineWorker` gets its repository via `applicationContext as AppApplication`**
 There is no Hilt/WorkerFactory. `TickWorker` casts `applicationContext` directly.

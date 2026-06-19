@@ -3,6 +3,7 @@ package com.github.maskedkunisquat.musicmanager.logic
 import com.github.maskedkunisquat.musicmanager.logic.ai.StubAiProvider
 import com.github.maskedkunisquat.musicmanager.logic.sim.SimEngine
 import com.github.maskedkunisquat.musicmanager.logic.sim.WorldInitializer
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -20,7 +21,7 @@ class Phase0HarnessTest {
         assertTrue("No events generated in 60 ticks — needs decay math may be broken", events.isNotEmpty())
 
         for (event in events) {
-            val email = ai.generateEmail(event, finalWorld)
+            val email = runBlocking { ai.generateEmail(event, finalWorld) }
             assertTrue(
                 "Event ${event::class.simpleName} produced ${email.options.size} option(s), expected ≥ 2",
                 email.options.size >= 2

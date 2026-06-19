@@ -7,5 +7,6 @@ data class InboxItem(
     val id: String,
     val event: SimEvent,
     val email: GeneratedEmail,
-    val dayOfGame: Int
+    val dayOfGame: Int,
+    val isRead: Boolean
 )
