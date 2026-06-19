@@ -20,6 +20,7 @@ data class EventLogEntity(
     val emailSubject: String,   // AI-generated prose (stub in Phase 1)
     val emailBody: String,
     val optionsJson: String?,       // JSON array of ResponseOption; null for response_applied rows
+    val viewedAt: Long?,            // null = unread; set when player first opens the email
     val selectedOptionId: String?,  // null = pending player response
     val resolvedAt: Long?           // null = pending
 )

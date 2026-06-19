@@ -23,7 +23,7 @@ fun EventLogEntity.toInboxItemOrNull(): InboxItem? {
         }.getOrNull()
     } ?: emptyList()
     val email = GeneratedEmail(subject = emailSubject, body = emailBody, options = options)
-    return InboxItem(id = id, event = event, email = email, dayOfGame = dayOfGame)
+    return InboxItem(id = id, event = event, email = email, dayOfGame = dayOfGame, isRead = viewedAt != null)
 }
 
 fun EventLogEntity.toSimEventOrNull(): SimEvent? = try {

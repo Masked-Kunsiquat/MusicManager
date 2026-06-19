@@ -62,6 +62,10 @@ class InboxViewModel(
         }
     }
 
+    fun markViewed(eventId: String) {
+        viewModelScope.launch { repository.markViewed(eventId) }
+    }
+
     fun resolveEvent(eventId: String, option: ResponseOption) {
         _options.update { it - eventId }
         viewModelScope.launch {

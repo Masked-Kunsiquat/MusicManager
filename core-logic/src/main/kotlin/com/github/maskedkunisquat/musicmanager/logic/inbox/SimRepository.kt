@@ -10,5 +10,6 @@ interface SimRepository {
     suspend fun generateOptions(item: InboxItem): List<ResponseOption>
     suspend fun tick()
     suspend fun initializeIfEmpty(days: Int = 2)
+    suspend fun markViewed(eventId: String)
     suspend fun resolveEvent(eventId: String, option: ResponseOption)
 }

@@ -77,6 +77,10 @@ class SimRepositoryImpl(
         }
     }
 
+    override suspend fun markViewed(eventId: String) {
+        dao.markViewed(eventId, System.currentTimeMillis())
+    }
+
     override suspend fun resolveEvent(eventId: String, option: ResponseOption) = tickMutex.withLock {
         world = applyResponse(world, option)
         val now = System.currentTimeMillis()

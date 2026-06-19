@@ -32,6 +32,7 @@ fun SimEvent.toEntity(email: GeneratedEmail): EventLogEntity = EventLogEntity(
     emailSubject = email.subject,
     emailBody = email.body,
     optionsJson = if (email.options.isEmpty()) null else optionsJson.encodeToString(email.options),
+    viewedAt = null,
     selectedOptionId = null,
     resolvedAt = null
 )
@@ -76,6 +77,7 @@ fun ResponseOption.toResponseEntity(originalEventId: String, dayOfGame: Int): Ev
         emailSubject = "",
         emailBody = "",
         optionsJson = null,
+        viewedAt = now,         // response_applied rows are never shown in the inbox
         selectedOptionId = id,  // pre-resolved — this event IS the decision, not a pending item
         resolvedAt = now
     )
