@@ -112,24 +112,24 @@ before signing flow; new event types before their app screens.
   setting this field; the `generateEmail()` path is the correct home for AI copy. Stub headlines
   baked into existing DB rows will persist until the player's DB is cleared.
 
-### 2-B — Data + content pipeline (`:core-data` + `:core-logic`)
+### 2-B — Data + content pipeline (`:core-data` + `:core-logic`) ✅
 
-1. **`StubAiProvider` arms** — prose + options for each new event type:
-   - `MarketShift`: label-perspective narrator ("the momentum is shifting —
-     here's what you could do"); options affect label strategy/funds allocation
-   - `IntelDrop`: scout or contact voice; options are informational reactions
-     (file away, share with roster artists, act on it with spend)
-   - `ScoutReport`: scout voice pitching a prospect; options open the signing
-     flow or pass
+1. **`StubAiProvider` arms** — prose + options for all three new event types:
+   - `MarketShift`: direction + magnitude-driven copy; options shift focus,
+     watch, or stay the course
+   - `IntelDrop`: contact-voice framing around the headline; "share" gives a
+     +0.08 BELONGING `RosterNeedChange`; "brief scouts" costs $2
+   - `ScoutReport`: resolves actual prospect name/genre/signabilityScore;
+     copy varies by score tier (buzzing / developing / raw); option text
+     uses the prospect's name
 
-2. **Mapper + entity updates** — `EventMapper.toEntity()` payload arms for the
-   three new `SimEvent` subtypes; `EntityMapper.toSimEventOrNull()` decode arms.
-   Follow the existing `"%.4f"` float formatting convention.
+2. **Mapper + entity updates** — completed in 2-A: `EventMapper` payload arms
+   and `EntityMapper` decode arms for all three new subtypes.
 
-3. **`MarketState` serialization** — `MarketState` is already `@Serializable`
-   (added in the Phase 1 gap fixes). Verify `genreTrends`, `ProspectState`, and
-   `ScoutState` are all covered; add `@Serializable` where missing. World
-   snapshot round-trip test.
+3. **`MarketState` serialization** — all three models (`MarketState`,
+   `ProspectState`, `ScoutState`) confirmed `@Serializable`. Four round-trip
+   tests added: full `SimWorld`, prospects-only, scouts-only, and legacy
+   snapshot backward-compat (confirms `emptyMap()` defaults on pre-2-A rows).
 
 ### 2-C — Signing flow (`:core-logic` + `:core-data`)
 

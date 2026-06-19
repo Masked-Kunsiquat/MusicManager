@@ -6,6 +6,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.model.WantType
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
 import com.github.maskedkunisquat.musicmanager.logic.response.StateEffect
+import kotlin.math.abs
 
 // Costs are in cents. costFunds is the source of truth for affordability gating;
 // do NOT duplicate costs as LabelFundsChange effects (would double-charge).
@@ -18,7 +19,7 @@ class StubAiProvider : LabelAiProvider {
         val loyalty = artist?.dimensions?.loyalty ?: 0.5f
         val confidence = artist?.dimensions?.confidence ?: 0.5f
         val volatility = artist?.dimensions?.volatility ?: 0.5f
-        val (subject, body) = prose(event, artistName, loyalty, confidence, volatility)
+        val (subject, body) = prose(event, artistName, loyalty, confidence, volatility, world)
         return GeneratedEmail(subject = subject, body = body, options = options(event, world))
     }
 
@@ -54,7 +55,8 @@ class StubAiProvider : LabelAiProvider {
         name: String,
         loyalty: Float,
         confidence: Float,
-        volatility: Float
+        volatility: Float,
+        world: SimWorld
     ): Pair<String, String> = when (event) {
         is SimEvent.NeedUrgent ->
             needUrgentProse(event.needType, event.currentValue, name, loyalty, confidence, volatility)
@@ -64,7 +66,7 @@ class StubAiProvider : LabelAiProvider {
             wantSurfacedProse(event.wantType, name, loyalty, confidence)
         is SimEvent.MarketShift -> marketShiftProse(event)
         is SimEvent.IntelDrop -> intelDropProse(event)
-        is SimEvent.ScoutReport -> scoutReportProse(event)
+        is SimEvent.ScoutReport -> scoutReportProse(event, world)
     }
 
     private fun needUrgentProse(
@@ -181,7 +183,7 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.WantSurfaced -> wantSurfacedOptions(event, world)
         is SimEvent.MarketShift -> marketShiftOptions(event)
         is SimEvent.IntelDrop -> intelDropOptions(event)
-        is SimEvent.ScoutReport -> scoutReportOptions(event)
+        is SimEvent.ScoutReport -> scoutReportOptions(event, world)
     }
 
     private fun needUrgentOptions(event: SimEvent.NeedUrgent, world: SimWorld): List<ResponseOption> {
@@ -311,56 +313,115 @@ class StubAiProvider : LabelAiProvider {
         }
     }
 
-    // --- Market event prose + options (Phase 2 stubs — fleshed out in 2-B) ---
+    // --- Market event prose + options ---
 
     private fun marketShiftProse(event: SimEvent.MarketShift): Pair<String, String> {
-        val direction = if (event.currentTrend > event.previousTrend) "gaining momentum" else "cooling off"
-        return Pair(
-            "${event.genre} is $direction",
-            "The ${event.genre} scene is shifting. Trend moved from " +
-            "${(event.previousTrend * 100).toInt()}% to ${(event.currentTrend * 100).toInt()}% " +
-            "this cycle. Worth factoring into your roster decisions."
-        )
+        val delta = event.currentTrend - event.previousTrend
+        val rising = delta > 0f
+        val magnitude = abs(delta)
+        val prev = (event.previousTrend * 100).toInt()
+        val curr = (event.currentTrend * 100).toInt()
+
+        return when {
+            magnitude >= 0.15f && rising -> Pair(
+                "${event.genre} — strong upswing",
+                "${event.genre} moved hard this cycle — $prev% to $curr%. " +
+                "Streaming velocity is up and live turnout is following. " +
+                "If you have unsigned artists in this lane, the window is open now."
+            )
+            rising -> Pair(
+                "${event.genre} — gaining ground",
+                "${event.genre} trending up — $prev% to $curr%. " +
+                "Steady build rather than a spike. " +
+                "If you're already in this space, the momentum is working for you."
+            )
+            magnitude >= 0.15f -> Pair(
+                "${event.genre} — sharp pullback",
+                "${event.genre} pulled back sharply — $prev% to $curr%. " +
+                "Labels are cooling spend here. " +
+                "Could be a correction or the start of a longer slide — worth checking your exposure."
+            )
+            else -> Pair(
+                "${event.genre} — cooling off",
+                "${event.genre} is losing ground — $prev% to $curr%. " +
+                "Nothing dramatic, but the numbers are dipping. " +
+                "Keep an eye on your roster artists in this space."
+            )
+        }
     }
 
     private fun intelDropProse(event: SimEvent.IntelDrop): Pair<String, String> = Pair(
-        "industry note: ${event.genre}",
-        event.headline
+        "intel: ${event.genre}",
+        "Flagged this from the trades — ${event.headline.trimEnd('.')}. " +
+        "Passing it along in case it shifts how you're thinking about ${event.genre} this cycle."
     )
 
-    private fun scoutReportProse(event: SimEvent.ScoutReport): Pair<String, String> = Pair(
-        "prospect worth a look",
-        "Got eyes on someone in the ${event.prospectId.take(8)} circuit. " +
-        "Early stages but the instinct is there. Worth a conversation?"
-    )
+    private fun scoutReportProse(event: SimEvent.ScoutReport, world: SimWorld): Pair<String, String> {
+        val prospect = world.prospects[event.prospectId]
+        val scoutName = world.scouts[event.scoutId]?.name ?: "Your scout"
+        val prospectName = prospect?.name ?: "an unsigned artist"
+        val genre = prospect?.genre ?: "their space"
+        val score = prospect?.signabilityScore ?: 0.5f
+
+        val pitch = when {
+            score >= 0.70f ->
+                "The momentum is already there and other labels are circling. I wouldn't sit on this."
+            score >= 0.45f ->
+                "Still developing but the bones are solid. Right setup around them and there's a real ceiling here."
+            else ->
+                "Raw — but there's something genuine underneath. Needs the right environment to land."
+        }
+
+        return Pair(
+            "new prospect — $prospectName",
+            "$scoutName here. I've been keeping tabs on a $genre artist worth your time: $prospectName. " +
+            "$pitch\n\nWorth a conversation?"
+        )
+    }
 
     private fun marketShiftOptions(event: SimEvent.MarketShift): List<ResponseOption> {
         val rising = event.currentTrend > event.previousTrend
         return listOf(
             option("market:${event.genre}:lean_in",
-                if (rising) "Prioritize ${event.genre} signings this cycle"
-                else "Pull back ${event.genre} marketing spend",
+                if (rising) "Shift focus — prioritize ${event.genre} signings this cycle"
+                else "Pull back — pause new ${event.genre} spend until it stabilizes",
                 emptyList()),
             option("market:${event.genre}:watch",
-                "Note it and watch for another cycle",
+                "Watch another cycle before acting",
                 emptyList()),
             option("market:${event.genre}:ignore",
-                "Ignore — stay the course",
+                "Stay the course — this doesn't change the plan",
                 emptyList())
         )
     }
 
     private fun intelDropOptions(event: SimEvent.IntelDrop): List<ResponseOption> = listOf(
-        option("intel:${event.genre}:file", "File it — useful context", emptyList()),
-        option("intel:${event.genre}:share", "Share with roster artists in this genre", emptyList()),
-        option("intel:${event.genre}:act", "Act on it — brief the team", emptyList())
+        option("intel:${event.genre}:file",
+            "File it — good context, nothing to act on yet",
+            emptyList()),
+        option("intel:${event.genre}:share",
+            "Share it with the roster — keep everyone in the loop",
+            listOf(RNC(NeedType.BELONGING, +0.08f))),
+        option("intel:${event.genre}:act",
+            "Brief the scouts — double down on ${event.genre} intel",
+            emptyList(),
+            cost = 200 * CENTS)
     )
 
-    private fun scoutReportOptions(event: SimEvent.ScoutReport): List<ResponseOption> = listOf(
-        option("scout:${event.prospectId}:meet", "Set up a meeting", emptyList()),
-        option("scout:${event.prospectId}:pass", "Pass for now", emptyList()),
-        option("scout:${event.prospectId}:more", "Ask the scout for more intel first", emptyList())
-    )
+    private fun scoutReportOptions(event: SimEvent.ScoutReport, world: SimWorld): List<ResponseOption> {
+        val prospectName = world.prospects[event.prospectId]?.name ?: "this prospect"
+        return listOf(
+            option("scout:${event.prospectId}:meet",
+                "Set up an intro meeting with $prospectName",
+                emptyList()),
+            option("scout:${event.prospectId}:more",
+                "Ask the scout for more intel before committing",
+                emptyList()),
+            option("scout:${event.prospectId}:pass",
+                "Pass — not the right fit right now",
+                emptyList())
+        )
+    }
 
     private fun option(id: String, text: String, effects: List<StateEffect>, cost: Long = 0L) =
         ResponseOption(id = id, text = text, effects = effects, costFunds = cost)
