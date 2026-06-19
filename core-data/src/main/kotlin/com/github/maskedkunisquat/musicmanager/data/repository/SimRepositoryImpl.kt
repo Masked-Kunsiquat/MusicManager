@@ -1,7 +1,9 @@
 package com.github.maskedkunisquat.musicmanager.data.repository
 
 import com.github.maskedkunisquat.musicmanager.data.dao.EventLogDao
+import com.github.maskedkunisquat.musicmanager.data.mapper.eventSignature
 import com.github.maskedkunisquat.musicmanager.data.mapper.toInboxItemOrNull
+import com.github.maskedkunisquat.musicmanager.data.mapper.toSimEventOrNull
 import com.github.maskedkunisquat.musicmanager.data.mapper.toEntity
 import com.github.maskedkunisquat.musicmanager.logic.ai.LabelAiProvider
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
@@ -42,12 +44,20 @@ class SimRepositoryImpl(
     private suspend fun tickUnderLock() {
         val result = engine.tick(world)
         world = result.world
-        result.events.forEach { event ->
-            // Phase 2: pass the world snapshot at the time of the event, not the post-tick world.
-            // Needs/dimensions don't tick yet so this is benign in Phase 1.
-            val email = aiProvider.generateEmail(event, world)
-            dao.insert(event.toEntity(email))
-        }
+        // Build a signature set from currently-open events so the same (artist, need/want/contract)
+        // doesn't flood the inbox across ticks while the player hasn't responded yet.
+        val queued = dao.getUnresolved()
+            .mapNotNull { it.toSimEventOrNull() }
+            .map { it.eventSignature() }
+            .toSet()
+        result.events
+            .filter { it.eventSignature() !in queued }
+            .forEach { event ->
+                // Phase 2: pass the world snapshot at the time of the event, not the post-tick world.
+                // Needs/dimensions don't tick yet so this is benign in Phase 1.
+                val email = aiProvider.generateEmail(event, world)
+                dao.insert(event.toEntity(email))
+            }
     }
 
     override suspend fun tick() = tickMutex.withLock { tickUnderLock() }

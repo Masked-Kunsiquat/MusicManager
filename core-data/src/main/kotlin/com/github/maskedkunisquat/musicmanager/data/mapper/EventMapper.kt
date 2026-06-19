@@ -8,6 +8,14 @@ import kotlinx.serialization.json.put
 import java.util.Locale
 import java.util.UUID
 
+// Stable identity key for deduplication — one unresolved event per (artist, need/want type)
+// or per contract. Used in tickUnderLock to skip events already in the inbox.
+fun SimEvent.eventSignature(): String = when (this) {
+    is SimEvent.NeedUrgent -> "need_urgent:$artistId:${needType.name}"
+    is SimEvent.ContractExpiring -> "contract_expiring:$contractId"
+    is SimEvent.WantSurfaced -> "want_surfaced:$artistId:${wantType.name}"
+}
+
 fun SimEvent.toEntity(email: GeneratedEmail): EventLogEntity = EventLogEntity(
     id = UUID.randomUUID().toString(),
     dayOfGame = dayOfGame,
