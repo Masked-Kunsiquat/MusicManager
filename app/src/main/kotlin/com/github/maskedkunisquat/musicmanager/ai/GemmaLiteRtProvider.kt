@@ -67,7 +67,9 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
             val actual = computeSha256(modelFile)
             if (actual != expectedHash) {
                 Log.e(TAG, "SHA-256 mismatch for ${modelFile.name} — deleting corrupted download")
-                modelFile.delete()
+                if (!modelFile.delete()) {
+                    Log.w(TAG, "Failed to delete corrupted file — manual removal may be required: ${modelFile.absolutePath}")
+                }
                 _modelLoadState.value = ModelLoadState.ERROR
                 return
             }

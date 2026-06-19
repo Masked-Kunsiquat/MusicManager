@@ -32,6 +32,12 @@ object GemmaModelConfig {
 
     // Expected SHA-256 hex digests keyed by filename (from GitHub Releases asset page).
     // Add new entries here when uploading a model. Absent = verification skipped for that file.
+    //
+    // Intentional aliases — some filenames are different names for the same binary:
+    //   "gemma3-1b-it-elite"  ==  "Gemma3-1B-IT_q4_ekv1280_sm8750" (Snapdragon 8 Gen 3 / SM8750)
+    //   "gemma3-1b-it-ultra"  ==  "Gemma3-1B-IT_q4_ekv1280_sm8650" (Snapdragon 8 Gen 2 / SM8650)
+    // The sm8xxx names are device-specific NPU builds; elite/ultra are the human-readable aliases
+    // used when the device selection logic isn't yet wired.
     private val expectedSha256 = mapOf(
         "gemma3-1b-it-universal.litertlm"            to "1325ae366d31950f137c9c357b9fa89448b176d76998180c08ceaca78bba98be",
         "gemma3-1b-it-elite.litertlm"                to "1904ceff9591e7a140df3a672c800e8e7bee8337526484b00f69ccef4fa2d60a",

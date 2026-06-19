@@ -29,7 +29,7 @@ class AppApplication : Application() {
             aiProvider = aiProvider,
             seed = DEFAULT_SEED,
             saveWorld = { world ->
-                prefs.edit().putString(KEY_WORLD_SNAPSHOT, world.toJsonString()).apply()
+                prefs.edit().putString(KEY_WORLD_SNAPSHOT, world.toJsonString()).commit()
             },
             loadWorld = {
                 prefs.getString(KEY_WORLD_SNAPSHOT, null)?.toSimWorldOrNull()
