@@ -41,7 +41,8 @@ class InboxViewModel(
             // Seed once the engine settles. initialize() sets LOADING eagerly before
             // launching the background job, so this correctly waits for READY (Gemma)
             // or IDLE/ERROR (model not downloaded or failed — stub fallback).
-            modelLoadState.first { it != ModelLoadState.LOADING }
+            // DOWNLOADING is excluded too: model is on the wire, not usable yet.
+            modelLoadState.first { it != ModelLoadState.LOADING && it != ModelLoadState.DOWNLOADING }
             repository.initializeIfEmpty(days = 2)
             _world.value = repository.world
         }
