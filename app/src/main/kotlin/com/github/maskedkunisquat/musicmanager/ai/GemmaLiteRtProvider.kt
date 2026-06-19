@@ -64,7 +64,13 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
         }
         val expectedHash = GemmaModelConfig.expectedSha256For(GemmaModelConfig.modelFilename(context))
         if (expectedHash != null) {
-            val actual = computeSha256(modelFile)
+            val actual = try {
+                computeSha256(modelFile)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to read model file for SHA-256 verification", e)
+                _modelLoadState.value = ModelLoadState.ERROR
+                return
+            }
             if (actual != expectedHash) {
                 Log.e(TAG, "SHA-256 mismatch for ${modelFile.name} — deleting corrupted download")
                 if (!modelFile.delete()) {

@@ -6,20 +6,18 @@ import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.WantType
+import com.github.maskedkunisquat.musicmanager.data.db.worldJson
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
 import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-
-private val entityJson = Json { ignoreUnknownKeys = true }
 
 fun EventLogEntity.toInboxItemOrNull(): InboxItem? {
     val event = toSimEventOrNull() ?: return null
     val options = optionsJson?.let { json ->
         runCatching {
-            entityJson.decodeFromString(ListSerializer(ResponseOption.serializer()), json)
+            worldJson.decodeFromString(ListSerializer(ResponseOption.serializer()), json)
         }.getOrNull()
     } ?: emptyList()
     val email = GeneratedEmail(subject = emailSubject, body = emailBody, options = options)
@@ -27,7 +25,7 @@ fun EventLogEntity.toInboxItemOrNull(): InboxItem? {
 }
 
 fun EventLogEntity.toSimEventOrNull(): SimEvent? = try {
-    val json = Json.parseToJsonElement(payload).jsonObject
+    val json = worldJson.parseToJsonElement(payload).jsonObject
     when (eventType) {
         "need_urgent" -> SimEvent.NeedUrgent(
             artistId = json["artistId"]!!.jsonPrimitive.content,

@@ -14,10 +14,12 @@ import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
 import com.github.maskedkunisquat.musicmanager.logic.sim.SimEngine
 import com.github.maskedkunisquat.musicmanager.logic.sim.WorldInitializer
 import com.github.maskedkunisquat.musicmanager.logic.sim.applyResponse
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 class SimRepositoryImpl(
     private val dao: EventLogDao,
@@ -46,7 +48,6 @@ class SimRepositoryImpl(
     private suspend fun tickUnderLock() {
         val result = engine.tick(world)
         world = result.world
-        saveWorld(world)
         // Build a signature set from currently-open events so the same (artist, need/want/contract)
         // doesn't flood the inbox across ticks while the player hasn't responded yet.
         val queued = dao.getUnresolved()
@@ -61,6 +62,9 @@ class SimRepositoryImpl(
                 val email = aiProvider.generateEmail(event, world)
                 dao.insert(event.toEntity(email))
             }
+        // Persist world after events are in the DB. If killed between these two writes the world
+        // snapshot is one tick behind — harmless, because the dedup guard prevents re-flooding.
+        withContext(Dispatchers.IO) { saveWorld(world) }
     }
 
     override suspend fun tick() = tickMutex.withLock { tickUnderLock() }
@@ -86,7 +90,7 @@ class SimRepositoryImpl(
         // Persist world before touching the DAO. If the process dies between here and
         // markResolved the event re-appears as unresolved on next launch, which is
         // preferable to losing the world effects with the event already marked gone.
-        saveWorld(world)
+        withContext(Dispatchers.IO) { saveWorld(world) }
         val now = System.currentTimeMillis()
         dao.markResolved(eventId, option.id, now)
         dao.insert(option.toResponseEntity(eventId, world.currentDay))
