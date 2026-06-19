@@ -214,9 +214,9 @@ class StubAiProvider : LabelAiProvider {
             )
             NeedType.BELONGING -> listOf(
                 option("$a:belong_dinner", "Host a label family dinner this week",
-                    listOf(NC(a, NeedType.BELONGING, +0.40f), RC(a, +0.15f))),
+                    listOf(RNC(NeedType.BELONGING, +0.40f), RC(a, +0.15f))),
                 option("$a:belong_collab", "Arrange a collab session with another roster artist",
-                    listOf(NC(a, NeedType.BELONGING, +0.35f), NC(a, NeedType.CREATIVE_FULFILLMENT, +0.10f), RC(a, +0.10f))),
+                    listOf(RNC(NeedType.BELONGING, +0.35f), NC(a, NeedType.CREATIVE_FULFILLMENT, +0.10f), RC(a, +0.10f))),
                 option("$a:belong_checkin", "Send a personal check-in and schedule a call",
                     listOf(NC(a, NeedType.BELONGING, +0.15f), RC(a, +0.05f)))
             )
@@ -307,6 +307,9 @@ class StubAiProvider : LabelAiProvider {
 
     private fun RC(artistId: String, delta: Float) =
         StateEffect.RelationshipChange(artistId, delta)
+
+    private fun RNC(needType: NeedType, delta: Float) =
+        StateEffect.RosterNeedChange(needType, delta)
 
     companion object {
         private const val CENTS = 100L

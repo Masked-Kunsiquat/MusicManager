@@ -29,4 +29,10 @@ sealed class StateEffect {
         val artistId: String,
         val delta: Float
     ) : StateEffect()
+
+    @Serializable @SerialName("roster_need_change")
+    data class RosterNeedChange(
+        val needType: NeedType,
+        val delta: Float
+    ) : StateEffect()
 }

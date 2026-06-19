@@ -61,6 +61,11 @@ fun ResponseOption.toResponseEntity(originalEventId: String, dayOfGame: Int): Ev
                             put("artistId", effect.artistId)
                             put("delta", String.format(Locale.US, "%.4f", effect.delta))
                         }
+                        is StateEffect.RosterNeedChange -> {
+                            put("type", "roster_need_change")
+                            put("needType", effect.needType.name)
+                            put("delta", String.format(Locale.US, "%.4f", effect.delta))
+                        }
                     }
                 })
             }

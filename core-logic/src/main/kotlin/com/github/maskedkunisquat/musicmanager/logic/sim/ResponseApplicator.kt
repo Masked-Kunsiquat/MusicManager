@@ -43,4 +43,12 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): SimWorld = when (
             ))
         )
     }
+    is StateEffect.RosterNeedChange -> {
+        val updatedArtists = world.artists.mapValues { (_, artist) ->
+            val need = artist.needs[effect.needType] ?: return@mapValues artist
+            val newValue = (need.value + effect.delta).coerceIn(0f, 1f)
+            artist.copy(needs = artist.needs + (effect.needType to need.copy(value = newValue)))
+        }
+        world.copy(artists = updatedArtists)
+    }
 }
