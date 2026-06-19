@@ -212,14 +212,20 @@ class StubAiProvider : LabelAiProvider {
                     listOf(NC(a, NeedType.RECOGNITION, +0.20f)),
                     cost = 150 * CENTS)
             )
-            NeedType.BELONGING -> listOf(
-                option("$a:belong_dinner", "Host a label family dinner this week",
-                    listOf(RNC(NeedType.BELONGING, +0.40f), RC(a, +0.15f))),
-                option("$a:belong_collab", "Arrange a collab session with another roster artist",
-                    listOf(RNC(NeedType.BELONGING, +0.35f), NC(a, NeedType.CREATIVE_FULFILLMENT, +0.10f), RC(a, +0.10f))),
-                option("$a:belong_checkin", "Send a personal check-in and schedule a call",
-                    listOf(NC(a, NeedType.BELONGING, +0.15f), RC(a, +0.05f)))
-            )
+            NeedType.BELONGING -> {
+                val partner = world.artists.keys.firstOrNull { it != a }
+                listOf(
+                    option("$a:belong_dinner", "Host a label family dinner this week",
+                        listOf(RNC(NeedType.BELONGING, +0.40f), RC(a, +0.15f))),
+                    option("$a:belong_collab",
+                        if (partner != null) "Set up a session between ${world.artists[a]?.name ?: a} and ${world.artists[partner]?.name ?: partner}"
+                        else "Arrange a creative session for ${world.artists[a]?.name ?: a}",
+                        if (partner != null) listOf(PNC(partner, NeedType.BELONGING, +0.35f), NC(a, NeedType.BELONGING, +0.35f), NC(a, NeedType.CREATIVE_FULFILLMENT, +0.10f), RC(a, +0.10f))
+                        else listOf(NC(a, NeedType.BELONGING, +0.35f), NC(a, NeedType.CREATIVE_FULFILLMENT, +0.10f))),
+                    option("$a:belong_checkin", "Send a personal check-in and schedule a call",
+                        listOf(NC(a, NeedType.BELONGING, +0.15f), RC(a, +0.05f)))
+                )
+            }
             NeedType.AUTONOMY -> listOf(
                 option("$a:auto_full", "Grant full creative control for their next single",
                     listOf(NC(a, NeedType.AUTONOMY, +0.55f), NC(a, NeedType.CREATIVE_FULFILLMENT, +0.15f), RC(a, +0.10f))),
@@ -310,6 +316,9 @@ class StubAiProvider : LabelAiProvider {
 
     private fun RNC(needType: NeedType, delta: Float) =
         StateEffect.RosterNeedChange(needType, delta)
+
+    private fun PNC(partnerId: String, needType: NeedType, delta: Float) =
+        StateEffect.PairedNeedChange(partnerId, needType, delta)
 
     companion object {
         private const val CENTS = 100L

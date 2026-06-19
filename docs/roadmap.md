@@ -69,6 +69,10 @@ visibly change that artist's subsequent behavior/tone.
 - Unsigned artist pool, procedurally generated
 - Signing flow: scout tip -> meeting request -> options-based negotiation
   across a few inbox exchanges
+- Partner picker UI for `PairedNeedChange` effects (Phase 2A uses random
+  selection; Phase 2B gates the resolve button behind an artist picker so
+  the player chooses who to pair — domain model (`StateEffect.PairedNeedChange`)
+  is already in place, swap is UI-only)
 
 **Content cadence design (decided Phase 1):** Each non-artist content type
 owns its own generation rate inside `EventGenerator.tick()` — no new WorkManager

@@ -35,4 +35,14 @@ sealed class StateEffect {
         val needType: NeedType,
         val delta: Float
     ) : StateEffect()
+
+    // Phase 2A: partnerId is filled at option-generation time (random roster pick).
+    // Phase 2B: UI intercepts options containing this effect, shows a partner picker,
+    // replaces partnerId with the player's choice before calling resolveEvent.
+    @Serializable @SerialName("paired_need_change")
+    data class PairedNeedChange(
+        val partnerId: String,
+        val needType: NeedType,
+        val delta: Float
+    ) : StateEffect()
 }

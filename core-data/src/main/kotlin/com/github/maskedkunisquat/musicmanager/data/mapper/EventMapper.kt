@@ -66,6 +66,12 @@ fun ResponseOption.toResponseEntity(originalEventId: String, dayOfGame: Int): Ev
                             put("needType", effect.needType.name)
                             put("delta", String.format(Locale.US, "%.4f", effect.delta))
                         }
+                        is StateEffect.PairedNeedChange -> {
+                            put("type", "paired_need_change")
+                            put("partnerId", effect.partnerId)
+                            put("needType", effect.needType.name)
+                            put("delta", String.format(Locale.US, "%.4f", effect.delta))
+                        }
                     }
                 })
             }
