@@ -36,10 +36,11 @@ class SimRepositoryImpl(
     override fun observeUnresolved(): Flow<List<InboxItem>> =
         dao.observeUnresolved().map { entities -> entities.mapNotNull { it.toInboxItemOrNull() } }
 
-    // Gemma writes option labels; stub owns the underlying effects/costs.
-    // The delay here is intentional — Gemma is generating the text the player sees.
-    override suspend fun generateOptions(item: InboxItem): List<ResponseOption> =
-        aiProvider.generateEmail(item.event, world).options
+    override suspend fun generateOptions(item: InboxItem): List<ResponseOption> {
+        if (item.email.options.isNotEmpty()) return item.email.options
+        // Options weren't stored (pre-migration row or serialization failure) — re-run inference.
+        return aiProvider.generateEmail(item.event, world).options
+    }
 
     // All world mutation goes through this; callers must already hold tickMutex.
     private suspend fun tickUnderLock() {

@@ -5,6 +5,8 @@ import com.github.maskedkunisquat.musicmanager.logic.ai.GeneratedEmail
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
 import com.github.maskedkunisquat.musicmanager.logic.response.StateEffect
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -19,6 +21,8 @@ fun SimEvent.eventSignature(): String = when (this) {
     is SimEvent.WantSurfaced -> "want_surfaced:$artistId:${wantType.name}"
 }
 
+private val optionsJson = Json
+
 fun SimEvent.toEntity(email: GeneratedEmail): EventLogEntity = EventLogEntity(
     id = UUID.randomUUID().toString(),
     dayOfGame = dayOfGame,
@@ -27,6 +31,7 @@ fun SimEvent.toEntity(email: GeneratedEmail): EventLogEntity = EventLogEntity(
     recordedAt = System.currentTimeMillis(),
     emailSubject = email.subject,
     emailBody = email.body,
+    optionsJson = if (email.options.isEmpty()) null else optionsJson.encodeToString(email.options),
     selectedOptionId = null,
     resolvedAt = null
 )
@@ -70,6 +75,7 @@ fun ResponseOption.toResponseEntity(originalEventId: String, dayOfGame: Int): Ev
         recordedAt = now,
         emailSubject = "",
         emailBody = "",
+        optionsJson = null,
         selectedOptionId = id,  // pre-resolved — this event IS the decision, not a pending item
         resolvedAt = now
     )

@@ -19,6 +19,7 @@ data class EventLogEntity(
     val recordedAt: Long,       // System.currentTimeMillis()
     val emailSubject: String,   // AI-generated prose (stub in Phase 1)
     val emailBody: String,
+    val optionsJson: String?,       // JSON array of ResponseOption; null for response_applied rows
     val selectedOptionId: String?,  // null = pending player response
     val resolvedAt: Long?           // null = pending
 )

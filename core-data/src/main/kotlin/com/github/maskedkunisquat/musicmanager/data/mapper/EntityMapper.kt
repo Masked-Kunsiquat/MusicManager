@@ -6,15 +6,23 @@ import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.WantType
+import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
+private val entityJson = Json { ignoreUnknownKeys = true }
+
 fun EventLogEntity.toInboxItemOrNull(): InboxItem? {
     val event = toSimEventOrNull() ?: return null
-    // options are emptyList here — regenerated from live world context on demand in the detail screen
-    val email = GeneratedEmail(subject = emailSubject, body = emailBody, options = emptyList())
+    val options = optionsJson?.let { json ->
+        runCatching {
+            entityJson.decodeFromString(ListSerializer(ResponseOption.serializer()), json)
+        }.getOrNull()
+    } ?: emptyList()
+    val email = GeneratedEmail(subject = emailSubject, body = emailBody, options = options)
     return InboxItem(id = id, event = event, email = email, dayOfGame = dayOfGame)
 }
 
