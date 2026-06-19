@@ -66,7 +66,7 @@ fun EmailDetailScreen(
     val artistName = when (val e = item.event) {
         is SimEvent.MarketShift -> e.genre
         is SimEvent.IntelDrop -> "industry intel"
-        is SimEvent.ScoutReport -> "scout"
+        is SimEvent.ScoutReport -> world.scouts[e.scoutId]?.name ?: "scout"
         else -> world.artists[e.artistId]?.name ?: e.artistId.orEmpty()
     }
     val options = allOptions[item.id]

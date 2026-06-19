@@ -121,8 +121,7 @@ object WorldInitializer {
             id = id,
             name = "${SCOUT_FIRST.random(rng)} ${SCOUT_LAST.random(rng)}",
             focusGenres = focusGenres,
-            // Stagger by half the report interval so scouts don't burst on the same tick.
-            lastReportDay = -(index * 4)
+            lastReportDay = -(index * (SCOUT_REPORT_INTERVAL / 2))
         )
     }
 }

@@ -19,7 +19,7 @@ fun SimEvent.eventSignature(): String = when (this) {
     is SimEvent.NeedUrgent -> "need_urgent:$artistId:${needType.name}"
     is SimEvent.ContractExpiring -> "contract_expiring:$contractId"
     is SimEvent.WantSurfaced -> "want_surfaced:$artistId:${wantType.name}"
-    is SimEvent.MarketShift -> "market_shift:$genre"
+    is SimEvent.MarketShift -> "market_shift:$genre:$dayOfGame"
     is SimEvent.IntelDrop -> "intel_drop:$genre:$dayOfGame"
     is SimEvent.ScoutReport -> "scout_report:$scoutId:$prospectId"
 }
