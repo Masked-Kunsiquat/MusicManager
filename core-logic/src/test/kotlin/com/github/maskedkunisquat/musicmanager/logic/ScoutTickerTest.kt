@@ -26,35 +26,34 @@ class ScoutTickerTest {
         ScoutState(id = id, name = "Scout $id", focusGenres = focusGenres, lastReportDay = lastReportDay)
 
     private val prospects = mapOf("p0" to prospect("p0"), "p1" to prospect("p1", "pop"))
-    private val rng = Random(42)
 
     // --- Interval ---
 
     @Test
     fun `scout fires when currentDay minus lastReportDay reaches the interval`() {
         val scouts = mapOf("s0" to scout("s0", lastReportDay = 0))
-        val (_, events) = tickScouts(scouts, currentDay = SCOUT_REPORT_INTERVAL, prospects, rng)
+        val (_, events) = tickScouts(scouts, currentDay = SCOUT_REPORT_INTERVAL, prospects, Random(42))
         assertTrue(events.any { it is SimEvent.ScoutReport })
     }
 
     @Test
     fun `scout does not fire before the interval is reached`() {
         val scouts = mapOf("s0" to scout("s0", lastReportDay = 0))
-        val (_, events) = tickScouts(scouts, currentDay = SCOUT_REPORT_INTERVAL - 1, prospects, rng)
+        val (_, events) = tickScouts(scouts, currentDay = SCOUT_REPORT_INTERVAL - 1, prospects, Random(42))
         assertTrue(events.none { it is SimEvent.ScoutReport })
     }
 
     @Test
     fun `lastReportDay is updated after a report fires`() {
         val scouts = mapOf("s0" to scout("s0", lastReportDay = 0))
-        val (updatedScouts, _) = tickScouts(scouts, currentDay = SCOUT_REPORT_INTERVAL, prospects, rng)
+        val (updatedScouts, _) = tickScouts(scouts, currentDay = SCOUT_REPORT_INTERVAL, prospects, Random(42))
         assertEquals(SCOUT_REPORT_INTERVAL, updatedScouts["s0"]!!.lastReportDay)
     }
 
     @Test
     fun `lastReportDay unchanged when scout does not fire`() {
         val scouts = mapOf("s0" to scout("s0", lastReportDay = 0))
-        val (updatedScouts, _) = tickScouts(scouts, currentDay = SCOUT_REPORT_INTERVAL - 1, prospects, rng)
+        val (updatedScouts, _) = tickScouts(scouts, currentDay = SCOUT_REPORT_INTERVAL - 1, prospects, Random(42))
         assertEquals(0, updatedScouts["s0"]!!.lastReportDay)
     }
 
@@ -66,7 +65,7 @@ class ScoutTickerTest {
             "s0" to scout("s0", lastReportDay = 0),
             "s1" to scout("s1", lastReportDay = 0)
         )
-        val (_, events) = tickScouts(scouts, currentDay = SCOUT_REPORT_INTERVAL, prospects, rng)
+        val (_, events) = tickScouts(scouts, currentDay = SCOUT_REPORT_INTERVAL, prospects, Random(42))
         assertEquals(2, events.filterIsInstance<SimEvent.ScoutReport>().size)
     }
 
@@ -76,7 +75,7 @@ class ScoutTickerTest {
             "s0" to scout("s0", lastReportDay = 0),
             "s1" to scout("s1", lastReportDay = 4)  // fires 4 ticks later
         )
-        val (_, eventsAtInterval) = tickScouts(scouts, currentDay = SCOUT_REPORT_INTERVAL, prospects, rng)
+        val (_, eventsAtInterval) = tickScouts(scouts, currentDay = SCOUT_REPORT_INTERVAL, prospects, Random(42))
         val reportIds = eventsAtInterval.filterIsInstance<SimEvent.ScoutReport>().map { it.scoutId }
         assertTrue("s0" in reportIds)
         assertFalse("s1 should not fire yet", "s1" in reportIds)
@@ -101,7 +100,7 @@ class ScoutTickerTest {
             events.filterIsInstance<SimEvent.ScoutReport>().any { it.prospectId == "p0" }
         }
         val total = 201
-        assertTrue("Focus genre should win > 50% of the time; got $focusReports/$total", focusReports > total / 2)
+        assertTrue("Focus genre should dominate > 70% of picks; got $focusReports/$total", focusReports > total * 7 / 10)
     }
 
     // --- Edge cases ---
@@ -109,13 +108,13 @@ class ScoutTickerTest {
     @Test
     fun `empty prospects returns no events`() {
         val scouts = mapOf("s0" to scout("s0", lastReportDay = 0))
-        val (_, events) = tickScouts(scouts, currentDay = SCOUT_REPORT_INTERVAL, emptyMap(), rng)
+        val (_, events) = tickScouts(scouts, currentDay = SCOUT_REPORT_INTERVAL, emptyMap(), Random(42))
         assertTrue(events.isEmpty())
     }
 
     @Test
     fun `empty scouts returns no events`() {
-        val (_, events) = tickScouts(emptyMap(), currentDay = SCOUT_REPORT_INTERVAL, prospects, rng)
+        val (_, events) = tickScouts(emptyMap(), currentDay = SCOUT_REPORT_INTERVAL, prospects, Random(42))
         assertTrue(events.isEmpty())
     }
 

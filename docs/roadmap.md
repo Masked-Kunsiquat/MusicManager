@@ -102,6 +102,16 @@ before signing flow; new event types before their app screens.
    source). Start with 2 scouts wired at world init. Scouts are not hired/fired
    until Phase 3.
 
+**Known tech debt from 2-A review:**
+- **RNG seed correlation** — `scoutRng` uses `seed xor (currentDay + 2)` and `eventRng` uses
+  `seed xor nextDay`, so `scoutRng(N)` == `eventRng(N+1)`. Scout prospect selection on day N is
+  fully correlated with IntelDrop emission on day N+1. Low impact now; revisit when tuning content
+  cadence in 2-B.
+- **`IntelDrop.headline` baked at event creation** — `EventGenerator.intelDropEvents()` calls
+  `stubHeadline()` at event creation time. When AI goes live in 2-B, `EventGenerator` must stop
+  setting this field; the `generateEmail()` path is the correct home for AI copy. Stub headlines
+  baked into existing DB rows will persist until the player's DB is cleared.
+
 ### 2-B — Data + content pipeline (`:core-data` + `:core-logic`)
 
 1. **`StubAiProvider` arms** — prose + options for each new event type:

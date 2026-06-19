@@ -109,6 +109,7 @@ class EventGeneratorTest {
         val eventsA = generateEvents(world)
         val eventsB = generateEvents(world)
         assertEquals(eventsA, eventsB)
+        assertTrue("Expected no IntelDrop with default seed", eventsA.none { it is SimEvent.IntelDrop })
     }
 
     @Test
@@ -134,7 +135,7 @@ class EventGeneratorTest {
         }
         val rosterDrops = drops.count { it.genre == "indie-rock" }
         val total = drops.size
-        assertTrue("Expected roster genre to dominate IntelDrops; got $rosterDrops/$total", rosterDrops > total / 3)
+        assertTrue("Expected roster genre to dominate IntelDrops; got $rosterDrops/$total", rosterDrops > total / 2)
     }
 
     // --- Determinism ---

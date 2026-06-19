@@ -219,7 +219,7 @@ class StubAiProvider : LabelAiProvider {
                     cost = 150 * CENTS)
             )
             NeedType.BELONGING -> {
-                val partner = world.artists.keys.firstOrNull { it != a }
+                val partner = world.artists.keys.sorted().firstOrNull { it != a }
                 listOf(
                     option("$a:belong_dinner", "Host a label family dinner this week",
                         listOf(RNC(NeedType.BELONGING, +0.40f), RC(a, +0.15f))),
