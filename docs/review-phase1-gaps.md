@@ -64,10 +64,13 @@ At open time: `generateEmail()` runs again, discards subject/body, returns optio
 Two full on-device inference runs per email viewed. Option text also drifts between runs
 (Gemma is non-deterministic), so the options the player sees on second open may differ.
 
-Fix: store options JSON blob in `EventLogEntity` at tick time. `generateOptions()` reads
-from DB instead of re-inferring.
+*Partial mitigation in `feat/tool-calling-email`:* `parseEmail()` now merges Gemma-written
+labels onto stub `ResponseOption` effect objects, so the option text actually reflects
+Gemma's generation instead of being discarded. The underlying double-inference is still
+present — the full fix (store options JSON blob in `EventLogEntity` at tick time so
+`generateOptions()` reads from DB) remains out of scope and requires a schema migration.
 
-**5. Model target is still Gemma 3 1B**
+**5. Model target is still Gemma 3 1B** *(Phase 1 gate)*
 
 `GemmaModelConfig` returns `gemma3-1b-it-universal.litertlm`. The design target is
 Gemma 4 E4B (`gemma-4-E4B-it.litertlm`, ~3.66 GB). The `RELEASE_BASE_URL` points to
@@ -75,7 +78,9 @@ GitHub Releases which has a 100 MB per-file limit — it cannot host the 4 E4B m
 
 Phase 1's "done when" condition (on-device Gemma 4 E4B generates emails) isn't met.
 The 1B is a workable dev stand-in but the download infra and model config both need to
-target 4 E4B before Phase 1 can be considered closed.
+target 4 E4B before Phase 1 can be considered closed. This is a Phase 1 completion
+gate, not a Phase 2 prerequisite — included here under "Should fix" because it doesn't
+block Phase 2 content work, but the phase isn't technically done until it ships.
 
 **6. `belong_dinner` / `belong_collab` affect one artist, imply roster-wide action**
 
@@ -120,16 +125,16 @@ but `ConcurrentHashMap` or `synchronized` would make intent explicit.
 
 ## Fix priority
 
-| # | Issue | When |
-|---|-------|------|
-| 1 | EventGenerator dedup — inbox flooding | Before Phase 2 |
-| 2 | World state not persisted | Before Phase 2 |
-| 3 | Response not event-logged | Before Phase 2 |
-| 4 | Double Gemma inference per read | Before Phase 2 |
-| 5 | Model still 1B not 4 E4B | Phase 1 completion |
-| 6 | Roster-wide options affect 1 artist | Phase 2 design |
-| 7 | NPU else-branch wrong filename | Quick fix, anytime |
-| 8 | No unread state | Phase 2 UX |
-| 9 | SHA-256 null | Before external users |
-| 10 | Debug receivers unguarded | Before external users |
-| 11 | `inFlightOptions` race | Low-risk, anytime |
+| # | Issue | When | Status |
+|---|-------|------|--------|
+| 1 | EventGenerator dedup — inbox flooding | Before Phase 2 | Open |
+| 2 | World state not persisted | Before Phase 2 | Open |
+| 3 | Response not event-logged | Before Phase 2 | Open |
+| 4 | Double Gemma inference per read (partial: labels now merged) | Before Phase 2 | Partial |
+| 5 | Model still 1B not 4 E4B | Phase 1 completion gate | Open |
+| 6 | Roster-wide options affect 1 artist | Phase 2 design | Open |
+| 7 | NPU else-branch wrong filename | Quick fix, anytime | Open |
+| 8 | No unread state | Phase 2 UX | Open |
+| 9 | SHA-256 null | Before external users | Open |
+| 10 | Debug receivers unguarded | Before external users | Fixed (moved to src/debug manifest) |
+| 11 | `inFlightOptions` race | Low-risk, anytime | Open |
