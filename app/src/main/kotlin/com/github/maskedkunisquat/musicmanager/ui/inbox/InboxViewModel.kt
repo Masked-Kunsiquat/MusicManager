@@ -34,7 +34,8 @@ class InboxViewModel(
     val options: StateFlow<Map<String, List<ResponseOption>>> = _options.asStateFlow()
 
     // Tracks IDs currently being fetched to prevent duplicate coroutine launches on rapid recomposition.
-    private val inFlightOptions = mutableSetOf<String>()
+    // ConcurrentHashMap-backed so add/remove are thread-safe if ever called off the main thread.
+    private val inFlightOptions: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
     init {
         viewModelScope.launch {
