@@ -2,17 +2,33 @@ package com.github.maskedkunisquat.musicmanager.logic.sim
 
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.model.ArtistState
+import com.github.maskedkunisquat.musicmanager.logic.model.MarketState
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
+import kotlin.math.abs
+import kotlin.random.Random
 
 private const val NEED_URGENT_THRESHOLD = 0.3f
 private const val CONTRACT_EXPIRY_WARNING_DAYS = 30
+private const val MARKET_SHIFT_THRESHOLD = 0.08f
+private const val INTEL_BASE_CHANCE = 0.25f
+// Probability that an IntelDrop targets a roster genre (vs. a random market genre).
+private const val INTEL_ROSTER_GENRE_WEIGHT = 0.70f
 
-internal fun generateEvents(world: SimWorld): List<SimEvent> = buildList {
+// previousMarket: world before tickMarket ran this tick — used to detect meaningful shifts.
+// rng: seeded by SimEngine from world.seed; default fixed seed keeps tests deterministic.
+internal fun generateEvents(
+    world: SimWorld,
+    previousMarket: MarketState = world.market,
+    rng: Random = Random(0L)
+): List<SimEvent> = buildList {
     for (artist in world.artists.values) {
         addAll(needEvents(artist, world.currentDay))
         addAll(contractEvents(artist, world))
         addAll(wantEvents(artist, world.currentDay))
     }
+    addAll(marketShiftEvents(world, previousMarket))
+    addAll(intelDropEvents(world, rng))
+    // ScoutReport generation deferred to 2-A-5 (requires ScoutState in SimWorld).
 }
 
 private fun needEvents(artist: ArtistState, day: Int): List<SimEvent> =
@@ -54,3 +70,39 @@ private fun wantEvents(artist: ArtistState, day: Int): List<SimEvent> =
                 dayOfGame = day
             )
         }
+
+private fun marketShiftEvents(world: SimWorld, previousMarket: MarketState): List<SimEvent> =
+    world.market.genreTrends.mapNotNull { (genre, currentTrend) ->
+        val previousTrend = previousMarket.genreTrends[genre] ?: return@mapNotNull null
+        if (abs(currentTrend - previousTrend) >= MARKET_SHIFT_THRESHOLD) {
+            SimEvent.MarketShift(
+                genre = genre,
+                previousTrend = previousTrend,
+                currentTrend = currentTrend,
+                dayOfGame = world.currentDay
+            )
+        } else null
+    }
+
+private fun intelDropEvents(world: SimWorld, rng: Random): List<SimEvent> {
+    if (rng.nextFloat() > INTEL_BASE_CHANCE) return emptyList()
+    val rosterGenres = world.artists.values.map { it.genre }.toSet()
+    val genrePool = world.market.genreTrends.keys.toList().ifEmpty { return emptyList() }
+    val genre = if (rosterGenres.isNotEmpty() && rng.nextFloat() < INTEL_ROSTER_GENRE_WEIGHT) {
+        rosterGenres.random(rng)
+    } else {
+        genrePool.random(rng)
+    }
+    val trend = world.market.genreTrends[genre] ?: return emptyList()
+    return listOf(SimEvent.IntelDrop(genre = genre, headline = stubHeadline(genre, trend), dayOfGame = world.currentDay))
+}
+
+// Stub headlines — replaced by AI-generated text in 2-B.
+private fun stubHeadline(genre: String, trend: Float): String = when {
+    trend > 0.75f -> "$genre is dominating — labels scrambling to sign anything in the space"
+    trend > 0.60f -> "$genre momentum building — scouts reporting strong live turnout"
+    trend > 0.50f -> "$genre holding steady — cautious optimism from distributors"
+    trend > 0.40f -> "$genre losing ground — oversaturation concerns in the trades"
+    trend > 0.25f -> "$genre cooling off — a few breakout acts keeping it on life support"
+    else          -> "$genre in a rough patch — labels quietly pulling back budgets"
+}
