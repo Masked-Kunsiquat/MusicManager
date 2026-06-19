@@ -22,6 +22,7 @@ fun SimEvent.eventSignature(): String = when (this) {
     is SimEvent.MarketShift -> "market_shift:$genre:$dayOfGame"
     is SimEvent.IntelDrop -> "intel_drop:$genre:$dayOfGame"
     is SimEvent.ScoutReport -> "scout_report:$scoutId:$prospectId"
+    is SimEvent.NegotiationRound -> "negotiation_round:$prospectId:$round"
 }
 
 fun SimEvent.toEntity(email: GeneratedEmail): EventLogEntity = EventLogEntity(
@@ -75,6 +76,18 @@ fun ResponseOption.toResponseEntity(originalEventId: String, dayOfGame: Int): Ev
                             put("needType", effect.needType.name)
                             put("delta", String.format(Locale.US, "%.4f", effect.delta))
                         }
+                        is StateEffect.AdvanceNegotiation -> {
+                            put("type", "advance_negotiation")
+                            put("prospectId", effect.prospectId)
+                        }
+                        is StateEffect.SignArtist -> {
+                            put("type", "sign_artist")
+                            put("prospectId", effect.prospectId)
+                        }
+                        is StateEffect.NegotiationFailed -> {
+                            put("type", "negotiation_failed")
+                            put("prospectId", effect.prospectId)
+                        }
                     }
                 })
             }
@@ -102,6 +115,7 @@ private fun SimEvent.eventTypeKey(): String = when (this) {
     is SimEvent.MarketShift -> "market_shift"
     is SimEvent.IntelDrop -> "intel_drop"
     is SimEvent.ScoutReport -> "scout_report"
+    is SimEvent.NegotiationRound -> "negotiation_round"
 }
 
 private fun SimEvent.toPayloadJson(): String = when (this) {
@@ -132,5 +146,9 @@ private fun SimEvent.toPayloadJson(): String = when (this) {
     is SimEvent.ScoutReport -> buildJsonObject {
         put("scoutId", scoutId)
         put("prospectId", prospectId)
+    }
+    is SimEvent.NegotiationRound -> buildJsonObject {
+        put("prospectId", prospectId)
+        put("round", round)
     }
 }.toString()

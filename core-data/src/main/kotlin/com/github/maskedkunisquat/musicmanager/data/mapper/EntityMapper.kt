@@ -61,6 +61,11 @@ fun EventLogEntity.toSimEventOrNull(): SimEvent? = try {
             prospectId = json["prospectId"]!!.jsonPrimitive.content,
             dayOfGame = dayOfGame
         )
+        "negotiation_round" -> SimEvent.NegotiationRound(
+            prospectId = json["prospectId"]!!.jsonPrimitive.content,
+            round = json["round"]!!.jsonPrimitive.int,
+            dayOfGame = dayOfGame
+        )
         else -> null
     }
 } catch (_: Exception) {
