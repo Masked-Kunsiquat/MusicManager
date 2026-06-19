@@ -34,6 +34,11 @@ class AppApplication : Application() {
         schedulePeriodicTick()
     }
 
+    fun debugReset() {
+        getSharedPreferences("tick_prefs", MODE_PRIVATE).edit().clear().commit()
+        DatabaseFactory.clearForDebug(this)
+    }
+
     private fun schedulePeriodicTick() {
         // Fire every hour; TickWorker uses elapsed-time logic to advance 0–9 game ticks per fire.
         val request = PeriodicWorkRequestBuilder<TickWorker>(1, TimeUnit.HOURS).build()

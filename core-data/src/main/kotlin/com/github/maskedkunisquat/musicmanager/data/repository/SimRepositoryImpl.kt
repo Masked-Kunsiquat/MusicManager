@@ -33,6 +33,8 @@ class SimRepositoryImpl(
     override fun observeUnresolved(): Flow<List<InboxItem>> =
         dao.observeUnresolved().map { entities -> entities.mapNotNull { it.toInboxItemOrNull() } }
 
+    // Gemma writes option labels; stub owns the underlying effects/costs.
+    // The delay here is intentional — Gemma is generating the text the player sees.
     override suspend fun generateOptions(item: InboxItem): List<ResponseOption> =
         aiProvider.generateEmail(item.event, world).options
 
@@ -52,7 +54,13 @@ class SimRepositoryImpl(
 
     override suspend fun initializeIfEmpty(days: Int) = tickMutex.withLock {
         if (dao.getAll().isEmpty()) {
-            repeat(days) { tickUnderLock() }
+            // Tick until we have at least `days` inbox events, capped at 90 ticks to prevent
+            // infinite loops on pathological seeds. `days` here means target event count.
+            var ticks = 0
+            while (dao.getAll().size < days && ticks < 90) {
+                tickUnderLock()
+                ticks++
+            }
         }
     }
 
