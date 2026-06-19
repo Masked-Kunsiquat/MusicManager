@@ -10,6 +10,7 @@ data class SimWorld(
     val label: LabelState,
     val market: MarketState,
     val contracts: Map<String, Contract>,
-    // Default emptyMap so snapshots written before 2-A-4 still deserialize.
-    val prospects: Map<String, ProspectState> = emptyMap()
+    // Defaults so snapshots written before these fields existed still deserialize.
+    val prospects: Map<String, ProspectState> = emptyMap(),
+    val scouts: Map<String, ScoutState> = emptyMap()
 )

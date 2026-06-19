@@ -10,6 +10,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.NeedState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ProspectState
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
+import com.github.maskedkunisquat.musicmanager.logic.model.ScoutState
 import com.github.maskedkunisquat.musicmanager.logic.model.RevenueSplit
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import kotlin.random.Random
@@ -20,6 +21,8 @@ object WorldInitializer {
     private val GENRES = listOf("indie-rock", "pop", "hip-hop", "electronic", "folk", "r&b")
     private val ADJECTIVES = listOf("Young", "Dark", "Golden", "Wild", "Restless", "Silent", "Bright", "New")
     private val NOUNS = listOf("Lions", "Birds", "Waves", "Stars", "Flowers", "Rivers", "Tides", "Ghosts")
+    private val SCOUT_FIRST = listOf("Marcus", "Nina", "Dara", "Leon", "Priya", "Eli", "Tanya", "Jax")
+    private val SCOUT_LAST = listOf("Cross", "Webb", "Reid", "Park", "Osei", "Vance", "Cole", "Marsh")
 
     fun initializeWorld(seed: Long): SimWorld {
         val rng = Random(seed)
@@ -39,6 +42,12 @@ object WorldInitializer {
             id to buildProspect(id, rng)
         }
 
+        // Two scouts, staggered by half the report interval so reports don't burst together.
+        val scouts = (0 until 2).associate { i ->
+            val id = "scout_${seed}_$i"
+            id to buildScout(id, i, rng)
+        }
+
         return SimWorld(
             seed = seed,
             currentDay = 0,
@@ -46,7 +55,8 @@ object WorldInitializer {
             label = buildLabel(artists.keys.toSet(), rng),
             market = buildMarket(rng),
             contracts = contracts,
-            prospects = prospects
+            prospects = prospects,
+            scouts = scouts
         )
     }
 
@@ -103,4 +113,16 @@ object WorldInitializer {
         // 0.2–0.9: avoids trivially impossible or trivially easy negotiations.
         signabilityScore = 0.2f + rng.nextFloat() * 0.7f
     )
+
+    private fun buildScout(id: String, index: Int, rng: Random): ScoutState {
+        val focusCount = 1 + rng.nextInt(2) // 1 or 2 focus genres
+        val focusGenres = (0 until focusCount).map { GENRES.random(rng) }.toSet()
+        return ScoutState(
+            id = id,
+            name = "${SCOUT_FIRST.random(rng)} ${SCOUT_LAST.random(rng)}",
+            focusGenres = focusGenres,
+            // Stagger by half the report interval so scouts don't burst on the same tick.
+            lastReportDay = -(index * 4)
+        )
+    }
 }

@@ -7,18 +7,25 @@ import kotlin.random.Random
 class SimEngine {
 
     fun tick(world: SimWorld): TickResult {
-        // Two separate RNGs per tick, both seed-deterministic:
-        // marketRng drives trend drift; eventRng drives probabilistic event emission.
-        // Using currentDay vs currentDay+1 as XOR operands keeps them independent.
+        // Three independent seed-deterministic RNGs per tick. XOR operands differ by +0/+1/+2
+        // from currentDay, which is sufficient since these are seeds (not offsets) into Random.
+        val nextDay = world.currentDay + 1
         val marketRng = Random(world.seed xor world.currentDay.toLong())
+        val scoutRng  = Random(world.seed xor (world.currentDay.toLong() + 2L))
+        val eventRng  = Random(world.seed xor nextDay.toLong())
+
         val previousMarket = world.market
+        val (updatedScouts, scoutReports) = tickScouts(world.scouts, nextDay, world.prospects, scoutRng)
         val nextWorld = world.copy(
-            currentDay = world.currentDay + 1,
+            currentDay = nextDay,
             artists = world.artists.mapValues { (_, artist) -> decayNeeds(artist) },
-            market = tickMarket(world.market, marketRng)
+            market = tickMarket(world.market, marketRng),
+            scouts = updatedScouts
         )
-        val eventRng = Random(world.seed xor nextWorld.currentDay.toLong())
-        return TickResult(world = nextWorld, events = generateEvents(nextWorld, previousMarket, eventRng))
+        return TickResult(
+            world = nextWorld,
+            events = generateEvents(nextWorld, previousMarket, eventRng) + scoutReports
+        )
     }
 
     fun tickN(world: SimWorld, ticks: Int): TickResult {
