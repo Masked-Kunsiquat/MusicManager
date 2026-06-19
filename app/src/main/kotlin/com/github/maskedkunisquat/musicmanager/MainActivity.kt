@@ -17,7 +17,8 @@ import com.github.maskedkunisquat.musicmanager.ui.theme.AppTheme
 class MainActivity : ComponentActivity() {
 
     private val inboxViewModel: InboxViewModel by viewModels {
-        InboxViewModelFactory((application as AppApplication).simRepository)
+        val app = application as AppApplication
+        InboxViewModelFactory(app.simRepository, app.aiProvider.modelLoadState)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

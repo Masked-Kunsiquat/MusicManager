@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.Locale
@@ -49,6 +50,9 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
     fun initialize() {
         val state = _modelLoadState.value
         if (state == ModelLoadState.LOADING || state == ModelLoadState.READY) return
+        // Set LOADING eagerly so observers waiting on modelLoadState see it immediately,
+        // before the background coroutine has a chance to start and set it itself.
+        _modelLoadState.value = ModelLoadState.LOADING
         initScope.launch { doInitialize() }
     }
 
@@ -130,7 +134,7 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
         val fallback = stub.generateEmail(event, world)
         val config = ConversationConfig(systemInstruction = Contents.of(systemInstruction()))
         val raw = eng.createConversation(config).use { conv ->
-            conv.sendMessage(buildPrompt(event, artist))
+            conv.sendMessage(buildPrompt(event, artist, fallback.options.size))
                 .contents.contents
                 .filterIsInstance<Content.Text>()
                 .joinToString("") { it.text }
@@ -139,7 +143,7 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
         return parseEmail(raw, fallback)
     }
 
-    // Extracts the first {...} block from raw output and parses subject/body.
+    // Extracts the first {...} block from raw output and parses subject/body/options.
     // The 1B model often wraps JSON in markdown fences — first/last brace search handles that.
     private fun parseEmail(raw: String, fallback: GeneratedEmail): GeneratedEmail {
         val start = raw.indexOf('{')
@@ -152,8 +156,23 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
             val obj = JSONObject(raw.substring(start, end + 1))
             val subject = obj.optString("subject").trim()
             val body = obj.optString("body").trim()
+                .replace(Regex("\\*{1,2}([^*]+)\\*{1,2}"), "$1")
             if (subject.isBlank() || body.isBlank()) return fallback
-            GeneratedEmail(subject = subject, body = body, options = fallback.options)
+
+            // Merge Gemma option labels onto stub effects. Stub owns game logic (effects,
+            // costs); Gemma owns the text the player reads. Fall back to stub labels if
+            // count doesn't match or array is missing.
+            val gemmaLabels = obj.optJSONArray("options")
+            val options = if (gemmaLabels != null && gemmaLabels.length() == fallback.options.size) {
+                fallback.options.mapIndexed { i, stub ->
+                    val label = gemmaLabels.optString(i).trim()
+                    if (label.isNotBlank()) stub.copy(text = label) else stub
+                }
+            } else {
+                fallback.options
+            }
+
+            GeneratedEmail(subject = subject, body = body, options = options)
         }.getOrElse {
             Log.w(TAG, "JSON parse failed — stub fallback: ${it.message}")
             fallback
@@ -161,13 +180,15 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
     }
 
     private fun systemInstruction() =
-        "You are a music artist writing emails. " +
+        "You are a music artist writing emails to your label manager. " +
         "Respond with ONLY a JSON object — no other text, no markdown, no code fences:\n" +
-        "{\"subject\": \"...\", \"body\": \"...\"}\n" +
+        "{\"subject\": \"...\", \"body\": \"...\", \"options\": [\"...\", \"...\"]}\n" +
         "subject: 5-10 words, all lowercase, no terminal punctuation. " +
-        "body: 3-5 sentences, first person."
+        "body: 3-5 sentences, first person, no asterisks. " +
+        "options: exactly N short action phrases (5-10 words each) the label manager could offer in response. " +
+        "N is specified in the prompt."
 
-    private fun buildPrompt(event: SimEvent, artist: ArtistState?): String = buildString {
+    private fun buildPrompt(event: SimEvent, artist: ArtistState?, optionCount: Int = 3): String = buildString {
         val name = artist?.name ?: "the artist"
         val genre = artist?.genre ?: "indie"
         append("You are $name, a $genre music artist.\n\n")
@@ -194,6 +215,7 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
             }
         }
 
+        append("Provide exactly $optionCount options.\n\n")
         val dims = artist?.dimensions
         if (dims != null) {
             append("Communication style: ")

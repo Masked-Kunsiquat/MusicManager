@@ -18,4 +18,9 @@ object DatabaseFactory {
             .eventLogDao()
             .also { instance = it }
     }
+
+    fun clearForDebug(context: Context) {
+        context.applicationContext.deleteDatabase("sim.db")
+        synchronized(this) { instance = null }
+    }
 }

@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.github.maskedkunisquat.musicmanager.logic.ai.ModelLoadState
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.SimRepository
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
@@ -12,11 +13,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class InboxViewModel(private val repository: SimRepository) : ViewModel() {
+class InboxViewModel(
+    private val repository: SimRepository,
+    private val modelLoadState: StateFlow<ModelLoadState>
+) : ViewModel() {
 
     private val _world = MutableStateFlow(repository.world)
     val world: StateFlow<SimWorld> = _world.asStateFlow()
@@ -33,7 +38,11 @@ class InboxViewModel(private val repository: SimRepository) : ViewModel() {
 
     init {
         viewModelScope.launch {
-            repository.initializeIfEmpty()
+            // Seed once the engine settles. initialize() sets LOADING eagerly before
+            // launching the background job, so this correctly waits for READY (Gemma)
+            // or IDLE/ERROR (model not downloaded or failed — stub fallback).
+            modelLoadState.first { it != ModelLoadState.LOADING }
+            repository.initializeIfEmpty(days = 2)
             _world.value = repository.world
         }
     }
@@ -68,7 +77,11 @@ class InboxViewModel(private val repository: SimRepository) : ViewModel() {
     }
 }
 
-class InboxViewModelFactory(private val repository: SimRepository) : ViewModelProvider.Factory {
+class InboxViewModelFactory(
+    private val repository: SimRepository,
+    private val modelLoadState: StateFlow<ModelLoadState>
+) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T = InboxViewModel(repository) as T
+    override fun <T : ViewModel> create(modelClass: Class<T>): T =
+        InboxViewModel(repository, modelLoadState) as T
 }
