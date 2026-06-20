@@ -6,6 +6,8 @@ import kotlin.random.Random
 
 class SimEngine {
 
+    internal val rivalTicker = RivalTicker()
+
     fun tick(world: SimWorld): TickResult {
         // Three independent seed-deterministic RNGs per tick. XOR operands differ by +0/+1/+2
         // from currentDay, which is sufficient since these are seeds (not offsets) into Random.
@@ -13,18 +15,20 @@ class SimEngine {
         val marketRng = Random(world.seed xor world.currentDay.toLong())
         val scoutRng  = Random(world.seed xor (world.currentDay.toLong() + 2L))
         val eventRng  = Random(world.seed xor nextDay.toLong())
+        val rivalRng  = Random(world.seed xor (nextDay.toLong() + 3L))
 
         val previousMarket = world.market
         val (updatedScouts, scoutReports) = tickScouts(world.scouts, nextDay, world.prospects, scoutRng)
         val newMarket = tickMarket(world.market, marketRng)
-        val nextWorld = world.copy(
+        val preRivalWorld = world.copy(
             currentDay = nextDay,
             artists = world.artists.mapValues { (_, artist) -> decayNeeds(artist) },
             market = newMarket,
             scouts = updatedScouts,
             chartSnapshot = if (nextDay % 3 == 0) newMarket else world.chartSnapshot
         )
-        val events = generateEvents(nextWorld, previousMarket, eventRng) + scoutReports
+        val (nextWorld, rivalEvents) = rivalTicker.tick(preRivalWorld, rivalRng)
+        val events = generateEvents(nextWorld, previousMarket, eventRng) + scoutReports + rivalEvents
         val capabilityEvents = events.filterIsInstance<SimEvent.CapabilityUnlockable>()
         val finalWorld = if (capabilityEvents.isEmpty()) nextWorld else nextWorld.copy(
             capabilityNoticedAt = nextWorld.capabilityNoticedAt +

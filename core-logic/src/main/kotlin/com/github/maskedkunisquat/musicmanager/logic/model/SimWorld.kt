@@ -13,6 +13,7 @@ data class SimWorld(
     // Defaults so snapshots written before these fields existed still deserialize.
     val prospects: Map<String, ProspectState> = emptyMap(),
     val scouts: Map<String, ScoutState> = emptyMap(),
+    val rivals: Map<String, RivalState> = emptyMap(),
     val activeNegotiations: Map<String, Int> = emptyMap(),    // prospectId → current round
     val unavailableProspects: Set<String> = emptySet(),        // cooldown after failed negotiation
     val chartSnapshot: MarketState = MarketState(emptyMap()),  // delayed market data; updates every 3 ticks

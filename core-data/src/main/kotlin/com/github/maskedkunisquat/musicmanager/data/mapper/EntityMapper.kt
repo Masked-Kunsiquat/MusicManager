@@ -79,6 +79,21 @@ fun EventLogEntity.toSimEventOrNull(): SimEvent? = try {
             costFunds = json["costFunds"]!!.jsonPrimitive.content.toLong(),
             dayOfGame = dayOfGame
         )
+        "rival_signing" -> SimEvent.RivalSigning(
+            rivalId = json["rivalId"]!!.jsonPrimitive.content,
+            rivalName = json["rivalName"]!!.jsonPrimitive.content,
+            prospectName = json["prospectName"]!!.jsonPrimitive.content,
+            genre = json["genre"]!!.jsonPrimitive.content,
+            wasPlayerTarget = json["wasPlayerTarget"]!!.jsonPrimitive.content.toBoolean(),
+            dayOfGame = dayOfGame
+        )
+        "rival_poach" -> SimEvent.RivalPoach(
+            rivalId = json["rivalId"]!!.jsonPrimitive.content,
+            rivalName = json["rivalName"]!!.jsonPrimitive.content,
+            artistId = json["artistId"]!!.jsonPrimitive.content,
+            artistName = json["artistName"]!!.jsonPrimitive.content,
+            dayOfGame = dayOfGame
+        )
         else -> null
     }
 } catch (_: Exception) {

@@ -210,73 +210,33 @@ Work is ordered by dependency. Domain mechanics must land before UI; rivals
 need the poaching preconditions (contract renewal, relationship balance)
 before the poach event can feel motivated rather than arbitrary.
 
-### 3-A — Label meso tier (`:core-logic`)
+### 3-A — Label meso tier (`:core-logic`) ✅
 
-The label itself has needs that tick alongside artist needs. Two types for
-Phase 3; staff morale is deferred until staff exist.
+`LabelNeedType` (CASH_FLOW, GENRE_DIVERSITY), `LabelNeedEvaluator` (pure
+computation, no stored fields), `SimEvent.LabelNeedUrgent` with threshold
+emission (CASH_FLOW < 0.35f, GENRE_DIVERSITY < 0.40f), `StubAiProvider`
+arms, `StateEffect.ReputationChange` added here (used throughout Phase 3),
+EventMapper/EntityMapper arms, 9 new tests. All passing.
 
-1. **`LabelNeedType`** enum: `CASH_FLOW`, `GENRE_DIVERSITY`. Add to the
-   same package as `NeedType`.
+**Implementation note:** `LabelNeedUrgent` uses the same dedup-per-signature
+mechanism as `NeedUrgent` — one unresolved event per need type at a time.
+`ReputationChange` added alongside (needed by cash-flow commercial deal
+option and throughout 3-C/3-D).
 
-2. **`LabelNeedEvaluator`** object — computes current value (0f–1f) from
-   existing `SimWorld` state, no new stored fields:
-   - `CASH_FLOW`: bucket `label.funds` — e.g. < $5k → 0.1f, < $20k → 0.4f,
-     < $50k → 0.65f, else 1.0f.
-   - `GENRE_DIVERSITY`: distinct genres across `world.artists` divided by
-     `max(4, rosterSize)`. A 4-artist roster all in one genre = 0.25f.
-   Called once per tick from `EventGenerator`; no persistent state needed.
+### 3-B — Capability system (`:core-logic`) ✅
 
-3. **`SimEvent.LabelNeedUrgent(needType: LabelNeedType, severity: Float,
-   dayOfGame: Int)`** — emitted when a meso need drops below its threshold
-   (`CASH_FLOW` < 0.35f, `GENRE_DIVERSITY` < 0.4f). Threshold-gated like
-   artist `NeedUrgent`, not probabilistic — emits once per crossing, not
-   every tick.
+`CapabilityType` enum (PUBLICIST, IN_HOUSE_BOOKING, VIDEO_PRODUCTION),
+`LabelState.capabilities: Set<CapabilityType>` (default emptySet),
+`SimWorld.capabilityNoticedAt: Map<String, Int>` (20-tick cooldown to
+prevent re-offer spam after defer), `SimEvent.CapabilityUnlockable` with
+per-type rep/funds gates, `StateEffect.UnlockCapability`, `StubAiProvider`
+arms for unlock email + gated extra arms on `MarketShift` (IN_HOUSE_BOOKING
+→ lock dates, VIDEO_PRODUCTION → video series) and `IntelDrop` (PUBLICIST
+→ PR pitch), EventMapper/EntityMapper arms, 14 tests. All passing.
 
-4. **`StubAiProvider`** arms for `LabelNeedUrgent`:
-   - `CASH_FLOW`: options cut overhead (no cost, reduces a roster artist's
-     `NeedChange`), seek advance (costs relationship with one artist, gives
-     `LabelFundsChange`), or accept a commercial deal (costs `INDIE_SCENE`
-     rep, gains funds).
-   - `GENRE_DIVERSITY`: options actively target an off-genre signing, offer
-     a genre-adjacent artist a `WantSurfaced`, or hold course.
-
-5. **Entity mapper arms** for `LabelNeedUrgent` + serialization + tests.
-   `EventGeneratorTest` should assert both threshold events fire correctly.
-
-### 3-B — Capability system (`:core-logic`)
-
-Capabilities gate which option arms appear and represent diegetic label
-growth — not arbitrary unlocks.
-
-1. **`CapabilityType`** enum: `IN_HOUSE_BOOKING`, `VIDEO_PRODUCTION`,
-   `PUBLICIST`. Add `capabilities: Set<CapabilityType> = emptySet()` to
-   `LabelState` (default so existing serialized worlds deserialize cleanly).
-
-2. **`StateEffect.UnlockCapability(type: CapabilityType)`** — `ResponseApplicator`
-   arm adds the type to `label.capabilities`. No cost deducted here; the
-   `ResponseOption.costFunds` field handles the deduction as always.
-
-3. **`SimEvent.CapabilityUnlockable(type: CapabilityType, costFunds: Long,
-   dayOfGame: Int)`** — emitted once per type when label clears the gate:
-   - `PUBLICIST`: `label.reputation[PRESS] > 0.4f`
-   - `IN_HOUSE_BOOKING`: `label.reputation[VENUE_BOOKERS] > 0.4f`
-   - `VIDEO_PRODUCTION`: `label.funds > 5_000_000L` (i.e. $50k in cents)
-   Guard against re-emitting: only fire if the capability isn't already in
-   `label.capabilities`.
-
-4. **`StubAiProvider`** arm for `CapabilityUnlockable`: 2 options — unlock
-   now (costs `costFunds`, applies `UnlockCapability`) or defer. Option text
-   names the capability and states what it unlocks diegetically ("bring
-   booking in-house — venues start returning calls faster").
-
-5. **`EventGenerator` gates**: for `MarketShift` and `IntelDrop`, if the
-   relevant capability is present, an extra option arm is available (e.g.
-   `PUBLICIST` unlocks a "leverage this for press coverage" arm on
-   `IntelDrop`; `IN_HOUSE_BOOKING` unlocks a "lock in a run of dates while
-   the trend peaks" arm on `MarketShift`). Implemented as simple
-   `if (type in world.label.capabilities)` guards inside `StubAiProvider`.
-
-6. Entity mapper arms + tests.
+**Implementation note:** `SimEngine.tick()` stamps `capabilityNoticedAt`
+after emission so the cooldown is enforced across sessions via world
+persistence.
 
 ### 3-C — Rival NPC labels (`:core-logic`)
 

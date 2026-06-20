@@ -29,6 +29,8 @@ fun SimEvent.eventSignature(): String = when (this) {
     is SimEvent.NegotiationRound -> "negotiation_round:$prospectId:$round"
     is SimEvent.LabelNeedUrgent -> "label_need_urgent:${needType.name}"
     is SimEvent.CapabilityUnlockable -> "capability_unlockable:${type.name}"
+    is SimEvent.RivalSigning -> "rival_signing:$rivalId:$prospectName"
+    is SimEvent.RivalPoach -> "rival_poach:$rivalId:$artistId"
 }
 
 fun SimEvent.toEntity(email: GeneratedEmail): EventLogEntity = EventLogEntity(
@@ -133,6 +135,8 @@ private fun SimEvent.eventTypeKey(): String = when (this) {
     is SimEvent.NegotiationRound -> "negotiation_round"
     is SimEvent.LabelNeedUrgent -> "label_need_urgent"
     is SimEvent.CapabilityUnlockable -> "capability_unlockable"
+    is SimEvent.RivalSigning -> "rival_signing"
+    is SimEvent.RivalPoach -> "rival_poach"
 }
 
 private fun SimEvent.toPayloadJson(): String = when (this) {
@@ -175,5 +179,18 @@ private fun SimEvent.toPayloadJson(): String = when (this) {
     is SimEvent.CapabilityUnlockable -> buildJsonObject {
         put("type", type.name)
         put("costFunds", costFunds)
+    }
+    is SimEvent.RivalSigning -> buildJsonObject {
+        put("rivalId", rivalId)
+        put("rivalName", rivalName)
+        put("prospectName", prospectName)
+        put("genre", genre)
+        put("wasPlayerTarget", wasPlayerTarget)
+    }
+    is SimEvent.RivalPoach -> buildJsonObject {
+        put("rivalId", rivalId)
+        put("rivalName", rivalName)
+        put("artistId", artistId)
+        put("artistName", artistName)
     }
 }.toString()

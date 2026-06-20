@@ -73,6 +73,8 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.NegotiationRound -> negotiationRoundProse(event, world)
         is SimEvent.LabelNeedUrgent -> labelNeedUrgentProse(event)
         is SimEvent.CapabilityUnlockable -> capabilityUnlockableProse(event)
+        is SimEvent.RivalSigning -> rivalSigningProse(event)
+        is SimEvent.RivalPoach -> rivalPoachProse(event)
     }
 
     private fun needUrgentProse(
@@ -193,6 +195,8 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.NegotiationRound -> negotiationRoundOptions(event, world)
         is SimEvent.LabelNeedUrgent -> labelNeedUrgentOptions(event, world)
         is SimEvent.CapabilityUnlockable -> capabilityUnlockableOptions(event)
+        is SimEvent.RivalSigning -> rivalSigningOptions(event)
+        is SimEvent.RivalPoach -> rivalPoachOptions(event)
     }
 
     private fun needUrgentOptions(event: SimEvent.NeedUrgent, world: SimWorld): List<ResponseOption> {
@@ -617,6 +621,51 @@ class StubAiProvider : LabelAiProvider {
 
     private fun option(id: String, text: String, effects: List<StateEffect>, cost: Long = 0L) =
         ResponseOption(id = id, text = text, effects = effects, costFunds = cost)
+
+    // --- Rival events ---
+
+    private fun rivalSigningProse(event: SimEvent.RivalSigning): Pair<String, String> {
+        val body = if (event.wasPlayerTarget) {
+            "${event.rivalName} moved fast on ${event.prospectName}. Your offer was still open — " +
+            "they didn't wait for an answer. This one stings more because you were in the running. " +
+            "Worth noting how quickly ${event.rivalName} closed when they wanted someone."
+        } else {
+            "${event.rivalName} signed ${event.prospectName}, a ${event.genre} act from the unsigned pool. " +
+            "They weren't in your active pipeline, but this tells you something about where ${event.rivalName} " +
+            "is building. File it away."
+        }
+        return Pair(
+            "intel: ${event.rivalName} signed ${event.prospectName}",
+            body
+        )
+    }
+
+    private fun rivalSigningOptions(event: SimEvent.RivalSigning): List<ResponseOption> = listOf(
+        option("rival:sign:${event.rivalId}:noted",
+            "Noted — adjust scouting response time",
+            emptyList()),
+        option("rival:sign:${event.rivalId}:watch",
+            "Flag ${event.rivalName} for closer watching",
+            emptyList())
+    )
+
+    private fun rivalPoachProse(event: SimEvent.RivalPoach): Pair<String, String> = Pair(
+        "${event.artistName} left — signed with ${event.rivalName}",
+        "${event.artistName} has signed with ${event.rivalName}. This isn't a surprise if you've " +
+        "been watching the loyalty signals — the relationship was already fragile. By the time " +
+        "the contract window opened, they had better options on the table. " +
+        "The remaining roster has noticed. Decide how you respond to the room."
+    )
+
+    private fun rivalPoachOptions(event: SimEvent.RivalPoach): List<ResponseOption> = listOf(
+        option("rival:poach:${event.rivalId}:accept",
+            "Let them go — focus forward",
+            emptyList()),
+        option("rival:poach:${event.rivalId}:morale",
+            "Emergency team meeting — hold the room together",
+            listOf(RNC(NeedType.BELONGING, +0.15f)),
+            cost = 500 * CENTS)
+    )
 
     private fun NC(artistId: String, needType: NeedType, delta: Float) =
         StateEffect.NeedChange(artistId, needType, delta)

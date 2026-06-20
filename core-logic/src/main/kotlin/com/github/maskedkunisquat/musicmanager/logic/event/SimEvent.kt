@@ -67,4 +67,25 @@ sealed class SimEvent {
         val costFunds: Long,
         override val dayOfGame: Int
     ) : SimEvent()
+
+    // Rival signed a prospect from the unsigned pool.
+    // wasPlayerTarget = true if the prospect was in world.activeNegotiations when poached.
+    data class RivalSigning(
+        val rivalId: String,
+        val rivalName: String,
+        val prospectName: String,
+        val genre: String,
+        val wasPlayerTarget: Boolean,
+        override val dayOfGame: Int
+    ) : SimEvent()
+
+    // Rival poached a signed artist. Artist is already removed from world when this arrives.
+    // artistName embedded because the world no longer contains the artist at render time.
+    data class RivalPoach(
+        val rivalId: String,
+        val rivalName: String,
+        override val artistId: String,
+        val artistName: String,
+        override val dayOfGame: Int
+    ) : SimEvent()
 }
