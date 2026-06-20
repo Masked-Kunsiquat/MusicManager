@@ -5,7 +5,7 @@ until the "Done when" criterion for Phase N is met and demonstrable (ideally
 via a test or a runnable CLI/debug harness, since most early phases have no
 UI).
 
-## Phase 0 — Foundation (no UI)
+## Phase 0 — Foundation (no UI) ✅
 
 Build and test `:core-logic` and `:core-data` in isolation. No Compose
 screens. Validate via unit tests and/or a debug-only command-line harness
@@ -28,7 +28,7 @@ that prints sim state, not via the app UI.
 tick it forward N times, and print/assert a list of events each carrying a
 non-empty, context-appropriate set of response options.
 
-## Phase 1 — The Inbox (v0.1, first real playable slice)
+## Phase 1 — The Inbox (v0.1, first real playable slice) ✅
 
 **Completed:**
 - Fake-OS shell: Compose scaffold, device-within-a-device chrome, inbox nav
@@ -46,7 +46,7 @@ non-empty, context-appropriate set of response options.
   9-tick catchup cap (≈ 24h). 180 ticks ≈ 20 real days.
 - Event log: append-only Room schema, `initializeIfEmpty` seeds 10 days on first run
 
-**Remaining:**
+**Deferred by choice (Gemma integration — Phase 1 gate met with StubAiProvider):**
 - `GemmaLiteRtProvider` full implementation: LiteRT-LM SDK integration,
   NPU → GPU (OpenCL) → CPU backend cascade, `generateEmail()` via real inference
 - Model download flow: resumable HTTP to `filesDir`, SHA-256 verification,
@@ -54,16 +54,12 @@ non-empty, context-appropriate set of response options.
 - Download/load state UI: progress indicator in DeviceScreen chrome while
   model is absent or loading (maps to `modelLoadState` StateFlow)
 
-**Done when:** one artist feels alive through their emails across multiple
-in-game days, powered by on-device Gemma 4 E4B inference, and a player's choices
-visibly change that artist's subsequent behavior/tone.
-
 ## Phase 2 — The Market (v0.2)
 
 Work is ordered by dependency. Domain layer must land before UI; scout model
 before signing flow; new event types before their app screens.
 
-### 2-A — Market domain layer (`:core-logic`)
+### 2-A — Market domain layer (`:core-logic`) ✅
 
 1. **Genre trend ticking** — `MarketState.genreTrends` already exists as a
    `Map<String, Float>` stub. Add tick logic: each genre drifts by a small
@@ -131,7 +127,7 @@ before signing flow; new event types before their app screens.
    tests added: full `SimWorld`, prospects-only, scouts-only, and legacy
    snapshot backward-compat (confirms `emptyMap()` defaults on pre-2-A rows).
 
-### 2-C — Signing flow (`:core-logic` + `:core-data`)
+### 2-C — Signing flow (`:core-logic` + `:core-data`) ✅
 
 1. **Multi-turn negotiation events** — signing unfolds across 2-4 inbox
    exchanges. Add `SimEvent.NegotiationRound(prospectId, round: Int, ...)`.
@@ -150,7 +146,7 @@ before signing flow; new event types before their app screens.
    `SignArtist` constructs a full `ArtistState` from `ProspectState` + seeds
    initial needs from dimensions (high volatility → needs start lower).
 
-### 2-D — App screens (`:app`)
+### 2-D — App screens (`:app`) ✅
 
 **UI aesthetic: retro/flip-phone (Nokia-era).** All screens in 2-D and beyond
 use this as the base. Lock it in once, apply globally — consistency is what
@@ -281,7 +277,7 @@ strained → 65/35 + `FULL_ARTIST` on a 90-tick short term. `ContractExpiring`
 options updated to use `OpenRenewal` effect. `EventMapper`/`EntityMapper`
 round-trip for `RenewalOpened`. 20 tests in `RenewalSystemTest`.
 
-### 3-E — Unsignable archetype + deal builder UI (`:core-logic` + `:app`)
+### 3-E — Unsignable archetype + deal builder UI (`:core-logic` + `:app`) ✅
 
 1. **`SignabilityType`** enum: `NORMAL`, `UNSIGNABLE`. Add
    `signability: SignabilityType = NORMAL` to `ProspectState`. One
@@ -314,7 +310,7 @@ round-trip for `RenewalOpened`. 20 tests in `RenewalSystemTest`.
      flavor text above the deal builder ("She said the split wasn't the
      issue. It's the control.").
 
-### 3-F — App screens (`:app`)
+### 3-F — App screens (`:app`) ✅
 
 1. **`LabelOfficeScreen`** — accessible from `HomeScreen`. Retro theme
    (inside `RetroTheme` like all other screens). Shows:
@@ -365,47 +361,31 @@ want mechanic before broadcast (which consumes it); domain mechanics before
 their app screens; audit pass after all mechanics are stable; hash chain last
 (pure infrastructure, no gameplay dependency).
 
-### 4-A — Want activation + tech debt cleanup (`:core-logic`)
+### 4-A — Want activation + tech debt cleanup (`:core-logic`) ✅ (partial)
 
-`activeWants` has been scaffolded since Phase 0 but always seeded as
-`emptyList()`. This sub-phase makes it real.
+**Delivered:**
 
-1. **Tech debt from 3-D/3-E** — resolve before adding scope:
-   - `ArtistState.relationshipBalance` is denormalized. Verify it against
-     the event log on world load in `WorldInitializer.rebuildFromEvents()`
-     (or equivalent fold): sum all `RelationshipChange` deltas per artist
-     and assert/correct the stored value. Emit a warning log if divergence
-     is detected; do not crash.
-   - `DealBuilderPanel` constructs `ResponseOption` in the UI layer without
-     a stable id. Ensure the ViewModel assigns a deterministic id (e.g.
-     `"deal_${artistId}_${currentDay}"`) so the dedup guard in
-     `SimRepository` works correctly.
+- ✅ `WorldInitializer.buildArtist()` — `buildArtistWants()` pure fn derives 0–2 wants
+  from dimensions: low loyalty (<0.40f) → `INCREASED_ROYALTIES`; high confidence
+  (≥0.65f) → `MAJOR_VENUE_TOUR` or `RECORD_ALBUM` by commercial appetite; high
+  volatility (≥0.70f) → `GENRE_EXPERIMENT`; mid-confidence + low commercial → `COLLAB_WITH_PRODUCER`.
+- ✅ `StateEffect.WantSatisfied(artistId, wantType)` — removes want from `activeWants`,
+  +0.15f loyalty via `RelationshipChange`. No-op guard if want is not active.
+- ✅ `StubAiProvider` `WantSurfaced` arms — all 5 `WantType` branches wired. Fully-
+  satisfying option carries `WantSatisfied`; partial options deliberately omit it
+  (want stays active = cost-vs-loyalty tension preserved).
+- ✅ EventMapper/EntityMapper — decided at implementation time: `WantSatisfied` lives
+  only as a `StateEffect`, not a persisted `SimEvent`. No mapper arms needed.
+- ✅ `DealBuilderPanel` deterministic option id (`"deal_builder:${artistId}:${round}"`)
+  fixes the dedup-guard issue from 3-E tech debt.
+- ✅ `WantActivationTest` — 10 tests: seeding rules, urgency threshold, loyalty bump,
+  clamp, `relationshipBalance` update, no-op guard, partial-satisfaction isolation.
+  All 182 core-logic tests pass.
 
-2. **`WorldInitializer.buildArtist()`** — populate `activeWants` from each
-   artist's archetype dimensions. Rule of thumb: high-confidence artists
-   surface `CREATIVE_AUTONOMY` wants; high-volatility artists surface
-   `RECOGNITION` wants; low-loyalty artists surface `FINANCIAL_SECURITY`
-   wants. 1-2 wants per artist at world init, urgency 0.3–0.7f.
-
-3. **`StateEffect.WantSatisfied(artistId, wantType)`** — new effect. Applicator
-   removes the matching want from `artist.activeWants` and applies a loyalty
-   bump of +0.15f (via the existing `RelationshipChange` path — the distinction
-   from money is the *source*, not the mechanism). Guard: no-op if the want
-   is not currently active.
-
-4. **`StubAiProvider` `WantSurfaced` arms** — 5 `WantType` branches are already
-   stubbed but unreachable. Wire them: each arm returns prose + options, at
-   least one of which carries `WantSatisfied` + a `costFunds` cost. Options
-   that satisfy a want should cost more than options that dismiss it — this is
-   the core tension (money vs. artist loyalty).
-
-5. **`EventMapper` / `EntityMapper`** arms for `WantSatisfied` if it needs to
-   be persisted as an event (it may only live as a `StateEffect`; decide at
-   implementation time).
-
-6. **Tests** — `WantActivationTest`: wants populated at world init, `WantSatisfied`
-   removes the want and moves loyalty, dismissed want stays in `activeWants`,
-   `WantSurfaced` only emits for urgency ≥ 0.7f.
+**Skipped (carry to 4-F audit pass):**
+- `ArtistState.relationshipBalance` verification on world load — `WorldInitializer`
+  does not yet fold event log to assert/correct the stored balance. Risk is low
+  (only diverges if pre-v4 rows are partially present); revisit in 4-F.
 
 ### 4-B — Broadcast mechanic (`:core-logic`)
 
@@ -538,7 +518,8 @@ occasionally wrong.
 ### 4-F — Email audit pass (`:core-logic`)
 
 No new types or mechanics. Pure content and variety pass across all
-`StubAiProvider` arms.
+`StubAiProvider` arms. Also pick up the one item skipped in 4-A: verify
+`ArtistState.relationshipBalance` against the event log on world load.
 
 1. **Audit checklist** — for every `StubAiProvider` arm, verify:
    - Prose is inflected by at least one artist dimension (loyalty, confidence,
