@@ -206,20 +206,261 @@ through the inbox flow.
 
 ## Phase 3 — The Label (v0.3)
 
-- Label-level needs/wants (meso tier): cash flow health, roster genre
-  diversity, staff morale once staff exist
-- Capability unlocks: in-house booking, video production, publicist —
-  gated by capital/reputation, expand which options are available
-- Rival NPC labels competing for the same artist pool, inferred indirectly
-  (press, cold contacts) — never shown directly
-- Contract renewal system where options reflect relationship history, not
-  just a money number
-- "Unsignable" independent artist archetype (benchmark/white-whale)
-- Structured negotiation mini-mode: numeric offer + priority free-text
-  input, parsed not interpreted as open NLP
+Work is ordered by dependency. Domain mechanics must land before UI; rivals
+need the poaching preconditions (contract renewal, relationship balance)
+before the poach event can feel motivated rather than arbitrary.
 
-**Done when:** losing an artist to a rival is legible (player understands
-why) and feels like a real loss, not a random event.
+### 3-A — Label meso tier (`:core-logic`)
+
+The label itself has needs that tick alongside artist needs. Two types for
+Phase 3; staff morale is deferred until staff exist.
+
+1. **`LabelNeedType`** enum: `CASH_FLOW`, `GENRE_DIVERSITY`. Add to the
+   same package as `NeedType`.
+
+2. **`LabelNeedEvaluator`** object — computes current value (0f–1f) from
+   existing `SimWorld` state, no new stored fields:
+   - `CASH_FLOW`: bucket `label.funds` — e.g. < $5k → 0.1f, < $20k → 0.4f,
+     < $50k → 0.65f, else 1.0f.
+   - `GENRE_DIVERSITY`: distinct genres across `world.artists` divided by
+     `max(4, rosterSize)`. A 4-artist roster all in one genre = 0.25f.
+   Called once per tick from `EventGenerator`; no persistent state needed.
+
+3. **`SimEvent.LabelNeedUrgent(needType: LabelNeedType, severity: Float,
+   dayOfGame: Int)`** — emitted when a meso need drops below its threshold
+   (`CASH_FLOW` < 0.35f, `GENRE_DIVERSITY` < 0.4f). Threshold-gated like
+   artist `NeedUrgent`, not probabilistic — emits once per crossing, not
+   every tick.
+
+4. **`StubAiProvider`** arms for `LabelNeedUrgent`:
+   - `CASH_FLOW`: options cut overhead (no cost, reduces a roster artist's
+     `NeedChange`), seek advance (costs relationship with one artist, gives
+     `LabelFundsChange`), or accept a commercial deal (costs `INDIE_SCENE`
+     rep, gains funds).
+   - `GENRE_DIVERSITY`: options actively target an off-genre signing, offer
+     a genre-adjacent artist a `WantSurfaced`, or hold course.
+
+5. **Entity mapper arms** for `LabelNeedUrgent` + serialization + tests.
+   `EventGeneratorTest` should assert both threshold events fire correctly.
+
+### 3-B — Capability system (`:core-logic`)
+
+Capabilities gate which option arms appear and represent diegetic label
+growth — not arbitrary unlocks.
+
+1. **`CapabilityType`** enum: `IN_HOUSE_BOOKING`, `VIDEO_PRODUCTION`,
+   `PUBLICIST`. Add `capabilities: Set<CapabilityType> = emptySet()` to
+   `LabelState` (default so existing serialized worlds deserialize cleanly).
+
+2. **`StateEffect.UnlockCapability(type: CapabilityType)`** — `ResponseApplicator`
+   arm adds the type to `label.capabilities`. No cost deducted here; the
+   `ResponseOption.costFunds` field handles the deduction as always.
+
+3. **`SimEvent.CapabilityUnlockable(type: CapabilityType, costFunds: Long,
+   dayOfGame: Int)`** — emitted once per type when label clears the gate:
+   - `PUBLICIST`: `label.reputation[PRESS] > 0.4f`
+   - `IN_HOUSE_BOOKING`: `label.reputation[VENUE_BOOKERS] > 0.4f`
+   - `VIDEO_PRODUCTION`: `label.funds > 5_000_000L` (i.e. $50k in cents)
+   Guard against re-emitting: only fire if the capability isn't already in
+   `label.capabilities`.
+
+4. **`StubAiProvider`** arm for `CapabilityUnlockable`: 2 options — unlock
+   now (costs `costFunds`, applies `UnlockCapability`) or defer. Option text
+   names the capability and states what it unlocks diegetically ("bring
+   booking in-house — venues start returning calls faster").
+
+5. **`EventGenerator` gates**: for `MarketShift` and `IntelDrop`, if the
+   relevant capability is present, an extra option arm is available (e.g.
+   `PUBLICIST` unlocks a "leverage this for press coverage" arm on
+   `IntelDrop`; `IN_HOUSE_BOOKING` unlocks a "lock in a run of dates while
+   the trend peaks" arm on `MarketShift`). Implemented as simple
+   `if (type in world.label.capabilities)` guards inside `StubAiProvider`.
+
+6. Entity mapper arms + tests.
+
+### 3-C — Rival NPC labels (`:core-logic`)
+
+Rivals are never shown directly — only inferred through press and the
+prospect pool thinning. The poaching mechanic is what makes "losing an
+artist" possible.
+
+1. **`RivalState`**: `id: String`, `name: String`,
+   `genreWeights: Map<String, Float>` (higher = rival prioritizes this
+   genre when targeting prospects). Add `rivals: Map<String, RivalState>
+   = emptyMap()` to `SimWorld`. `WorldInitializer` seeds 2 rivals with
+   genre weights complementary to the player's starting roster — they
+   compete in adjacent territory, not identical.
+
+2. **`RivalTicker`** — called from `SimEngine.tick()` alongside other
+   tickers:
+   - Each rival scores available prospects by `(signabilityScore *
+     genreWeight[prospect.genre])`. Highest-scoring becomes their target.
+   - A `rivalProgress: Map<String, Int>` counter (rivalId → ticks on
+     current target) advances each tick. Not persisted to event log —
+     stored transiently on `SimWorld` via a new field
+     `rivalProgress: Map<String, String> = emptyMap()` (rivalId →
+     prospectId currently being pursued). Counter lives in a per-session
+     map inside `RivalTicker`; resets on world load (acceptable — rivals
+     restart their clock on reload, not a meaningful exploit).
+   - At 10 ticks on one target: rival "signs" them. Prospect removed from
+     `world.prospects`. Emits `SimEvent.RivalSigning`.
+   - Rival then picks their next target.
+
+3. **`SimEvent.RivalSigning(rivalId: String, rivalName: String,
+   prospectName: String, genre: String, wasPlayerTarget: Boolean,
+   dayOfGame: Int)`** — `wasPlayerTarget = true` if prospectId was in
+   `world.activeNegotiations` when poached. `StubAiProvider` copy varies:
+   `wasPlayerTarget = true` gets sharper copy ("Mercury Sound closed
+   [name]. Your offer was still open.").
+
+4. **Poaching signed artists** — `RivalTicker` separately evaluates each
+   signed artist for poach risk:
+   - Condition: `artist.dimensions.loyalty < 0.3f` AND contract within 15
+     ticks of expiry AND no `RenewalOpened` event is currently unresolved
+     for this artist (i.e. player hasn't opened renewal talks).
+   - At threshold (8 ticks): emit `SimEvent.RivalPoach(rivalId, rivalName,
+     artistId, dayOfGame)`. `ResponseApplicator` arm removes the artist
+     from `world.artists` and `world.contracts` and `label.rosterIds`.
+   - `StubAiProvider` copy names the rival, the artist, and the loyalty
+     signal that tipped it — making the loss legible.
+
+5. **Reputation effects of rival moves**: when a rival signs a prospect
+   or poaches an artist, apply a small `reputation[PRESS] -= 0.03f` delta
+   automatically (rivals gaining ground is always a mild press negative for
+   you). No new event needed — apply in `RivalTicker` directly.
+
+6. Serialization for `RivalState` + tests for `RivalTicker` (threshold
+   triggering, `wasPlayerTarget` flag, poach conditions).
+
+**Known tech debt from 3-C:**
+- `rivalProgress` counters reset on world reload. Rivals restart their
+  pursuit clock every session. Acceptable now; Phase 5 season structure
+  should persist this properly.
+- Rival genre weights are static — rivals don't react to market shifts.
+  Intentional for now; a dynamic rival strategy would need its own tick
+  logic and is Phase 4+ scope.
+
+### 3-D — Contract renewal (`:core-logic` + `:core-data`)
+
+Renewal must feel different from a fresh signing — history shapes the
+terms. This is the mechanic that makes the "rival poach" loss legible: if
+the player ignored renewal, they had warning.
+
+1. **`ArtistState.relationshipBalance: Float = 0f`** — accumulated sum of
+   all `RelationshipChange.delta` values applied to this artist since they
+   were signed. `ResponseApplicator` updates it on every resolved option.
+   Denormalized by design (event log is the audit trail; this is the
+   running total for fast reads). Default 0f for backward compat.
+
+2. **`StateEffect.OpenRenewal(artistId: String, contractId: String)`** —
+   add as a response option on `ContractExpiring` events ("open renewal
+   discussions"). `ResponseApplicator` arm emits `SimEvent.RenewalOpened`
+   round 1 into the repository.
+
+3. **`SimEvent.RenewalOpened(artistId: String, contractId: String,
+   round: Int, dayOfGame: Int)`** — multi-turn like `NegotiationRound`.
+   Up to 3 exchanges. Subsequent rounds triggered by
+   `StateEffect.AdvanceRenewal(artistId, contractId)`.
+
+4. **`StateEffect` additions for renewal**:
+   - `AdvanceRenewal(artistId, contractId)` — generates next `RenewalOpened`
+     round.
+   - `RenewContract(artistId, newExpiryTicks: Int, revenueSplit:
+     RevenueSplit, creativeControl: CreativeControl)` — `ResponseApplicator`
+     creates a new `Contract` from the current day, removes the old one.
+   - `RenewalWalked(artistId)` — artist walks; apply `loyalty -= 0.2f` and
+     mark contract as expired (remove from `world.contracts`). If a rival's
+     poach counter was running, this accelerates it to threshold immediately.
+
+5. **Option weighting by `relationshipBalance`** in `StubAiProvider`:
+   - `> 0.5f` (warm history): artist leads with favorable terms — generous
+     split, `SHARED` control, lower `costFunds`.
+   - `-0.3f..0.5f` (neutral): standard terms, both sides give a little.
+   - `< -0.3f` (strained history): artist demands better split AND
+     `FULL_ARTIST` control, higher cost. One option is always
+     `RenewalWalked` — they might walk regardless. Copy reflects the
+     tension without stating the number directly.
+
+6. **Entity mapper arms** for `RenewalOpened` + `AdvanceRenewal` +
+   `RenewContract` + `RenewalWalked`. Tests for `ResponseApplicator` arms
+   (all four effects) and for the balance-driven option generation.
+
+### 3-E — Unsignable archetype + deal builder UI (`:core-logic` + `:app`)
+
+1. **`SignabilityType`** enum: `NORMAL`, `UNSIGNABLE`. Add
+   `signability: SignabilityType = NORMAL` to `ProspectState`. One
+   prospect seeded as `UNSIGNABLE` in `WorldInitializer` — high
+   `signabilityScore` so scouts surface them often.
+
+2. **`ResponseApplicator` guard**: when applying `StateEffect.SignArtist`
+   for a prospect with `signability == UNSIGNABLE`, intercept and apply
+   `NegotiationFailed` instead — but don't remove the prospect from
+   `world.prospects` (they cycle back after the cooldown, endlessly
+   available to be scouted again).
+
+3. **`StubAiProvider`** copy for unsignable `NegotiationRound` — uses a
+   distinctive voice across all rounds. Copy should feel like a person who
+   genuinely doesn't want a deal, not someone haggling. Final round copy
+   is flat: "Not interested. But thanks for looking."
+
+4. **`DealBuilderOverlay`** composable — shown instead of standard option
+   buttons when the inbox email is a `RenewalOpened` event:
+   - Revenue split selector: fixed steps — 50/50, 60/40, 70/30, 80/20
+     (artist percentage). Lower cut for the label = lower `costFunds` on
+     the resulting option but risks a `RelationshipChange` negative delta.
+   - `DealPriority` single-select chips: `CREATIVE_FREEDOM`,
+     `TOURING_BUDGET`, `MARKETING_SPEND`. Selection adds a corresponding
+     `NeedChange` or `WantSurfaced` effect to the resulting
+     `RenewContract`. Not free text — keyword-based, no NLP.
+   - Confirm button constructs a `ResponseOption` with the chosen effects
+     and calls `resolveEvent` via the ViewModel.
+   - On `RenewalOpened` round > 1, show the artist's prior response as
+     flavor text above the deal builder ("She said the split wasn't the
+     issue. It's the control.").
+
+### 3-F — App screens (`:app`)
+
+1. **`LabelOfficeScreen`** — accessible from `HomeScreen`. Retro theme
+   (inside `RetroTheme` like all other screens). Shows:
+   - Cash flow status line: text descriptor from `LabelNeedEvaluator`
+     ("Cash flow: strong / tight / critical") — no bars, no numbers.
+   - Roster diversity line: "Roster: diversified / skewing [dominant
+     genre] / one-genre" — derived same way.
+   - Capabilities section: unlocked capabilities as a flat list ("■
+     Publicist"); locked capabilities shown greyed with their gate
+     ("□ In-house booking — needs venue rep"). No shop UI — status only.
+     Capabilities are unlocked via the inbox (the `CapabilityUnlockable`
+     email flow), not purchased here.
+   - Nav entry added to `HomeScreen`.
+
+2. **`PressScreen` update** — `RivalSigning` events interspersed with
+   `IntelDrop` in the same reverse-chron feed. Prefixed with `[RIVAL]` tag
+   in monospace to distinguish. `RivalPoach` events appear as breaking-news
+   style entries ("ARTIST LEFT: [name] signed to [rival]."). Both pull from
+   `dao.observeByType` with updated type string arms.
+
+3. **`DealBuilderOverlay`** (described in 3-E above) wired into
+   `EmailDetailScreen` — shown when `item.event` is a `RenewalOpened`.
+   Standard response option buttons remain for all other event types.
+
+4. **Nav updates** in `AppNavGraph` for `LabelOfficeScreen`.
+
+**Known tech debt from 3-D/3-E:**
+- `ArtistState.relationshipBalance` is denormalized. If the DB is partially
+  cleared (e.g. migration wipes pre-v4 rows), the balance diverges from
+  event-log truth. Phase 4 audit pass should verify the balance against
+  the event log on world load.
+- `DealBuilderOverlay` builds a `ResponseOption` directly in the UI layer,
+  bypassing `StubAiProvider`. This is intentional — it's a player-authored
+  deal, not AI-generated. Ensure the ViewModel constructs a valid UUID for
+  the option id so the dedup guard in `SimRepository` works correctly.
+
+**Done when:** losing an artist to a rival is legible — player sees the
+`RivalSigning` or `RivalPoach` entry in `PressScreen`, can trace it back
+to a loyalty signal they missed, and understands that opening renewal talks
+earlier would have closed the window; contract renewal produces meaningfully
+different offers based on relationship history; the white-whale prospect
+appears in scout reports repeatedly and always refuses.
 
 ## Phase 4 — Depth Pass (v0.4)
 
