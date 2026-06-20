@@ -15,6 +15,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 
 fun EventLogEntity.toInboxItemOrNull(): InboxItem? {
     val event = toSimEventOrNull() ?: return null
@@ -82,7 +83,7 @@ fun EventLogEntity.toSimEventOrNull(): SimEvent? = try {
         )
         "capability_unlockable" -> SimEvent.CapabilityUnlockable(
             type = CapabilityType.valueOf(json["type"]!!.jsonPrimitive.content),
-            costFunds = json["costFunds"]!!.jsonPrimitive.content.toLong(),
+            costFunds = json["costFunds"]!!.jsonPrimitive.long,
             dayOfGame = dayOfGame
         )
         "rival_signing" -> SimEvent.RivalSigning(

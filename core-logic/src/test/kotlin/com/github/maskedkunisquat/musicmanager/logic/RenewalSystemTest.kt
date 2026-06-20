@@ -181,14 +181,14 @@ class RenewalSystemTest {
 
     @Test
     fun `RenewalWalked reduces artist loyalty by 0_2`() {
-        val world = baseWorld(baseArtist(loyalty = 0.6f))
+        val world = baseWorld(baseArtist(loyalty = 0.6f)).copy(activeRenewals = mapOf(artistId to 1))
         val (updated, _) = applyResponse(world, option(listOf(StateEffect.RenewalWalked(artistId))))
         assertEquals(0.4f, updated.artists[artistId]!!.dimensions.loyalty, 0.001f)
     }
 
     @Test
     fun `RenewalWalked clamps loyalty to 0f`() {
-        val world = baseWorld(baseArtist(loyalty = 0.1f))
+        val world = baseWorld(baseArtist(loyalty = 0.1f)).copy(activeRenewals = mapOf(artistId to 1))
         val (updated, _) = applyResponse(world, option(listOf(StateEffect.RenewalWalked(artistId))))
         assertEquals(0f, updated.artists[artistId]!!.dimensions.loyalty, 0.001f)
     }
@@ -204,6 +204,7 @@ class RenewalSystemTest {
     fun `RenewalWalked accelerates rival poach counter to threshold minus 1`() {
         val rivalId = "r0"
         val world = baseWorld().copy(
+            activeRenewals = mapOf(artistId to 1),
             rivals = mapOf(rivalId to com.github.maskedkunisquat.musicmanager.logic.model.RivalState(
                 id = rivalId, name = "Mercury Sound", genreWeights = mapOf("indie-rock" to 1.0f)
             )),
@@ -232,7 +233,7 @@ class RenewalSystemTest {
 
     @Test
     fun `full three-round renewal flow produces final contract`() {
-        var world = baseWorld().copy(activeRenewals = mapOf(artistId to 0))
+        var world = baseWorld()
 
         // Round 1: OpenRenewal
         val (w1, e1) = applyResponse(world, option(listOf(StateEffect.OpenRenewal(artistId, contractId))))

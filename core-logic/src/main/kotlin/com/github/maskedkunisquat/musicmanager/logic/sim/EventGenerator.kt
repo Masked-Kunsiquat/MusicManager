@@ -18,6 +18,8 @@ private const val INTEL_BASE_CHANCE = 0.25f
 private const val INTEL_ROSTER_GENRE_WEIGHT = 0.70f
 // Re-offer a deferred capability after this many ticks (~2.2 real days).
 private const val CAPABILITY_NOTICE_COOLDOWN = 20
+// Suppress repeated label-need warnings for this many ticks (~27 real hours).
+private const val LABEL_NEED_COOLDOWN = 10
 
 private val LABEL_NEED_THRESHOLDS = mapOf(
     LabelNeedType.CASH_FLOW      to 0.35f,
@@ -141,7 +143,10 @@ private fun labelNeedEvents(world: SimWorld): List<SimEvent> {
     val values = LabelNeedEvaluator.evaluate(world)
     return LABEL_NEED_THRESHOLDS.mapNotNull { (needType, threshold) ->
         val value = values[needType] ?: return@mapNotNull null
-        if (value < threshold) SimEvent.LabelNeedUrgent(needType, value, world.currentDay) else null
+        if (value >= threshold) return@mapNotNull null
+        val lastNoticed = world.labelNeedNoticedAt[needType.name]
+        if (lastNoticed != null && world.currentDay - lastNoticed < LABEL_NEED_COOLDOWN) return@mapNotNull null
+        SimEvent.LabelNeedUrgent(needType, value, world.currentDay)
     }
 }
 

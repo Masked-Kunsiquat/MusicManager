@@ -28,9 +28,12 @@ class SimEngine {
         val (nextWorld, rivalEvents) = tickRivals(preRivalWorld, rivalRng)
         val events = generateEvents(nextWorld, previousMarket, eventRng) + scoutReports + rivalEvents
         val capabilityEvents = events.filterIsInstance<SimEvent.CapabilityUnlockable>()
-        val finalWorld = if (capabilityEvents.isEmpty()) nextWorld else nextWorld.copy(
-            capabilityNoticedAt = nextWorld.capabilityNoticedAt +
-                capabilityEvents.associate { it.type.name to nextWorld.currentDay }
+        val labelNeedEvents = events.filterIsInstance<SimEvent.LabelNeedUrgent>()
+        val finalWorld = nextWorld.copy(
+            capabilityNoticedAt = if (capabilityEvents.isEmpty()) nextWorld.capabilityNoticedAt
+                else nextWorld.capabilityNoticedAt + capabilityEvents.associate { it.type.name to nextWorld.currentDay },
+            labelNeedNoticedAt = if (labelNeedEvents.isEmpty()) nextWorld.labelNeedNoticedAt
+                else nextWorld.labelNeedNoticedAt + labelNeedEvents.associate { it.needType.name to nextWorld.currentDay }
         )
         return TickResult(world = finalWorld, events = events)
     }

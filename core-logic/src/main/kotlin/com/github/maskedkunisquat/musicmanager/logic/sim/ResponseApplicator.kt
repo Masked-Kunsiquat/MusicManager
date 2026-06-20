@@ -8,6 +8,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.NeedState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.model.SignabilityType
+import java.util.UUID
 import com.github.maskedkunisquat.musicmanager.logic.model.RevenueSplit
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
@@ -165,6 +166,8 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): Pair<SimWorld, Li
         is StateEffect.OpenRenewal -> {
             val artist = world.artists[effect.artistId] ?: return Pair(world, noEvents)
             if (artist.contractId != effect.contractId) return Pair(world, noEvents)
+            // Guard: don't reset a renewal that's already in-flight (e.g. stale ContractExpiring email).
+            if (world.activeRenewals.containsKey(effect.artistId)) return Pair(world, noEvents)
             val newWorld = world.copy(activeRenewals = world.activeRenewals + (effect.artistId to 1))
             val event = SimEvent.RenewalOpened(
                 artistId = effect.artistId,
@@ -189,7 +192,7 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): Pair<SimWorld, Li
         is StateEffect.RenewContract -> {
             val artist = world.artists[effect.artistId] ?: return Pair(world, noEvents)
             val oldContractId = artist.contractId
-            val newContractId = "renewal_${effect.artistId}_${world.currentDay}"
+            val newContractId = "renewal_${UUID.randomUUID()}"
             val newContract = Contract(
                 id = newContractId,
                 artistId = effect.artistId,
@@ -207,6 +210,8 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): Pair<SimWorld, Li
             Pair(newWorld, noEvents)
         }
         is StateEffect.RenewalWalked -> {
+            // Guard: only penalize if a renewal was actually in progress.
+            if (effect.artistId !in world.activeRenewals) return Pair(world, noEvents)
             val artist = world.artists[effect.artistId] ?: return Pair(world, noEvents)
             val newLoyalty = (artist.dimensions.loyalty - 0.2f).coerceIn(0f, 1f)
             // Accelerate any rival already tracking this artist to threshold so the poach fires next tick.

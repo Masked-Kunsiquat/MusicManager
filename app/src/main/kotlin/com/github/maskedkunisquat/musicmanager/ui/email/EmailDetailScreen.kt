@@ -146,7 +146,8 @@ fun EmailDetailScreen(
                         labelFunds = world.label.funds,
                         onResolve = { option ->
                             viewModel.resolveEvent(eventId, option)
-                            onBack()
+                            // Navigation is handled by the LaunchedEffect that fires when item
+                            // disappears from the inbox after the DB write propagates.
                         }
                     )
                 } else {
@@ -167,7 +168,7 @@ fun EmailDetailScreen(
                                             pickerFor = option
                                         } else {
                                             viewModel.resolveEvent(eventId, option)
-                                            onBack()
+                                            // Navigation handled by LaunchedEffect on item disappearing.
                                         }
                                     },
                                     filled = index == 0,

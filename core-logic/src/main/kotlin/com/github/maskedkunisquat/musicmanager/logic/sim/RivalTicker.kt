@@ -5,6 +5,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.ArtistState
 import com.github.maskedkunisquat.musicmanager.logic.model.ProspectState
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.model.RivalState
+import com.github.maskedkunisquat.musicmanager.logic.model.SignabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import kotlin.random.Random
 
@@ -78,7 +79,9 @@ private fun SimWorld.clearProspectTarget(rivalId: String) = copy(
 )
 
 private fun pickProspect(rival: RivalState, world: SimWorld, rng: Random): ProspectState? {
-    val available = world.prospects.values.filter { it.id !in world.unavailableProspects }
+    val available = world.prospects.values.filter {
+        it.id !in world.unavailableProspects && it.signability != SignabilityType.UNSIGNABLE
+    }
     if (available.isEmpty()) return null
     return available.maxByOrNull { p ->
         val w = rival.genreWeights[p.genre] ?: 0.1f
