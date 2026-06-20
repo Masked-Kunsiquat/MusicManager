@@ -186,6 +186,7 @@ private fun leadSurfacedEvents(world: SimWorld): List<SimEvent> {
         p.id !in world.unavailableProspects &&
         (world.passedLeads[p.id]?.let { day - it >= PASS_LEAD_COOLDOWN } ?: true)
     }
+    // Watched leads come first: they represent prior player interest so they take priority over new prospects.
     return (fromWatch + fresh).take(cap).map { p ->
         SimEvent.LeadSurfaced(prospectId = p.id, dayOfGame = day)
     }

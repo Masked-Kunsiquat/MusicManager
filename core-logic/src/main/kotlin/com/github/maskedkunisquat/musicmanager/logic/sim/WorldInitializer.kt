@@ -131,7 +131,7 @@ object WorldInitializer {
         if (wants.size < 2 && d.volatility >= 0.70f) {
             wants += Want(type = WantType.GENRE_EXPERIMENT, urgency = (0.50f + d.volatility * 0.35f).coerceIn(0f, 1f), expiryDay = null)
         }
-        if (wants.size < 2 && d.confidence in 0.45f..0.64f && d.commercialAppetite < 0.45f) {
+        if (wants.size < 2 && d.confidence in 0.45f..0.65f && d.commercialAppetite < 0.45f) {
             wants += Want(type = WantType.COLLAB_WITH_PRODUCER, urgency = (0.60f + d.confidence * 0.25f).coerceIn(0f, 1f), expiryDay = null)
         }
         return wants

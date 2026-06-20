@@ -71,20 +71,19 @@ class WantActivationTest {
                 lowLoyaltyArtist.activeWants.any { it.type == WantType.INCREASED_ROYALTIES }
             )
         }
-        // If no artist has loyalty < 0.40 for this seed, the test is not applicable — pass vacuously.
+        // Seed 42 doesn't guarantee a low-loyalty artist; keep as conditional guard rather than assertNotNull.
     }
 
     @Test
     fun `high-confidence artist gets a career want`() {
         val world = WorldInitializer.initializeWorld(seed = 42L)
         val highConfArtist = world.artists.values.firstOrNull { it.dimensions.confidence >= 0.65f }
-        if (highConfArtist != null) {
-            val careerWants = setOf(WantType.MAJOR_VENUE_TOUR, WantType.RECORD_ALBUM)
-            assertTrue(
-                "Expected MAJOR_VENUE_TOUR or RECORD_ALBUM for high-confidence artist",
-                highConfArtist.activeWants.any { it.type in careerWants }
-            )
-        }
+        assertNotNull("Seed 42 must produce at least one artist with confidence >= 0.65", highConfArtist)
+        val careerWants = setOf(WantType.MAJOR_VENUE_TOUR, WantType.RECORD_ALBUM)
+        assertTrue(
+            "Expected MAJOR_VENUE_TOUR or RECORD_ALBUM for high-confidence artist",
+            highConfArtist!!.activeWants.any { it.type in careerWants }
+        )
     }
 
     @Test

@@ -375,7 +375,9 @@ their app screens; audit pass after all mechanics are stable; hash chain last
   satisfying option carries `WantSatisfied`; partial options deliberately omit it
   (want stays active = cost-vs-loyalty tension preserved).
 - ✅ EventMapper/EntityMapper — decided at implementation time: `WantSatisfied` lives
-  only as a `StateEffect`, not a persisted `SimEvent`. No mapper arms needed.
+  only as a `StateEffect`, not a persisted `SimEvent`. No EventMapper/EntityMapper arms
+  needed for SimEvent dispatch; serialization is still handled as a StateEffect inside
+  `ResponseOption.toResponseEntity()`.
 - ✅ `DealBuilderPanel` deterministic option id (`"deal_builder:${artistId}:${round}"`)
   fixes the dedup-guard issue from 3-E tech debt.
 - ✅ `WantActivationTest` — 10 tests: seeding rules, urgency threshold, loyalty bump,

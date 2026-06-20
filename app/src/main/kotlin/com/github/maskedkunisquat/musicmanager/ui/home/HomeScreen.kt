@@ -86,10 +86,3 @@ fun HomeScreen(
     }
 }
 
-@Preview(showBackground = true)
-@Composable
-private fun HomeScreenPreview() {
-    RetroTheme {
-        // Preview uses a stub — no real ViewModel in preview.
-    }
-}
