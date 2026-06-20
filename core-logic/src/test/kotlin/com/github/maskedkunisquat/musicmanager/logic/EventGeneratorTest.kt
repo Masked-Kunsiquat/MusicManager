@@ -3,6 +3,7 @@ package com.github.maskedkunisquat.musicmanager.logic
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.model.ArtistDimensions
 import com.github.maskedkunisquat.musicmanager.logic.model.ArtistState
+import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelState
 import com.github.maskedkunisquat.musicmanager.logic.model.MarketState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedState
@@ -11,6 +12,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.sim.generateEvents
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.random.Random
@@ -136,6 +138,58 @@ class EventGeneratorTest {
         val rosterDrops = drops.count { it.genre == "indie-rock" }
         val total = drops.size
         assertTrue("Expected roster genre to dominate IntelDrops; got $rosterDrops/$total", rosterDrops > total / 2)
+    }
+
+    // --- LabelNeedUrgent ---
+
+    @Test
+    fun `LabelNeedUrgent CASH_FLOW emitted when funds below threshold`() {
+        // $4k in cents — below $5k bucket → severity 0.10f, threshold 0.35f → should emit
+        val w = world().copy(label = world().label.copy(funds = 400_000L))
+        val events = generateEvents(w)
+        val urgent = events.filterIsInstance<SimEvent.LabelNeedUrgent>()
+            .firstOrNull { it.needType == LabelNeedType.CASH_FLOW }
+        assertNotNull("Expected CASH_FLOW LabelNeedUrgent", urgent)
+        assertEquals(0.10f, urgent!!.severity, 0.001f)
+    }
+
+    @Test
+    fun `LabelNeedUrgent CASH_FLOW not emitted when funds are healthy`() {
+        // $100k in cents — above all thresholds → severity 1.0f, above 0.35f → should not emit
+        val w = world().copy(label = world().label.copy(funds = 10_000_000L))
+        val events = generateEvents(w)
+        assertTrue(events.none { it is SimEvent.LabelNeedUrgent && (it as SimEvent.LabelNeedUrgent).needType == LabelNeedType.CASH_FLOW })
+    }
+
+    @Test
+    fun `LabelNeedUrgent GENRE_DIVERSITY emitted when roster is one-genre`() {
+        // All artists in same genre → 1 distinct / 4 = 0.25f < 0.40f threshold → should emit
+        val sameGenreArtist = artist.copy(id = "a1", genre = "indie-rock")
+        val artists = mapOf("a0" to artist, "a1" to sameGenreArtist)
+        val w = world(artists = artists)
+        val events = generateEvents(w)
+        assertTrue(events.any { it is SimEvent.LabelNeedUrgent && (it as SimEvent.LabelNeedUrgent).needType == LabelNeedType.GENRE_DIVERSITY })
+    }
+
+    @Test
+    fun `LabelNeedUrgent GENRE_DIVERSITY not emitted when roster is diverse`() {
+        // Four artists across four distinct genres → 4/4 = 1.0f → no event
+        val artists = mapOf(
+            "a0" to artist.copy(genre = "indie-rock"),
+            "a1" to artist.copy(id = "a1", genre = "hip-hop"),
+            "a2" to artist.copy(id = "a2", genre = "folk"),
+            "a3" to artist.copy(id = "a3", genre = "pop")
+        )
+        val w = world(genreTrends = mapOf("indie-rock" to 0.5f, "hip-hop" to 0.5f, "folk" to 0.5f, "pop" to 0.5f), artists = artists)
+        val events = generateEvents(w)
+        assertTrue(events.none { it is SimEvent.LabelNeedUrgent && (it as SimEvent.LabelNeedUrgent).needType == LabelNeedType.GENRE_DIVERSITY })
+    }
+
+    @Test
+    fun `LabelNeedUrgent carries correct day`() {
+        val w = world().copy(currentDay = 42, label = world().label.copy(funds = 400_000L))
+        val event = generateEvents(w).filterIsInstance<SimEvent.LabelNeedUrgent>().first()
+        assertEquals(42, event.dayOfGame)
     }
 
     // --- Determinism ---

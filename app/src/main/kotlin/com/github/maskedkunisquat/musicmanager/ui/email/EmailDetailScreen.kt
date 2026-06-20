@@ -63,7 +63,8 @@ fun EmailDetailScreen(
     val item = items.find { it.id == eventId }
 
     LaunchedEffect(item) {
-        item?.let { viewModel.requestOptionsFor(it) }
+        // RenewalOpened events are handled by DealBuilderPanel — no AI options needed.
+        item?.let { if (it.event !is SimEvent.RenewalOpened) viewModel.requestOptionsFor(it) }
     }
 
     val hasLoaded = rememberSaveable { mutableStateOf(false) }
@@ -138,31 +139,44 @@ fun EmailDetailScreen(
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
             Column(modifier = Modifier.padding(12.dp)) {
-                when {
-                    options == null -> {
-                        CircularProgressIndicator(
-                            modifier = Modifier
-                                .align(Alignment.CenterHorizontally)
-                                .padding(8.dp)
-                        )
-                    }
-                    options.isEmpty() -> Unit
-                    else -> {
-                        options.forEachIndexed { index, option ->
-                            RetroButton(
-                                onClick = {
-                                    if (option.needsPartnerPick()) {
-                                        pickerFor = option
-                                    } else {
-                                        viewModel.resolveEvent(eventId, option)
-                                        onBack()
-                                    }
-                                },
-                                filled = index == 0,
+                val renewalEvent = item.event as? SimEvent.RenewalOpened
+                if (renewalEvent != null) {
+                    DealBuilderPanel(
+                        event = renewalEvent,
+                        labelFunds = world.label.funds,
+                        onResolve = { option ->
+                            viewModel.resolveEvent(eventId, option)
+                            // Navigation is handled by the LaunchedEffect that fires when item
+                            // disappears from the inbox after the DB write propagates.
+                        }
+                    )
+                } else {
+                    when {
+                        options == null -> {
+                            CircularProgressIndicator(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 8.dp)
-                            ) { Text(option.text) }
+                                    .align(Alignment.CenterHorizontally)
+                                    .padding(8.dp)
+                            )
+                        }
+                        options.isEmpty() -> Unit
+                        else -> {
+                            options.forEachIndexed { index, option ->
+                                RetroButton(
+                                    onClick = {
+                                        if (option.needsPartnerPick()) {
+                                            pickerFor = option
+                                        } else {
+                                            viewModel.resolveEvent(eventId, option)
+                                            // Navigation handled by LaunchedEffect on item disappearing.
+                                        }
+                                    },
+                                    filled = index == 0,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                ) { Text(option.text) }
+                            }
                         }
                     }
                 }
@@ -176,7 +190,7 @@ fun EmailDetailScreen(
                     val final = pickerFor!!.withPartner(artistId)
                     viewModel.resolveEvent(eventId, final)
                     pickerFor = null
-                    onBack()
+                    // Navigation handled by LaunchedEffect(item) when the item disappears.
                 },
                 onDismiss = { pickerFor = null },
                 modifier = Modifier.fillMaxSize()

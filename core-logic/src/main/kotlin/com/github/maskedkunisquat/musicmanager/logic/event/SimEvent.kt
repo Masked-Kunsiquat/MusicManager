@@ -1,5 +1,7 @@
 package com.github.maskedkunisquat.musicmanager.logic.event
 
+import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
+import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.WantType
 
@@ -51,6 +53,46 @@ sealed class SimEvent {
     data class NegotiationRound(
         val prospectId: String,
         val round: Int,
+        override val dayOfGame: Int
+    ) : SimEvent()
+
+    data class RenewalOpened(
+        override val artistId: String,
+        val contractId: String,
+        val round: Int,
+        override val dayOfGame: Int
+    ) : SimEvent()
+
+    data class LabelNeedUrgent(
+        val needType: LabelNeedType,
+        val severity: Float,
+        override val dayOfGame: Int
+    ) : SimEvent()
+
+    data class CapabilityUnlockable(
+        val type: CapabilityType,
+        val costFunds: Long,
+        override val dayOfGame: Int
+    ) : SimEvent()
+
+    // Rival signed a prospect from the unsigned pool.
+    // wasPlayerTarget = true if the prospect was in world.activeNegotiations when poached.
+    data class RivalSigning(
+        val rivalId: String,
+        val rivalName: String,
+        val prospectName: String,
+        val genre: String,
+        val wasPlayerTarget: Boolean,
+        override val dayOfGame: Int
+    ) : SimEvent()
+
+    // Rival poached a signed artist. Artist is already removed from world when this arrives.
+    // artistName embedded because the world no longer contains the artist at render time.
+    data class RivalPoach(
+        val rivalId: String,
+        val rivalName: String,
+        override val artistId: String,
+        val artistName: String,
         override val dayOfGame: Int
     ) : SimEvent()
 }

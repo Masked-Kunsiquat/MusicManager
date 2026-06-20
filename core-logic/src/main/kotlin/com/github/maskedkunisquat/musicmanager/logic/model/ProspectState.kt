@@ -10,7 +10,8 @@ data class ProspectState(
     val dimensions: ArtistDimensions,
     // 0f = very hard to sign (competing offers, high demands); 1f = eager.
     // Hidden from the player — drives which negotiation options StubAiProvider surfaces.
-    val signabilityScore: Float
+    val signabilityScore: Float,
+    val signability: SignabilityType = SignabilityType.NORMAL
 ) {
     init {
         require(signabilityScore in 0f..1f) { "signabilityScore must be in 0f..1f, was $signabilityScore" }

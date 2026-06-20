@@ -13,21 +13,29 @@ class SimEngine {
         val marketRng = Random(world.seed xor world.currentDay.toLong())
         val scoutRng  = Random(world.seed xor (world.currentDay.toLong() + 2L))
         val eventRng  = Random(world.seed xor nextDay.toLong())
+        val rivalRng  = Random(world.seed xor (nextDay.toLong() + 3L))
 
         val previousMarket = world.market
         val (updatedScouts, scoutReports) = tickScouts(world.scouts, nextDay, world.prospects, scoutRng)
         val newMarket = tickMarket(world.market, marketRng)
-        val nextWorld = world.copy(
+        val preRivalWorld = world.copy(
             currentDay = nextDay,
             artists = world.artists.mapValues { (_, artist) -> decayNeeds(artist) },
             market = newMarket,
             scouts = updatedScouts,
             chartSnapshot = if (nextDay % 3 == 0) newMarket else world.chartSnapshot
         )
-        return TickResult(
-            world = nextWorld,
-            events = generateEvents(nextWorld, previousMarket, eventRng) + scoutReports
+        val (nextWorld, rivalEvents) = tickRivals(preRivalWorld, rivalRng)
+        val events = generateEvents(nextWorld, previousMarket, eventRng) + scoutReports + rivalEvents
+        val capabilityEvents = events.filterIsInstance<SimEvent.CapabilityUnlockable>()
+        val labelNeedEvents = events.filterIsInstance<SimEvent.LabelNeedUrgent>()
+        val finalWorld = nextWorld.copy(
+            capabilityNoticedAt = if (capabilityEvents.isEmpty()) nextWorld.capabilityNoticedAt
+                else nextWorld.capabilityNoticedAt + capabilityEvents.associate { it.type.name to nextWorld.currentDay },
+            labelNeedNoticedAt = if (labelNeedEvents.isEmpty()) nextWorld.labelNeedNoticedAt
+                else nextWorld.labelNeedNoticedAt + labelNeedEvents.associate { it.needType.name to nextWorld.currentDay }
         )
+        return TickResult(world = finalWorld, events = events)
     }
 
     fun tickN(world: SimWorld, ticks: Int): TickResult {

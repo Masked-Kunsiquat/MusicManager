@@ -89,9 +89,11 @@ class WorldInitializerTest {
 
     @Test
     fun `all prospect signabilityScores are between 0_2 and 0_9`() {
-        // WorldInitializer constrains to 0.2–0.9 so negotiations are never trivially impossible/trivial.
+        // WorldInitializer constrains NORMAL prospects to 0.2–0.9 so negotiations are never trivially impossible/trivial.
+        // The UNSIGNABLE whale sits at 0.90–1.00 intentionally (scouts surface them constantly).
         val world = WorldInitializer.initializeWorld(77L)
         for (prospect in world.prospects.values) {
+            if (prospect.signability == com.github.maskedkunisquat.musicmanager.logic.model.SignabilityType.UNSIGNABLE) continue
             assertTrue(
                 "${prospect.name} signabilityScore outside 0.2–0.9: ${prospect.signabilityScore}",
                 prospect.signabilityScore in 0.2f..0.9f

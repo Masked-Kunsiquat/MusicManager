@@ -10,6 +10,8 @@ import com.github.maskedkunisquat.musicmanager.logic.model.NeedState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ProspectState
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
+import com.github.maskedkunisquat.musicmanager.logic.model.SignabilityType
+import com.github.maskedkunisquat.musicmanager.logic.model.RivalState
 import com.github.maskedkunisquat.musicmanager.logic.model.ScoutState
 import com.github.maskedkunisquat.musicmanager.logic.model.RevenueSplit
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
@@ -23,6 +25,7 @@ object WorldInitializer {
     private val NOUNS = listOf("Lions", "Birds", "Waves", "Stars", "Flowers", "Rivers", "Tides", "Ghosts")
     private val SCOUT_FIRST = listOf("Marcus", "Nina", "Dara", "Leon", "Priya", "Eli", "Tanya", "Jax")
     private val SCOUT_LAST = listOf("Cross", "Webb", "Reid", "Park", "Osei", "Vance", "Cole", "Marsh")
+    private val RIVAL_NAMES = listOf("Mercury Sound", "Parallax Records", "Horizon Group", "Crestfall", "Vertex Label", "Meridian Music")
 
     fun initializeWorld(seed: Long): SimWorld {
         val rng = Random(seed)
@@ -40,12 +43,22 @@ object WorldInitializer {
         val prospects = (0 until prospectCount).associate { i ->
             val id = "prospect_${seed}_$i"
             id to buildProspect(id, rng)
+        } + run {
+            // One permanently unsignable prospect per world — high signabilityScore so scouts
+            // surface them often, but SignArtist always bounces. Intended as a recurring tease.
+            val id = "prospect_${seed}_whale"
+            mapOf(id to buildUnsignableProspect(id, rng))
         }
 
         // Two scouts, staggered by half the report interval so reports don't burst together.
         val scouts = (0 until 2).associate { i ->
             val id = "scout_${seed}_$i"
             id to buildScout(id, i, rng)
+        }
+
+        val rivals = (0 until 2).associate { i ->
+            val id = "rival_${seed}_$i"
+            id to buildRival(id, i, rng)
         }
 
         return SimWorld(
@@ -56,7 +69,8 @@ object WorldInitializer {
             market = buildMarket(rng),
             contracts = contracts,
             prospects = prospects,
-            scouts = scouts
+            scouts = scouts,
+            rivals = rivals
         )
     }
 
@@ -113,6 +127,34 @@ object WorldInitializer {
         // 0.2–0.9: avoids trivially impossible or trivially easy negotiations.
         signabilityScore = 0.2f + rng.nextFloat() * 0.7f
     )
+
+    private fun buildUnsignableProspect(id: String, rng: Random): ProspectState = ProspectState(
+        id = id,
+        name = "${ADJECTIVES.random(rng)} ${NOUNS.random(rng)}",
+        genre = GENRES.random(rng),
+        dimensions = ArtistDimensions(
+            confidence = 0.7f + rng.nextFloat() * 0.3f,
+            commercialAppetite = rng.nextFloat() * 0.25f,  // low commercial appetite
+            volatility = rng.nextFloat() * 0.3f,           // steady — consistent in their refusal
+            loyalty = rng.nextFloat() * 0.3f
+        ),
+        signabilityScore = 0.90f + rng.nextFloat() * 0.10f, // scouts surface them constantly
+        signability = SignabilityType.UNSIGNABLE
+    )
+
+    private fun buildRival(id: String, index: Int, rng: Random): RivalState {
+        val focusCount = 2 + rng.nextInt(2)  // 2–3 focus genres per rival
+        val focusGenres = (0 until focusCount).map { GENRES.random(rng) }.toSet()
+        val genreWeights = GENRES.associateWith { genre ->
+            if (genre in focusGenres) 0.60f + rng.nextFloat() * 0.40f  // 0.60–1.00
+            else 0.05f + rng.nextFloat() * 0.25f                         // 0.05–0.30
+        }
+        return RivalState(
+            id = id,
+            name = RIVAL_NAMES[index % RIVAL_NAMES.size],
+            genreWeights = genreWeights
+        )
+    }
 
     private fun buildScout(id: String, index: Int, rng: Random): ScoutState {
         val focusCount = 1 + rng.nextInt(2) // 1 or 2 focus genres

@@ -13,7 +13,18 @@ data class SimWorld(
     // Defaults so snapshots written before these fields existed still deserialize.
     val prospects: Map<String, ProspectState> = emptyMap(),
     val scouts: Map<String, ScoutState> = emptyMap(),
+    val rivals: Map<String, RivalState> = emptyMap(),
+    // Rival pursuit state — persisted so counters survive session restarts.
+    val rivalProspectTargets: Map<String, String> = emptyMap(),   // rivalId → prospectId
+    val rivalProspectCounters: Map<String, Int> = emptyMap(),      // rivalId → ticks on target
+    val rivalPoachTargets: Map<String, String> = emptyMap(),       // rivalId → artistId
+    val rivalPoachCounters: Map<String, Int> = emptyMap(),         // rivalId → ticks on poach
     val activeNegotiations: Map<String, Int> = emptyMap(),    // prospectId → current round
+    val activeRenewals: Map<String, Int> = emptyMap(),        // artistId → current renewal round
     val unavailableProspects: Set<String> = emptySet(),        // cooldown after failed negotiation
-    val chartSnapshot: MarketState = MarketState(emptyMap())   // delayed market data; updates every 3 ticks
+    val chartSnapshot: MarketState = MarketState(emptyMap()),  // delayed market data; updates every 3 ticks
+    // CapabilityType.name → day the offer was last presented; prevents re-emit within cooldown window.
+    val capabilityNoticedAt: Map<String, Int> = emptyMap(),
+    // LabelNeedType.name → day the warning was last emitted; prevents inbox flooding.
+    val labelNeedNoticedAt: Map<String, Int> = emptyMap()
 )

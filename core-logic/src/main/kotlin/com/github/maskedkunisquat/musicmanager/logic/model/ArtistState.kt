@@ -10,5 +10,8 @@ data class ArtistState(
     val dimensions: ArtistDimensions,
     val needs: Map<NeedType, NeedState>,
     val activeWants: List<Want>,
-    val contractId: String?
+    val contractId: String?,
+    // Running sum of all RelationshipChange deltas — drives renewal offer weighting.
+    // Unclamped; negative = strained history, positive = warm history.
+    val relationshipBalance: Float = 0f
 )

@@ -3,6 +3,8 @@ package com.github.maskedkunisquat.musicmanager.data.mapper
 import com.github.maskedkunisquat.musicmanager.data.entity.EventLogEntity
 import com.github.maskedkunisquat.musicmanager.logic.ai.GeneratedEmail
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
+import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
+import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
 import com.github.maskedkunisquat.musicmanager.logic.response.StateEffect
 import com.github.maskedkunisquat.musicmanager.data.db.worldJson
@@ -14,6 +16,8 @@ import java.util.Locale
 import java.util.UUID
 
 const val EVENT_TYPE_INTEL_DROP = "intel_drop"
+const val EVENT_TYPE_RIVAL_SIGNING = "rival_signing"
+const val EVENT_TYPE_RIVAL_POACH = "rival_poach"
 
 // Stable identity key for deduplication — one unresolved event per (artist, need/want type),
 // per contract, per genre shift, or per scout/prospect pair.
@@ -25,6 +29,11 @@ fun SimEvent.eventSignature(): String = when (this) {
     is SimEvent.IntelDrop -> "intel_drop:$genre:$dayOfGame"
     is SimEvent.ScoutReport -> "scout_report:$scoutId:$prospectId"
     is SimEvent.NegotiationRound -> "negotiation_round:$prospectId:$round"
+    is SimEvent.RenewalOpened -> "renewal_opened:$artistId:$round"
+    is SimEvent.LabelNeedUrgent -> "label_need_urgent:${needType.name}"
+    is SimEvent.CapabilityUnlockable -> "capability_unlockable:${type.name}"
+    is SimEvent.RivalSigning -> "rival_signing:$rivalId:$prospectName"
+    is SimEvent.RivalPoach -> "rival_poach:$rivalId:$artistId"
 }
 
 fun SimEvent.toEntity(email: GeneratedEmail): EventLogEntity = EventLogEntity(
@@ -90,6 +99,36 @@ fun ResponseOption.toResponseEntity(originalEventId: String, dayOfGame: Int): Ev
                             put("type", "negotiation_failed")
                             put("prospectId", effect.prospectId)
                         }
+                        is StateEffect.ReputationChange -> {
+                            put("type", "reputation_change")
+                            put("community", effect.community.name)
+                            put("delta", String.format(Locale.US, "%.4f", effect.delta))
+                        }
+                        is StateEffect.UnlockCapability -> {
+                            put("type", "unlock_capability")
+                            put("capabilityType", effect.type.name)
+                        }
+                        is StateEffect.OpenRenewal -> {
+                            put("type", "open_renewal")
+                            put("artistId", effect.artistId)
+                            put("contractId", effect.contractId)
+                        }
+                        is StateEffect.AdvanceRenewal -> {
+                            put("type", "advance_renewal")
+                            put("artistId", effect.artistId)
+                            put("contractId", effect.contractId)
+                        }
+                        is StateEffect.RenewContract -> {
+                            put("type", "renew_contract")
+                            put("artistId", effect.artistId)
+                            put("newExpiryTicks", effect.newExpiryTicks)
+                            put("artistPercent", effect.revenueSplit.artistPercent)
+                            put("creativeControl", effect.creativeControl.name)
+                        }
+                        is StateEffect.RenewalWalked -> {
+                            put("type", "renewal_walked")
+                            put("artistId", effect.artistId)
+                        }
                     }
                 })
             }
@@ -118,6 +157,11 @@ private fun SimEvent.eventTypeKey(): String = when (this) {
     is SimEvent.IntelDrop -> EVENT_TYPE_INTEL_DROP
     is SimEvent.ScoutReport -> "scout_report"
     is SimEvent.NegotiationRound -> "negotiation_round"
+    is SimEvent.RenewalOpened -> "renewal_opened"
+    is SimEvent.LabelNeedUrgent -> "label_need_urgent"
+    is SimEvent.CapabilityUnlockable -> "capability_unlockable"
+    is SimEvent.RivalSigning -> "rival_signing"
+    is SimEvent.RivalPoach -> "rival_poach"
 }
 
 private fun SimEvent.toPayloadJson(): String = when (this) {
@@ -152,5 +196,31 @@ private fun SimEvent.toPayloadJson(): String = when (this) {
     is SimEvent.NegotiationRound -> buildJsonObject {
         put("prospectId", prospectId)
         put("round", round)
+    }
+    is SimEvent.RenewalOpened -> buildJsonObject {
+        put("artistId", artistId)
+        put("contractId", contractId)
+        put("round", round)
+    }
+    is SimEvent.LabelNeedUrgent -> buildJsonObject {
+        put("needType", needType.name)
+        put("severity", String.format(Locale.US, "%.4f", severity))
+    }
+    is SimEvent.CapabilityUnlockable -> buildJsonObject {
+        put("type", type.name)
+        put("costFunds", costFunds)
+    }
+    is SimEvent.RivalSigning -> buildJsonObject {
+        put("rivalId", rivalId)
+        put("rivalName", rivalName)
+        put("prospectName", prospectName)
+        put("genre", genre)
+        put("wasPlayerTarget", wasPlayerTarget)
+    }
+    is SimEvent.RivalPoach -> buildJsonObject {
+        put("rivalId", rivalId)
+        put("rivalName", rivalName)
+        put("artistId", artistId)
+        put("artistName", artistName)
     }
 }.toString()

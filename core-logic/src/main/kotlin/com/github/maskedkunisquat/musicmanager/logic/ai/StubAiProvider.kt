@@ -1,7 +1,13 @@
 package com.github.maskedkunisquat.musicmanager.logic.ai
 
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
+import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
+import com.github.maskedkunisquat.musicmanager.logic.model.CreativeControl
+import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
+import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
+import com.github.maskedkunisquat.musicmanager.logic.model.SignabilityType
+import com.github.maskedkunisquat.musicmanager.logic.model.RevenueSplit
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.model.WantType
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
@@ -68,6 +74,11 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.IntelDrop -> intelDropProse(event)
         is SimEvent.ScoutReport -> scoutReportProse(event, world)
         is SimEvent.NegotiationRound -> negotiationRoundProse(event, world)
+        is SimEvent.RenewalOpened -> renewalOpenedProse(event, world)
+        is SimEvent.LabelNeedUrgent -> labelNeedUrgentProse(event)
+        is SimEvent.CapabilityUnlockable -> capabilityUnlockableProse(event)
+        is SimEvent.RivalSigning -> rivalSigningProse(event)
+        is SimEvent.RivalPoach -> rivalPoachProse(event)
     }
 
     private fun needUrgentProse(
@@ -182,10 +193,15 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.NeedUrgent -> needUrgentOptions(event, world)
         is SimEvent.ContractExpiring -> contractExpiringOptions(event, world)
         is SimEvent.WantSurfaced -> wantSurfacedOptions(event, world)
-        is SimEvent.MarketShift -> marketShiftOptions(event)
-        is SimEvent.IntelDrop -> intelDropOptions(event)
+        is SimEvent.MarketShift -> marketShiftOptions(event, world)
+        is SimEvent.IntelDrop -> intelDropOptions(event, world)
         is SimEvent.ScoutReport -> scoutReportOptions(event, world)
         is SimEvent.NegotiationRound -> negotiationRoundOptions(event, world)
+        is SimEvent.RenewalOpened -> renewalOpenedOptions(event, world)
+        is SimEvent.LabelNeedUrgent -> labelNeedUrgentOptions(event, world)
+        is SimEvent.CapabilityUnlockable -> capabilityUnlockableOptions(event)
+        is SimEvent.RivalSigning -> rivalSigningOptions(event)
+        is SimEvent.RivalPoach -> rivalPoachOptions(event)
     }
 
     private fun needUrgentOptions(event: SimEvent.NeedUrgent, world: SimWorld): List<ResponseOption> {
@@ -249,13 +265,14 @@ class StubAiProvider : LabelAiProvider {
 
     private fun contractExpiringOptions(event: SimEvent.ContractExpiring, world: SimWorld): List<ResponseOption> {
         val a = event.artistId
+        val c = event.contractId
         val lowLoyalty = (world.artists[a]?.dimensions?.loyalty ?: 0.5f) < 0.35f
         return buildList {
-            add(option("$a:contract_proactive", "Open renewal talks now — lead with better terms",
-                listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.10f), RC(a, +0.08f))))
-            add(option("$a:contract_premium", "Prepare a premium renewal offer with a signing bonus",
-                listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.25f), RC(a, +0.15f)),
-                cost = 2_000 * CENTS))
+            add(option("$a:contract_open", "Open renewal talks now",
+                listOf(StateEffect.OpenRenewal(a, c))))
+            add(option("$a:contract_premium", "Open talks with a signing bonus to show commitment",
+                listOf(StateEffect.OpenRenewal(a, c), RC(a, +0.08f)),
+                cost = 1_500 * CENTS))
             add(option("$a:contract_wait", "Wait — let their team make the first move",
                 listOf(RC(a, -0.10f))))
             if (lowLoyalty) {
@@ -381,34 +398,56 @@ class StubAiProvider : LabelAiProvider {
         )
     }
 
-    private fun marketShiftOptions(event: SimEvent.MarketShift): List<ResponseOption> {
+    private fun marketShiftOptions(event: SimEvent.MarketShift, world: SimWorld): List<ResponseOption> {
         val rising = event.currentTrend > event.previousTrend
-        return listOf(
-            option("market:${event.genre}:lean_in",
+        return buildList {
+            add(option("market:${event.genre}:lean_in",
                 if (rising) "Shift focus — prioritize ${event.genre} signings this cycle"
                 else "Pull back — pause new ${event.genre} spend until it stabilizes",
-                emptyList()),
-            option("market:${event.genre}:watch",
+                emptyList()))
+            add(option("market:${event.genre}:watch",
                 "Watch another cycle before acting",
-                emptyList()),
-            option("market:${event.genre}:ignore",
+                emptyList()))
+            add(option("market:${event.genre}:ignore",
                 "Stay the course — this doesn't change the plan",
-                emptyList())
-        )
+                emptyList()))
+            if (rising && CapabilityType.IN_HOUSE_BOOKING in world.label.capabilities) {
+                add(option("market:${event.genre}:book_dates",
+                    "Lock in a run of ${event.genre} dates while the trend peaks",
+                    world.artists.values
+                        .filter { it.genre == event.genre }
+                        .map { NC(it.id, NeedType.RECOGNITION, +0.15f) },
+                    cost = 500 * CENTS))
+            }
+            if (rising && CapabilityType.VIDEO_PRODUCTION in world.label.capabilities) {
+                add(option("market:${event.genre}:video_series",
+                    "Commission a video series capitalizing on the ${event.genre} momentum",
+                    world.artists.values
+                        .filter { it.genre == event.genre }
+                        .map { NC(it.id, NeedType.RECOGNITION, +0.20f) },
+                    cost = 800 * CENTS))
+            }
+        }
     }
 
-    private fun intelDropOptions(event: SimEvent.IntelDrop): List<ResponseOption> = listOf(
-        option("intel:${event.genre}:file",
+    private fun intelDropOptions(event: SimEvent.IntelDrop, world: SimWorld): List<ResponseOption> = buildList {
+        add(option("intel:${event.genre}:file",
             "File it — good context, nothing to act on yet",
-            emptyList()),
-        option("intel:${event.genre}:share",
+            emptyList()))
+        add(option("intel:${event.genre}:share",
             "Share it with the roster — keep everyone in the loop",
-            listOf(RNC(NeedType.BELONGING, +0.08f))),
-        option("intel:${event.genre}:act",
+            listOf(RNC(NeedType.BELONGING, +0.08f))))
+        add(option("intel:${event.genre}:act",
             "Brief the scouts — double down on ${event.genre} intel",
             emptyList(),
-            cost = 200 * CENTS)
-    )
+            cost = 200 * CENTS))
+        if (CapabilityType.PUBLICIST in world.label.capabilities) {
+            add(option("intel:${event.genre}:pr_pitch",
+                "Have the publicist pitch a story around this ${event.genre} angle",
+                listOf(StateEffect.ReputationChange(ReputationCommunity.PRESS, +0.04f)),
+                cost = 150 * CENTS))
+        }
+    }
 
     private fun scoutReportOptions(event: SimEvent.ScoutReport, world: SimWorld): List<ResponseOption> {
         val prospectName = world.prospects[event.prospectId]?.name ?: "this prospect"
@@ -429,6 +468,25 @@ class StubAiProvider : LabelAiProvider {
         val prospect = world.prospects[event.prospectId]
         val name = prospect?.name ?: "the artist"
         val score = prospect?.signabilityScore ?: 0.5f
+
+        if (prospect?.signability == SignabilityType.UNSIGNABLE) {
+            return when (event.round) {
+                1 -> Pair(
+                    "re: your outreach",
+                    "Hey — $name here. Thanks for reaching out, genuinely.\n\nI want to be upfront with you: I'm not looking to sign with anyone right now. " +
+                    "It's not about the terms or the label — I just need to stay independent for a while longer. I hope you understand."
+                )
+                2 -> Pair(
+                    "re: follow-up",
+                    "$name again.\n\nI appreciate you coming back — I do. But my position hasn't changed. I'm not ready to commit to anything structural. " +
+                    "I'm not sure I ever will be. The independence matters to me more than I can really explain on paper."
+                )
+                else -> Pair(
+                    "re: where things stand",
+                    "Not interested. But thanks for looking."
+                )
+            }
+        }
 
         return when (event.round) {
             1 -> {
@@ -487,8 +545,260 @@ class StubAiProvider : LabelAiProvider {
         }
     }
 
+    // --- Capability system ---
+
+    private fun capabilityUnlockableProse(event: SimEvent.CapabilityUnlockable): Pair<String, String> {
+        val (name, what) = when (event.type) {
+            CapabilityType.PUBLICIST -> "in-house PR" to
+                "Genre press starts responding faster. Pitching stories around intel and market shifts becomes an option."
+            CapabilityType.IN_HOUSE_BOOKING -> "in-house booking" to
+                "Venue bookers take your calls directly. You can lock in dates when trends peak instead of waiting on a middleman."
+            CapabilityType.VIDEO_PRODUCTION -> "in-house video production" to
+                "Visual content for your roster on demand. Capitalizing on momentum no longer means waiting weeks on a third party."
+        }
+        val cost = event.costFunds / 100L
+        return Pair(
+            "capability available — $name",
+            "Internal note: you're now positioned to bring $name in-house. $what\n\n" +
+            "One-time setup cost: \$$cost. Once unlocked, it's yours for the season."
+        )
+    }
+
+    private fun capabilityUnlockableOptions(event: SimEvent.CapabilityUnlockable): List<ResponseOption> {
+        val (name) = when (event.type) {
+            CapabilityType.PUBLICIST -> "in-house PR" to ""
+            CapabilityType.IN_HOUSE_BOOKING -> "in-house booking" to ""
+            CapabilityType.VIDEO_PRODUCTION -> "in-house video production" to ""
+        }
+        return listOf(
+            option("cap:${event.type.name}:unlock",
+                "Unlock $name now",
+                listOf(StateEffect.UnlockCapability(event.type)),
+                cost = event.costFunds),
+            option("cap:${event.type.name}:defer",
+                "Not yet — revisit when timing is better",
+                emptyList())
+        )
+    }
+
+    // --- Label meso tier ---
+
+    private fun labelNeedUrgentProse(event: SimEvent.LabelNeedUrgent): Pair<String, String> =
+        when (event.needType) {
+            LabelNeedType.CASH_FLOW -> {
+                val urgency = when {
+                    event.severity < 0.15f -> "We're close to the wire and something has to give."
+                    else -> "The runway is shorter than it should be right now."
+                }
+                Pair(
+                    "label finances — heads up",
+                    "Internal flag — cash position is tighter than the targets. $urgency " +
+                    "We have a few levers: cut discretionary spend, pull forward a deal that " +
+                    "brings revenue in, or accept less favorable terms somewhere to unlock " +
+                    "liquidity. None of these are painless. What's the call?"
+                )
+            }
+            LabelNeedType.GENRE_DIVERSITY -> Pair(
+                "roster check — genre concentration",
+                "Looking at the active roster — we're getting concentrated. " +
+                "If this genre hits a rough patch, we feel the whole thing at once. " +
+                "Might be worth being deliberate about the next signing rather than " +
+                "just chasing what's already working for us. Something to consider."
+            )
+        }
+
+    private fun labelNeedUrgentOptions(event: SimEvent.LabelNeedUrgent, world: SimWorld): List<ResponseOption> =
+        when (event.needType) {
+            LabelNeedType.CASH_FLOW -> {
+                val highestLoyaltyArtistId = world.artists.values
+                    .maxByOrNull { it.dimensions.loyalty }?.id
+                buildList {
+                    add(option("label:cash:cut_spend",
+                        "Cut discretionary spending across the board for this quarter",
+                        emptyList()))
+                    if (highestLoyaltyArtistId != null) {
+                        add(option("label:cash:advance_recovery",
+                            "Negotiate an advance recovery from ${world.artists[highestLoyaltyArtistId]?.name ?: "a roster artist"}",
+                            listOf(NC(highestLoyaltyArtistId, NeedType.FINANCIAL_SECURITY, -0.15f), RC(highestLoyaltyArtistId, -0.08f),
+                                StateEffect.LabelFundsChange(3_000 * CENTS))))
+                    }
+                    add(option("label:cash:commercial_deal",
+                        "Accept a commercial licensing deal — quick revenue, costs indie credibility",
+                        listOf(StateEffect.LabelFundsChange(8_000 * CENTS),
+                            StateEffect.ReputationChange(ReputationCommunity.INDIE_SCENE, -0.06f))))
+                    add(option("label:cash:monitor",
+                        "Hold course — watch cash position another cycle before acting",
+                        emptyList()))
+                }
+            }
+            LabelNeedType.GENRE_DIVERSITY -> listOf(
+                option("label:diversity:target_contrarian",
+                    "Instruct scouts to prioritize off-genre prospects this cycle",
+                    emptyList()),
+                option("label:diversity:hold_course",
+                    "Stay focused — the genre concentration is a calculated bet, not an oversight",
+                    emptyList()),
+                option("label:diversity:review",
+                    "Pull together a roster review — map where we're exposed before deciding",
+                    emptyList())
+            )
+        }
+
     private fun option(id: String, text: String, effects: List<StateEffect>, cost: Long = 0L) =
         ResponseOption(id = id, text = text, effects = effects, costFunds = cost)
+
+    // --- Contract renewal ---
+
+    private fun renewalOpenedProse(event: SimEvent.RenewalOpened, world: SimWorld): Pair<String, String> {
+        val artist = world.artists[event.artistId]
+        val name = artist?.name ?: "your artist"
+        val balance = artist?.relationshipBalance ?: 0f
+        val tier = renewalTier(balance)
+        val subject = when (event.round) {
+            1 -> "re: contract renewal — round 1"
+            2 -> "re: renewal talks — your response"
+            else -> "re: renewal — final position"
+        }
+        val body = when (tier) {
+            RenewalTier.WARM -> when (event.round) {
+                1 -> "Hey — my team flagged the window. Honestly, I'm not shopping around. " +
+                     "We've built something real here and I want to keep building it. " +
+                     "That said, let's make it official before anyone gets nervous. What are you thinking?"
+                2 -> "Good conversation last time. I think we're close. " +
+                     "I just want to make sure the terms reflect where things are now — " +
+                     "not where they were when we first signed. Nothing dramatic. Let's land this."
+                else -> "I want to close this. Here's where I need to land: " +
+                        "the split needs to move a little in my direction — I've earned it. " +
+                        "Everything else, I'm flexible on. Tell me we can do this."
+            }
+            RenewalTier.NEUTRAL -> when (event.round) {
+                1 -> "My manager says we need to start this conversation. " +
+                     "I'm not panicking but I'm also not going to pretend I haven't heard from other people. " +
+                     "If we're doing this, let's actually do it. What's the offer?"
+                2 -> "Okay. I've had time to think. I know what I want and I think you know too. " +
+                     "Let's stop dancing and put something real on the table. I'm ready to sign if it's right."
+                else -> "This is it. I need to know where we stand. " +
+                        "I have other conversations I can take seriously if this doesn't work out. " +
+                        "I'm not trying to be difficult — I just need the right deal."
+            }
+            RenewalTier.STRAINED -> when (event.round) {
+                1 -> "My lawyer says I need to at least have this conversation. Fine. " +
+                     "But I want to be honest: there's a lot of ground to make up here. " +
+                     "The split isn't working for me, the control situation hasn't been great, " +
+                     "and I've had real interest from other labels. I'm listening. But I need more."
+                2 -> "I told you where I was last time. Has anything changed on your end? " +
+                     "Because I need full creative control and I need the split to reflect my actual contribution. " +
+                     "I'm not budging on those two things."
+                else -> "Final answer. These are my terms. If you can't meet them, " +
+                        "we go our separate ways and that's okay. No hard feelings. " +
+                        "But I need an answer now."
+            }
+        }
+        return Pair(subject, "$name said:\n\n$body")
+    }
+
+    private fun renewalOpenedOptions(event: SimEvent.RenewalOpened, world: SimWorld): List<ResponseOption> {
+        val a = event.artistId
+        val c = event.contractId
+        val balance = world.artists[a]?.relationshipBalance ?: 0f
+        val tier = renewalTier(balance)
+        val isFinal = event.round >= 3
+        return when (tier) {
+            RenewalTier.WARM -> buildList {
+                // Warm history: artist accepts favorable-to-artist terms easily
+                add(option("$a:renew:warm:sign:${event.round}",
+                    "Sign on warm terms — 55/45 split, shared control, 180-tick term",
+                    listOf(StateEffect.RenewContract(a, 180, RevenueSplit(55), CreativeControl.SHARED))))
+                if (!isFinal) {
+                    add(option("$a:renew:warm:counter:${event.round}",
+                        "Counter with standard 50/50 — see if they'll meet us there",
+                        listOf(StateEffect.AdvanceRenewal(a, c), RC(a, -0.05f))))
+                }
+                add(option("$a:renew:warm:walk:${event.round}",
+                    "Walk away from talks",
+                    listOf(StateEffect.RenewalWalked(a))))
+            }
+            RenewalTier.NEUTRAL -> buildList {
+                add(option("$a:renew:neutral:sign:${event.round}",
+                    "Sign on standard terms — 50/50 split, shared control, 180-tick term",
+                    listOf(StateEffect.RenewContract(a, 180, RevenueSplit(50), CreativeControl.SHARED))))
+                if (!isFinal) {
+                    add(option("$a:renew:neutral:counter:${event.round}",
+                        "Push back on the split — hold at 45/55 and see where it lands",
+                        listOf(StateEffect.AdvanceRenewal(a, c), RC(a, -0.08f))))
+                }
+                add(option("$a:renew:neutral:walk:${event.round}",
+                    "Table the conversation — let the contract expire",
+                    listOf(StateEffect.RenewalWalked(a))))
+            }
+            RenewalTier.STRAINED -> buildList {
+                // Strained: artist demands a bigger cut and full creative control
+                add(option("$a:renew:strained:sign:${event.round}",
+                    "Accept their terms — 65/35 split, full artist control, 90-tick short term",
+                    listOf(StateEffect.RenewContract(a, 90, RevenueSplit(65), CreativeControl.FULL_ARTIST))))
+                if (!isFinal) {
+                    add(option("$a:renew:strained:counter:${event.round}",
+                        "Hold firm on 50/50 — push back hard",
+                        listOf(StateEffect.AdvanceRenewal(a, c), RC(a, -0.15f))))
+                }
+                add(option("$a:renew:strained:walk:${event.round}",
+                    "Let them walk — the relationship isn't worth the terms they're asking for",
+                    listOf(StateEffect.RenewalWalked(a))))
+            }
+        }
+    }
+
+    private enum class RenewalTier { WARM, NEUTRAL, STRAINED }
+    private fun renewalTier(balance: Float) = when {
+        balance > 0.5f  -> RenewalTier.WARM
+        balance < -0.3f -> RenewalTier.STRAINED
+        else            -> RenewalTier.NEUTRAL
+    }
+
+    // --- Rival events ---
+
+    private fun rivalSigningProse(event: SimEvent.RivalSigning): Pair<String, String> {
+        val body = if (event.wasPlayerTarget) {
+            "${event.rivalName} moved fast on ${event.prospectName}. Your offer was still open — " +
+            "they didn't wait for an answer. This one stings more because you were in the running. " +
+            "Worth noting how quickly ${event.rivalName} closed when they wanted someone."
+        } else {
+            "${event.rivalName} signed ${event.prospectName}, a ${event.genre} act from the unsigned pool. " +
+            "They weren't in your active pipeline, but this tells you something about where ${event.rivalName} " +
+            "is building. File it away."
+        }
+        return Pair(
+            "intel: ${event.rivalName} signed ${event.prospectName}",
+            body
+        )
+    }
+
+    private fun rivalSigningOptions(event: SimEvent.RivalSigning): List<ResponseOption> = listOf(
+        option("rival:sign:${event.rivalId}:noted",
+            "Noted — adjust scouting response time",
+            emptyList()),
+        option("rival:sign:${event.rivalId}:watch",
+            "Flag ${event.rivalName} for closer watching",
+            emptyList())
+    )
+
+    private fun rivalPoachProse(event: SimEvent.RivalPoach): Pair<String, String> = Pair(
+        "${event.artistName} left — signed with ${event.rivalName}",
+        "${event.artistName} has signed with ${event.rivalName}. This isn't a surprise if you've " +
+        "been watching the loyalty signals — the relationship was already fragile. By the time " +
+        "the contract window opened, they had better options on the table. " +
+        "The remaining roster has noticed. Decide how you respond to the room."
+    )
+
+    private fun rivalPoachOptions(event: SimEvent.RivalPoach): List<ResponseOption> = listOf(
+        option("rival:poach:${event.rivalId}:accept",
+            "Let them go — focus forward",
+            emptyList()),
+        option("rival:poach:${event.rivalId}:morale",
+            "Emergency team meeting — hold the room together",
+            listOf(RNC(NeedType.BELONGING, +0.15f)),
+            cost = 500 * CENTS)
+    )
 
     private fun NC(artistId: String, needType: NeedType, delta: Float) =
         StateEffect.NeedChange(artistId, needType, delta)

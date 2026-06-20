@@ -5,6 +5,8 @@ import com.github.maskedkunisquat.musicmanager.data.mapper.EVENT_TYPE_INTEL_DROP
 import com.github.maskedkunisquat.musicmanager.logic.ai.GeneratedEmail
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
+import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
+import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.WantType
 import com.github.maskedkunisquat.musicmanager.data.db.worldJson
@@ -13,6 +15,7 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 
 fun EventLogEntity.toInboxItemOrNull(): InboxItem? {
     val event = toSimEventOrNull() ?: return null
@@ -65,6 +68,37 @@ fun EventLogEntity.toSimEventOrNull(): SimEvent? = try {
         "negotiation_round" -> SimEvent.NegotiationRound(
             prospectId = json["prospectId"]!!.jsonPrimitive.content,
             round = json["round"]!!.jsonPrimitive.int,
+            dayOfGame = dayOfGame
+        )
+        "renewal_opened" -> SimEvent.RenewalOpened(
+            artistId = json["artistId"]!!.jsonPrimitive.content,
+            contractId = json["contractId"]!!.jsonPrimitive.content,
+            round = json["round"]!!.jsonPrimitive.int,
+            dayOfGame = dayOfGame
+        )
+        "label_need_urgent" -> SimEvent.LabelNeedUrgent(
+            needType = LabelNeedType.valueOf(json["needType"]!!.jsonPrimitive.content),
+            severity = json["severity"]!!.jsonPrimitive.content.toFloat(),
+            dayOfGame = dayOfGame
+        )
+        "capability_unlockable" -> SimEvent.CapabilityUnlockable(
+            type = CapabilityType.valueOf(json["type"]!!.jsonPrimitive.content),
+            costFunds = json["costFunds"]!!.jsonPrimitive.long,
+            dayOfGame = dayOfGame
+        )
+        "rival_signing" -> SimEvent.RivalSigning(
+            rivalId = json["rivalId"]!!.jsonPrimitive.content,
+            rivalName = json["rivalName"]!!.jsonPrimitive.content,
+            prospectName = json["prospectName"]!!.jsonPrimitive.content,
+            genre = json["genre"]!!.jsonPrimitive.content,
+            wasPlayerTarget = json["wasPlayerTarget"]!!.jsonPrimitive.content.toBoolean(),
+            dayOfGame = dayOfGame
+        )
+        "rival_poach" -> SimEvent.RivalPoach(
+            rivalId = json["rivalId"]!!.jsonPrimitive.content,
+            rivalName = json["rivalName"]!!.jsonPrimitive.content,
+            artistId = json["artistId"]!!.jsonPrimitive.content,
+            artistName = json["artistName"]!!.jsonPrimitive.content,
             dayOfGame = dayOfGame
         )
         else -> null
