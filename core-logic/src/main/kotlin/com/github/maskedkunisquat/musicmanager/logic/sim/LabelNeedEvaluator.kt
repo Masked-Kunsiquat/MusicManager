@@ -3,7 +3,7 @@ package com.github.maskedkunisquat.musicmanager.logic.sim
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 
-internal object LabelNeedEvaluator {
+object LabelNeedEvaluator {
 
     // Funds are stored in cents.
     private val CASH_FLOW_BUCKETS = listOf(

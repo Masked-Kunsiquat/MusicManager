@@ -16,6 +16,8 @@ import java.util.Locale
 import java.util.UUID
 
 const val EVENT_TYPE_INTEL_DROP = "intel_drop"
+const val EVENT_TYPE_RIVAL_SIGNING = "rival_signing"
+const val EVENT_TYPE_RIVAL_POACH = "rival_poach"
 
 // Stable identity key for deduplication — one unresolved event per (artist, need/want type),
 // per contract, per genre shift, or per scout/prospect pair.

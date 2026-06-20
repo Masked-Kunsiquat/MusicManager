@@ -80,6 +80,11 @@ private fun PressContent(feed: List<PressItem>, onBack: () -> Unit) {
 @Composable
 private fun PressRow(item: PressItem) {
     var expanded by rememberSaveable(item.id) { mutableStateOf(false) }
+    val headlineColor = when (item.tag) {
+        PressTag.BREAKING -> MaterialTheme.colorScheme.secondary
+        PressTag.RIVAL -> MaterialTheme.colorScheme.primary
+        PressTag.INTEL -> MaterialTheme.colorScheme.onSurface
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -89,7 +94,7 @@ private fun PressRow(item: PressItem) {
         Text(
             text = item.headline,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface
+            color = headlineColor
         )
         Text(
             text = "day ${item.dayOfGame}",
