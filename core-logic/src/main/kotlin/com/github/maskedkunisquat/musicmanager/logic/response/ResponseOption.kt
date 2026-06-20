@@ -1,5 +1,6 @@
 package com.github.maskedkunisquat.musicmanager.logic.response
 
+import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import kotlinx.serialization.SerialName
@@ -61,4 +62,7 @@ sealed class StateEffect {
         val community: ReputationCommunity,
         val delta: Float
     ) : StateEffect()
+
+    @Serializable @SerialName("unlock_capability")
+    data class UnlockCapability(val type: CapabilityType) : StateEffect()
 }

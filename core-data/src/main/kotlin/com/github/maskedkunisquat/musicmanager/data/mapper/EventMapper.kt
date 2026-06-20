@@ -3,6 +3,7 @@ package com.github.maskedkunisquat.musicmanager.data.mapper
 import com.github.maskedkunisquat.musicmanager.data.entity.EventLogEntity
 import com.github.maskedkunisquat.musicmanager.logic.ai.GeneratedEmail
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
+import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
 import com.github.maskedkunisquat.musicmanager.logic.response.StateEffect
@@ -27,6 +28,7 @@ fun SimEvent.eventSignature(): String = when (this) {
     is SimEvent.ScoutReport -> "scout_report:$scoutId:$prospectId"
     is SimEvent.NegotiationRound -> "negotiation_round:$prospectId:$round"
     is SimEvent.LabelNeedUrgent -> "label_need_urgent:${needType.name}"
+    is SimEvent.CapabilityUnlockable -> "capability_unlockable:${type.name}"
 }
 
 fun SimEvent.toEntity(email: GeneratedEmail): EventLogEntity = EventLogEntity(
@@ -97,6 +99,10 @@ fun ResponseOption.toResponseEntity(originalEventId: String, dayOfGame: Int): Ev
                             put("community", effect.community.name)
                             put("delta", String.format(Locale.US, "%.4f", effect.delta))
                         }
+                        is StateEffect.UnlockCapability -> {
+                            put("type", "unlock_capability")
+                            put("capabilityType", effect.type.name)
+                        }
                     }
                 })
             }
@@ -126,6 +132,7 @@ private fun SimEvent.eventTypeKey(): String = when (this) {
     is SimEvent.ScoutReport -> "scout_report"
     is SimEvent.NegotiationRound -> "negotiation_round"
     is SimEvent.LabelNeedUrgent -> "label_need_urgent"
+    is SimEvent.CapabilityUnlockable -> "capability_unlockable"
 }
 
 private fun SimEvent.toPayloadJson(): String = when (this) {
@@ -164,5 +171,9 @@ private fun SimEvent.toPayloadJson(): String = when (this) {
     is SimEvent.LabelNeedUrgent -> buildJsonObject {
         put("needType", needType.name)
         put("severity", String.format(Locale.US, "%.4f", severity))
+    }
+    is SimEvent.CapabilityUnlockable -> buildJsonObject {
+        put("type", type.name)
+        put("costFunds", costFunds)
     }
 }.toString()

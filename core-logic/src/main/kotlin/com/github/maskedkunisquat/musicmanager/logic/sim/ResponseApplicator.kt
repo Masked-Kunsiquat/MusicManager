@@ -6,9 +6,9 @@ import com.github.maskedkunisquat.musicmanager.logic.model.Contract
 import com.github.maskedkunisquat.musicmanager.logic.model.CreativeControl
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
+import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.model.RevenueSplit
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
-import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
 import com.github.maskedkunisquat.musicmanager.logic.response.StateEffect
 
@@ -141,6 +141,13 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): Pair<SimWorld, Li
             Pair(world.copy(
                 label = world.label.copy(
                     reputation = world.label.reputation + (effect.community to newValue)
+                )
+            ), noEvents)
+        }
+        is StateEffect.UnlockCapability -> {
+            Pair(world.copy(
+                label = world.label.copy(
+                    capabilities = world.label.capabilities + effect.type
                 )
             ), noEvents)
         }

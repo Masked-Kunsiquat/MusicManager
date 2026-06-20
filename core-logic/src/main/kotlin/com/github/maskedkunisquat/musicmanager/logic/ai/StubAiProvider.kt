@@ -1,6 +1,7 @@
 package com.github.maskedkunisquat.musicmanager.logic.ai
 
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
+import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
@@ -71,6 +72,7 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.ScoutReport -> scoutReportProse(event, world)
         is SimEvent.NegotiationRound -> negotiationRoundProse(event, world)
         is SimEvent.LabelNeedUrgent -> labelNeedUrgentProse(event)
+        is SimEvent.CapabilityUnlockable -> capabilityUnlockableProse(event)
     }
 
     private fun needUrgentProse(
@@ -185,11 +187,12 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.NeedUrgent -> needUrgentOptions(event, world)
         is SimEvent.ContractExpiring -> contractExpiringOptions(event, world)
         is SimEvent.WantSurfaced -> wantSurfacedOptions(event, world)
-        is SimEvent.MarketShift -> marketShiftOptions(event)
-        is SimEvent.IntelDrop -> intelDropOptions(event)
+        is SimEvent.MarketShift -> marketShiftOptions(event, world)
+        is SimEvent.IntelDrop -> intelDropOptions(event, world)
         is SimEvent.ScoutReport -> scoutReportOptions(event, world)
         is SimEvent.NegotiationRound -> negotiationRoundOptions(event, world)
         is SimEvent.LabelNeedUrgent -> labelNeedUrgentOptions(event, world)
+        is SimEvent.CapabilityUnlockable -> capabilityUnlockableOptions(event)
     }
 
     private fun needUrgentOptions(event: SimEvent.NeedUrgent, world: SimWorld): List<ResponseOption> {
@@ -385,34 +388,56 @@ class StubAiProvider : LabelAiProvider {
         )
     }
 
-    private fun marketShiftOptions(event: SimEvent.MarketShift): List<ResponseOption> {
+    private fun marketShiftOptions(event: SimEvent.MarketShift, world: SimWorld): List<ResponseOption> {
         val rising = event.currentTrend > event.previousTrend
-        return listOf(
-            option("market:${event.genre}:lean_in",
+        return buildList {
+            add(option("market:${event.genre}:lean_in",
                 if (rising) "Shift focus — prioritize ${event.genre} signings this cycle"
                 else "Pull back — pause new ${event.genre} spend until it stabilizes",
-                emptyList()),
-            option("market:${event.genre}:watch",
+                emptyList()))
+            add(option("market:${event.genre}:watch",
                 "Watch another cycle before acting",
-                emptyList()),
-            option("market:${event.genre}:ignore",
+                emptyList()))
+            add(option("market:${event.genre}:ignore",
                 "Stay the course — this doesn't change the plan",
-                emptyList())
-        )
+                emptyList()))
+            if (rising && CapabilityType.IN_HOUSE_BOOKING in world.label.capabilities) {
+                add(option("market:${event.genre}:book_dates",
+                    "Lock in a run of ${event.genre} dates while the trend peaks",
+                    world.artists.values
+                        .filter { it.genre == event.genre }
+                        .map { NC(it.id, NeedType.RECOGNITION, +0.15f) },
+                    cost = 500 * CENTS))
+            }
+            if (rising && CapabilityType.VIDEO_PRODUCTION in world.label.capabilities) {
+                add(option("market:${event.genre}:video_series",
+                    "Commission a video series capitalizing on the ${event.genre} momentum",
+                    world.artists.values
+                        .filter { it.genre == event.genre }
+                        .map { NC(it.id, NeedType.RECOGNITION, +0.20f) },
+                    cost = 800 * CENTS))
+            }
+        }
     }
 
-    private fun intelDropOptions(event: SimEvent.IntelDrop): List<ResponseOption> = listOf(
-        option("intel:${event.genre}:file",
+    private fun intelDropOptions(event: SimEvent.IntelDrop, world: SimWorld): List<ResponseOption> = buildList {
+        add(option("intel:${event.genre}:file",
             "File it — good context, nothing to act on yet",
-            emptyList()),
-        option("intel:${event.genre}:share",
+            emptyList()))
+        add(option("intel:${event.genre}:share",
             "Share it with the roster — keep everyone in the loop",
-            listOf(RNC(NeedType.BELONGING, +0.08f))),
-        option("intel:${event.genre}:act",
+            listOf(RNC(NeedType.BELONGING, +0.08f))))
+        add(option("intel:${event.genre}:act",
             "Brief the scouts — double down on ${event.genre} intel",
             emptyList(),
-            cost = 200 * CENTS)
-    )
+            cost = 200 * CENTS))
+        if (CapabilityType.PUBLICIST in world.label.capabilities) {
+            add(option("intel:${event.genre}:pr_pitch",
+                "Have the publicist pitch a story around this ${event.genre} angle",
+                listOf(StateEffect.ReputationChange(ReputationCommunity.PRESS, +0.04f)),
+                cost = 150 * CENTS))
+        }
+    }
 
     private fun scoutReportOptions(event: SimEvent.ScoutReport, world: SimWorld): List<ResponseOption> {
         val prospectName = world.prospects[event.prospectId]?.name ?: "this prospect"
@@ -489,6 +514,42 @@ class StubAiProvider : LabelAiProvider {
                 "Walk away — not the right fit",
                 listOf(StateEffect.NegotiationFailed(p))))
         }
+    }
+
+    // --- Capability system ---
+
+    private fun capabilityUnlockableProse(event: SimEvent.CapabilityUnlockable): Pair<String, String> {
+        val (name, what) = when (event.type) {
+            CapabilityType.PUBLICIST -> "in-house PR" to
+                "Genre press starts responding faster. Pitching stories around intel and market shifts becomes an option."
+            CapabilityType.IN_HOUSE_BOOKING -> "in-house booking" to
+                "Venue bookers take your calls directly. You can lock in dates when trends peak instead of waiting on a middleman."
+            CapabilityType.VIDEO_PRODUCTION -> "in-house video production" to
+                "Visual content for your roster on demand. Capitalizing on momentum no longer means waiting weeks on a third party."
+        }
+        val cost = event.costFunds / 100L
+        return Pair(
+            "capability available — $name",
+            "Internal note: you're now positioned to bring $name in-house. $what\n\n" +
+            "One-time setup cost: \$$cost. Once unlocked, it's yours for the season."
+        )
+    }
+
+    private fun capabilityUnlockableOptions(event: SimEvent.CapabilityUnlockable): List<ResponseOption> {
+        val (name) = when (event.type) {
+            CapabilityType.PUBLICIST -> "in-house PR" to ""
+            CapabilityType.IN_HOUSE_BOOKING -> "in-house booking" to ""
+            CapabilityType.VIDEO_PRODUCTION -> "in-house video production" to ""
+        }
+        return listOf(
+            option("cap:${event.type.name}:unlock",
+                "Unlock $name now",
+                listOf(StateEffect.UnlockCapability(event.type)),
+                cost = event.costFunds),
+            option("cap:${event.type.name}:defer",
+                "Not yet — revisit when timing is better",
+                emptyList())
+        )
     }
 
     // --- Label meso tier ---

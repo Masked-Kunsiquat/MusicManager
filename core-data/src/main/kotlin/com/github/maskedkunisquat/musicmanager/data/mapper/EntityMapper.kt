@@ -5,6 +5,7 @@ import com.github.maskedkunisquat.musicmanager.data.mapper.EVENT_TYPE_INTEL_DROP
 import com.github.maskedkunisquat.musicmanager.logic.ai.GeneratedEmail
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
+import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.WantType
@@ -71,6 +72,11 @@ fun EventLogEntity.toSimEventOrNull(): SimEvent? = try {
         "label_need_urgent" -> SimEvent.LabelNeedUrgent(
             needType = LabelNeedType.valueOf(json["needType"]!!.jsonPrimitive.content),
             severity = json["severity"]!!.jsonPrimitive.content.toFloat(),
+            dayOfGame = dayOfGame
+        )
+        "capability_unlockable" -> SimEvent.CapabilityUnlockable(
+            type = CapabilityType.valueOf(json["type"]!!.jsonPrimitive.content),
+            costFunds = json["costFunds"]!!.jsonPrimitive.content.toLong(),
             dayOfGame = dayOfGame
         )
         else -> null

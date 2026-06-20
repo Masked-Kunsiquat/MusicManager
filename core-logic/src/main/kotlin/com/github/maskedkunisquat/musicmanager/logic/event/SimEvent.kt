@@ -1,5 +1,6 @@
 package com.github.maskedkunisquat.musicmanager.logic.event
 
+import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.WantType
@@ -58,6 +59,12 @@ sealed class SimEvent {
     data class LabelNeedUrgent(
         val needType: LabelNeedType,
         val severity: Float,
+        override val dayOfGame: Int
+    ) : SimEvent()
+
+    data class CapabilityUnlockable(
+        val type: CapabilityType,
+        val costFunds: Long,
         override val dayOfGame: Int
     ) : SimEvent()
 }

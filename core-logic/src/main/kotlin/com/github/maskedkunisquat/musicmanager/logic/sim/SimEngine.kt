@@ -24,10 +24,13 @@ class SimEngine {
             scouts = updatedScouts,
             chartSnapshot = if (nextDay % 3 == 0) newMarket else world.chartSnapshot
         )
-        return TickResult(
-            world = nextWorld,
-            events = generateEvents(nextWorld, previousMarket, eventRng) + scoutReports
+        val events = generateEvents(nextWorld, previousMarket, eventRng) + scoutReports
+        val capabilityEvents = events.filterIsInstance<SimEvent.CapabilityUnlockable>()
+        val finalWorld = if (capabilityEvents.isEmpty()) nextWorld else nextWorld.copy(
+            capabilityNoticedAt = nextWorld.capabilityNoticedAt +
+                capabilityEvents.associate { it.type.name to nextWorld.currentDay }
         )
+        return TickResult(world = finalWorld, events = events)
     }
 
     fun tickN(world: SimWorld, ticks: Int): TickResult {
