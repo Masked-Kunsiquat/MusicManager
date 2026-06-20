@@ -9,6 +9,8 @@ import com.github.maskedkunisquat.musicmanager.logic.model.MarketState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ProspectState
+import com.github.maskedkunisquat.musicmanager.logic.model.Want
+import com.github.maskedkunisquat.musicmanager.logic.model.WantType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.model.SignabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.RivalState
@@ -74,26 +76,57 @@ object WorldInitializer {
         )
     }
 
-    private fun buildArtist(id: String, contractId: String, rng: Random): ArtistState = ArtistState(
-        id = id,
-        name = "${ADJECTIVES.random(rng)} ${NOUNS.random(rng)}",
-        genre = GENRES.random(rng),
-        dimensions = ArtistDimensions(
+    private fun buildArtist(id: String, contractId: String, rng: Random): ArtistState {
+        val name = "${ADJECTIVES.random(rng)} ${NOUNS.random(rng)}"
+        val genre = GENRES.random(rng)
+        val dimensions = ArtistDimensions(
             confidence = rng.nextFloat(),
             commercialAppetite = rng.nextFloat(),
             volatility = rng.nextFloat(),
             loyalty = rng.nextFloat()
-        ),
-        needs = NeedType.entries.associateWith { needType ->
+        )
+        val needs = NeedType.entries.associateWith { needType ->
             NeedState(
                 type = needType,
-                value = 0.7f + rng.nextFloat() * 0.3f,   // start well-satisfied
+                value = 0.7f + rng.nextFloat() * 0.3f,
                 decayRate = 0.02f + rng.nextFloat() * 0.03f
             )
-        },
-        activeWants = emptyList(), // Phase 1: populate from artist archetype + context
-        contractId = contractId
-    )
+        }
+        return ArtistState(
+            id = id,
+            name = name,
+            genre = genre,
+            dimensions = dimensions,
+            needs = needs,
+            activeWants = buildArtistWants(dimensions),
+            contractId = contractId
+        )
+    }
+
+    // Derives 0-2 wants from the artist's dimension profile. Pure function — no RNG.
+    // Rule: financial anxiety (low loyalty) surfaces first; career wants (confidence,
+    // volatility) fill remaining slots up to a cap of 2.
+    private fun buildArtistWants(d: ArtistDimensions): List<Want> {
+        val wants = mutableListOf<Want>()
+        if (d.loyalty < 0.40f) {
+            wants += Want(
+                type = WantType.INCREASED_ROYALTIES,
+                urgency = (0.70f + (0.40f - d.loyalty) * 1.25f).coerceIn(0f, 1f),
+                expiryDay = null
+            )
+        }
+        if (wants.size < 2 && d.confidence >= 0.65f) {
+            val type = if (d.commercialAppetite >= 0.60f) WantType.RECORD_ALBUM else WantType.MAJOR_VENUE_TOUR
+            wants += Want(type = type, urgency = (0.55f + d.confidence * 0.30f).coerceIn(0f, 1f), expiryDay = null)
+        }
+        if (wants.size < 2 && d.volatility >= 0.70f) {
+            wants += Want(type = WantType.GENRE_EXPERIMENT, urgency = (0.50f + d.volatility * 0.35f).coerceIn(0f, 1f), expiryDay = null)
+        }
+        if (wants.size < 2 && d.confidence in 0.45f..0.64f && d.commercialAppetite < 0.45f) {
+            wants += Want(type = WantType.COLLAB_WITH_PRODUCER, urgency = (0.60f + d.confidence * 0.25f).coerceIn(0f, 1f), expiryDay = null)
+        }
+        return wants
+    }
 
     private fun buildContract(artistId: String, contractId: String, rng: Random): Contract = Contract(
         id = contractId,

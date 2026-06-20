@@ -5,6 +5,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.CreativeControl
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.model.RevenueSplit
+import com.github.maskedkunisquat.musicmanager.logic.model.WantType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -88,4 +89,12 @@ sealed class StateEffect {
     // Artist walked from renewal talks. Loyalty -0.2f; accelerates rival poach if running.
     @Serializable @SerialName("renewal_walked")
     data class RenewalWalked(val artistId: String) : StateEffect()
+
+    // Marks a want as fulfilled — removes it from activeWants and grants +0.15f loyalty.
+    // No-op if the want is not currently active.
+    @Serializable @SerialName("want_satisfied")
+    data class WantSatisfied(
+        val artistId: String,
+        val wantType: WantType
+    ) : StateEffect()
 }

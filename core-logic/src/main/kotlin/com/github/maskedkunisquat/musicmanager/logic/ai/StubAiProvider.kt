@@ -287,7 +287,7 @@ class StubAiProvider : LabelAiProvider {
         return when (event.wantType) {
             WantType.MAJOR_VENUE_TOUR -> listOf(
                 option("$a:tour_book", "Start venue negotiations for a headline tour",
-                    listOf(NC(a, NeedType.RECOGNITION, +0.30f), NC(a, NeedType.FINANCIAL_SECURITY, +0.20f), RC(a, +0.10f)),
+                    listOf(NC(a, NeedType.RECOGNITION, +0.30f), NC(a, NeedType.FINANCIAL_SECURITY, +0.20f), RC(a, +0.10f), WS(a, WantType.MAJOR_VENUE_TOUR)),
                     cost = 1_500 * CENTS),
                 option("$a:tour_support_slot", "Lock in a support slot on a bigger act's tour instead",
                     listOf(NC(a, NeedType.RECOGNITION, +0.15f))),
@@ -295,17 +295,17 @@ class StubAiProvider : LabelAiProvider {
                     listOf(NC(a, NeedType.AUTONOMY, -0.10f), RC(a, -0.05f)))
             )
             WantType.COLLAB_WITH_PRODUCER -> listOf(
+                option("$a:collab_budget", "Allocate budget for an outside producer",
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.35f), RC(a, +0.08f), WS(a, WantType.COLLAB_WITH_PRODUCER)),
+                    cost = 500 * CENTS),
                 option("$a:collab_network", "Reach out to producers in their network",
                     listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.25f), RC(a, +0.05f))),
                 option("$a:collab_label", "Suggest a producer from the label's existing relationships",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.15f))),
-                option("$a:collab_budget", "Allocate budget for an outside producer",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.35f), RC(a, +0.08f)),
-                    cost = 500 * CENTS)
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.15f)))
             )
             WantType.GENRE_EXPERIMENT -> listOf(
                 option("$a:genre_ep", "Green-light a genre-experiment EP, separate from main release",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.40f), NC(a, NeedType.AUTONOMY, +0.20f), RC(a, +0.10f)),
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.40f), NC(a, NeedType.AUTONOMY, +0.20f), RC(a, +0.10f), WS(a, WantType.GENRE_EXPERIMENT)),
                     cost = 600 * CENTS),
                 option("$a:genre_one_track", "Allow one experimental track on the main album",
                     listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.20f))),
@@ -314,7 +314,7 @@ class StubAiProvider : LabelAiProvider {
             )
             WantType.RECORD_ALBUM -> listOf(
                 option("$a:album_greenlight", "Approve full album budget and timeline",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.50f), NC(a, NeedType.RECOGNITION, +0.10f), RC(a, +0.15f)),
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.50f), NC(a, NeedType.RECOGNITION, +0.10f), RC(a, +0.15f), WS(a, WantType.RECORD_ALBUM)),
                     cost = 3_000 * CENTS),
                 option("$a:album_ep_first", "Propose an EP first to build momentum",
                     listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.20f))),
@@ -323,7 +323,7 @@ class StubAiProvider : LabelAiProvider {
             )
             WantType.INCREASED_ROYALTIES -> listOf(
                 option("$a:royalties_agree", "Agree to a better royalty rate on the next deal",
-                    listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.35f), RC(a, +0.12f))),
+                    listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.35f), RC(a, +0.12f), WS(a, WantType.INCREASED_ROYALTIES))),
                 option("$a:royalties_partial", "Offer a smaller bump now, revisit at renewal",
                     listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.15f))),
                 option("$a:royalties_decline", "The deal stands — redirect to performance bonuses instead",
@@ -805,6 +805,9 @@ class StubAiProvider : LabelAiProvider {
 
     private fun RC(artistId: String, delta: Float) =
         StateEffect.RelationshipChange(artistId, delta)
+
+    private fun WS(artistId: String, wantType: WantType) =
+        StateEffect.WantSatisfied(artistId, wantType)
 
     private fun RNC(needType: NeedType, delta: Float) =
         StateEffect.RosterNeedChange(needType, delta)

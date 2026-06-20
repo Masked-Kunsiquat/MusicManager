@@ -9,6 +9,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.model.SignabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.RevenueSplit
+import com.github.maskedkunisquat.musicmanager.logic.model.WantType
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
 import com.github.maskedkunisquat.musicmanager.logic.response.StateEffect
@@ -207,6 +208,18 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): Pair<SimWorld, Li
                 activeRenewals = world.activeRenewals - effect.artistId
             )
             Pair(newWorld, noEvents)
+        }
+        is StateEffect.WantSatisfied -> {
+            val artist = world.artists[effect.artistId] ?: return Pair(world, noEvents)
+            if (artist.activeWants.none { it.type == effect.wantType }) return Pair(world, noEvents)
+            val newLoyalty = (artist.dimensions.loyalty + 0.15f).coerceIn(0f, 1f)
+            Pair(world.copy(
+                artists = world.artists + (effect.artistId to artist.copy(
+                    activeWants = artist.activeWants.filter { it.type != effect.wantType },
+                    dimensions = artist.dimensions.copy(loyalty = newLoyalty),
+                    relationshipBalance = artist.relationshipBalance + 0.15f
+                ))
+            ), noEvents)
         }
         is StateEffect.RenewalWalked -> {
             // Guard: only penalize if a renewal was actually in progress.
