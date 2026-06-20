@@ -3,6 +3,7 @@ package com.github.maskedkunisquat.musicmanager.data.mapper
 import com.github.maskedkunisquat.musicmanager.data.entity.EventLogEntity
 import com.github.maskedkunisquat.musicmanager.logic.ai.GeneratedEmail
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
+import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
 import com.github.maskedkunisquat.musicmanager.logic.response.StateEffect
 import com.github.maskedkunisquat.musicmanager.data.db.worldJson
@@ -25,6 +26,7 @@ fun SimEvent.eventSignature(): String = when (this) {
     is SimEvent.IntelDrop -> "intel_drop:$genre:$dayOfGame"
     is SimEvent.ScoutReport -> "scout_report:$scoutId:$prospectId"
     is SimEvent.NegotiationRound -> "negotiation_round:$prospectId:$round"
+    is SimEvent.LabelNeedUrgent -> "label_need_urgent:${needType.name}"
 }
 
 fun SimEvent.toEntity(email: GeneratedEmail): EventLogEntity = EventLogEntity(
@@ -90,6 +92,11 @@ fun ResponseOption.toResponseEntity(originalEventId: String, dayOfGame: Int): Ev
                             put("type", "negotiation_failed")
                             put("prospectId", effect.prospectId)
                         }
+                        is StateEffect.ReputationChange -> {
+                            put("type", "reputation_change")
+                            put("community", effect.community.name)
+                            put("delta", String.format(Locale.US, "%.4f", effect.delta))
+                        }
                     }
                 })
             }
@@ -118,6 +125,7 @@ private fun SimEvent.eventTypeKey(): String = when (this) {
     is SimEvent.IntelDrop -> EVENT_TYPE_INTEL_DROP
     is SimEvent.ScoutReport -> "scout_report"
     is SimEvent.NegotiationRound -> "negotiation_round"
+    is SimEvent.LabelNeedUrgent -> "label_need_urgent"
 }
 
 private fun SimEvent.toPayloadJson(): String = when (this) {
@@ -152,5 +160,9 @@ private fun SimEvent.toPayloadJson(): String = when (this) {
     is SimEvent.NegotiationRound -> buildJsonObject {
         put("prospectId", prospectId)
         put("round", round)
+    }
+    is SimEvent.LabelNeedUrgent -> buildJsonObject {
+        put("needType", needType.name)
+        put("severity", String.format(Locale.US, "%.4f", severity))
     }
 }.toString()

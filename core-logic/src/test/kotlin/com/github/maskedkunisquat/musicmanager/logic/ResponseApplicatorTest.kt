@@ -5,6 +5,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.ArtistDimensions
 import com.github.maskedkunisquat.musicmanager.logic.model.ArtistState
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelState
 import com.github.maskedkunisquat.musicmanager.logic.model.MarketState
+import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ProspectState
@@ -380,5 +381,50 @@ class ResponseApplicatorTest {
         val effect = StateEffect.NegotiationFailed("p0")
         val (_, events) = applyResponse(worldWithProspect, option(effects = listOf(effect)))
         assertTrue(events.isEmpty())
+    }
+
+    // --- ReputationChange ---
+
+    @Test
+    fun `ReputationChange applies delta to the correct community`() {
+        val world = baseWorld.copy(label = baseWorld.label.copy(
+            reputation = mapOf(ReputationCommunity.INDIE_SCENE to 0.5f)
+        ))
+        val effect = StateEffect.ReputationChange(ReputationCommunity.INDIE_SCENE, -0.10f)
+        val (result, _) = applyResponse(world, option(effects = listOf(effect)))
+        assertEquals(0.40f, result.label.reputation[ReputationCommunity.INDIE_SCENE]!!, 0.001f)
+    }
+
+    @Test
+    fun `ReputationChange clamps at 0f on underflow`() {
+        val world = baseWorld.copy(label = baseWorld.label.copy(
+            reputation = mapOf(ReputationCommunity.PRESS to 0.05f)
+        ))
+        val effect = StateEffect.ReputationChange(ReputationCommunity.PRESS, -0.20f)
+        val (result, _) = applyResponse(world, option(effects = listOf(effect)))
+        assertEquals(0f, result.label.reputation[ReputationCommunity.PRESS]!!, 0.001f)
+    }
+
+    @Test
+    fun `ReputationChange clamps at 1f on overflow`() {
+        val world = baseWorld.copy(label = baseWorld.label.copy(
+            reputation = mapOf(ReputationCommunity.COMMERCIAL to 0.95f)
+        ))
+        val effect = StateEffect.ReputationChange(ReputationCommunity.COMMERCIAL, +0.20f)
+        val (result, _) = applyResponse(world, option(effects = listOf(effect)))
+        assertEquals(1f, result.label.reputation[ReputationCommunity.COMMERCIAL]!!, 0.001f)
+    }
+
+    @Test
+    fun `ReputationChange does not affect other communities`() {
+        val world = baseWorld.copy(label = baseWorld.label.copy(
+            reputation = mapOf(
+                ReputationCommunity.INDIE_SCENE to 0.5f,
+                ReputationCommunity.PRESS to 0.6f
+            )
+        ))
+        val effect = StateEffect.ReputationChange(ReputationCommunity.INDIE_SCENE, -0.10f)
+        val (result, _) = applyResponse(world, option(effects = listOf(effect)))
+        assertEquals(0.6f, result.label.reputation[ReputationCommunity.PRESS]!!, 0.001f)
     }
 }

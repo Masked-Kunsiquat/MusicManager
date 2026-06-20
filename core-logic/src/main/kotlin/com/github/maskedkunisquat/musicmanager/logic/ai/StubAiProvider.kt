@@ -1,7 +1,9 @@
 package com.github.maskedkunisquat.musicmanager.logic.ai
 
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
+import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
+import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.model.WantType
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
@@ -68,6 +70,7 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.IntelDrop -> intelDropProse(event)
         is SimEvent.ScoutReport -> scoutReportProse(event, world)
         is SimEvent.NegotiationRound -> negotiationRoundProse(event, world)
+        is SimEvent.LabelNeedUrgent -> labelNeedUrgentProse(event)
     }
 
     private fun needUrgentProse(
@@ -186,6 +189,7 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.IntelDrop -> intelDropOptions(event)
         is SimEvent.ScoutReport -> scoutReportOptions(event, world)
         is SimEvent.NegotiationRound -> negotiationRoundOptions(event, world)
+        is SimEvent.LabelNeedUrgent -> labelNeedUrgentOptions(event, world)
     }
 
     private fun needUrgentOptions(event: SimEvent.NeedUrgent, world: SimWorld): List<ResponseOption> {
@@ -486,6 +490,69 @@ class StubAiProvider : LabelAiProvider {
                 listOf(StateEffect.NegotiationFailed(p))))
         }
     }
+
+    // --- Label meso tier ---
+
+    private fun labelNeedUrgentProse(event: SimEvent.LabelNeedUrgent): Pair<String, String> =
+        when (event.needType) {
+            LabelNeedType.CASH_FLOW -> {
+                val urgency = when {
+                    event.severity < 0.15f -> "We're close to the wire and something has to give."
+                    else -> "The runway is shorter than it should be right now."
+                }
+                Pair(
+                    "label finances — heads up",
+                    "Internal flag — cash position is tighter than the targets. $urgency " +
+                    "We have a few levers: cut discretionary spend, pull forward a deal that " +
+                    "brings revenue in, or accept less favorable terms somewhere to unlock " +
+                    "liquidity. None of these are painless. What's the call?"
+                )
+            }
+            LabelNeedType.GENRE_DIVERSITY -> Pair(
+                "roster check — genre concentration",
+                "Looking at the active roster — we're getting concentrated. " +
+                "If this genre hits a rough patch, we feel the whole thing at once. " +
+                "Might be worth being deliberate about the next signing rather than " +
+                "just chasing what's already working for us. Something to consider."
+            )
+        }
+
+    private fun labelNeedUrgentOptions(event: SimEvent.LabelNeedUrgent, world: SimWorld): List<ResponseOption> =
+        when (event.needType) {
+            LabelNeedType.CASH_FLOW -> {
+                val highestLoyaltyArtistId = world.artists.values
+                    .maxByOrNull { it.dimensions.loyalty }?.id
+                buildList {
+                    add(option("label:cash:cut_spend",
+                        "Cut discretionary spending across the board for this quarter",
+                        emptyList()))
+                    if (highestLoyaltyArtistId != null) {
+                        add(option("label:cash:advance_recovery",
+                            "Negotiate an advance recovery from ${world.artists[highestLoyaltyArtistId]?.name ?: "a roster artist"}",
+                            listOf(NC(highestLoyaltyArtistId, NeedType.FINANCIAL_SECURITY, -0.15f), RC(highestLoyaltyArtistId, -0.08f),
+                                StateEffect.LabelFundsChange(3_000 * CENTS))))
+                    }
+                    add(option("label:cash:commercial_deal",
+                        "Accept a commercial licensing deal — quick revenue, costs indie credibility",
+                        listOf(StateEffect.LabelFundsChange(8_000 * CENTS),
+                            StateEffect.ReputationChange(ReputationCommunity.INDIE_SCENE, -0.06f))))
+                    add(option("label:cash:monitor",
+                        "Hold course — watch cash position another cycle before acting",
+                        emptyList()))
+                }
+            }
+            LabelNeedType.GENRE_DIVERSITY -> listOf(
+                option("label:diversity:target_contrarian",
+                    "Instruct scouts to prioritize off-genre prospects this cycle",
+                    emptyList()),
+                option("label:diversity:hold_course",
+                    "Stay focused — the genre concentration is a calculated bet, not an oversight",
+                    emptyList()),
+                option("label:diversity:review",
+                    "Pull together a roster review — map where we're exposed before deciding",
+                    emptyList())
+            )
+        }
 
     private fun option(id: String, text: String, effects: List<StateEffect>, cost: Long = 0L) =
         ResponseOption(id = id, text = text, effects = effects, costFunds = cost)

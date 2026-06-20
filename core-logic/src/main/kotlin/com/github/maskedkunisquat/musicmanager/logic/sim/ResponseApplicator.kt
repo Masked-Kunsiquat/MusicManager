@@ -8,6 +8,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.NeedState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.RevenueSplit
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
+import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
 import com.github.maskedkunisquat.musicmanager.logic.response.StateEffect
 
@@ -133,6 +134,15 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): Pair<SimWorld, Li
                 unavailableProspects = world.unavailableProspects + effect.prospectId
             )
             Pair(newWorld, noEvents)
+        }
+        is StateEffect.ReputationChange -> {
+            val current = world.label.reputation[effect.community] ?: 0f
+            val newValue = (current + effect.delta).coerceIn(0f, 1f)
+            Pair(world.copy(
+                label = world.label.copy(
+                    reputation = world.label.reputation + (effect.community to newValue)
+                )
+            ), noEvents)
         }
     }
 }
