@@ -11,14 +11,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import com.github.maskedkunisquat.musicmanager.ui.components.RetroButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -126,27 +125,16 @@ fun EmailDetailScreen(
                 options.isEmpty() -> Unit
                 else -> {
                     options.forEachIndexed { index, option ->
-                        if (index == 0) {
-                            Button(
-                                onClick = {
-                                    viewModel.resolveEvent(eventId, option)
-                                    onBack()
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 8.dp)
-                            ) { Text(option.text) }
-                        } else {
-                            OutlinedButton(
-                                onClick = {
-                                    viewModel.resolveEvent(eventId, option)
-                                    onBack()
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 8.dp)
-                            ) { Text(option.text) }
-                        }
+                        RetroButton(
+                            onClick = {
+                                viewModel.resolveEvent(eventId, option)
+                                onBack()
+                            },
+                            filled = index == 0,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                        ) { Text(option.text) }
                     }
                 }
             }

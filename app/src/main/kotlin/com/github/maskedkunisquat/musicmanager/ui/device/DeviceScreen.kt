@@ -9,8 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import com.github.maskedkunisquat.musicmanager.ui.components.RetroButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -90,12 +89,7 @@ private fun ModelStateBanner(state: ModelLoadState, onDownload: () -> Unit) {
             modifier = Modifier.weight(1f)
         )
         if (showButton) {
-            Button(
-                onClick = onDownload,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
+            RetroButton(onClick = onDownload) {
                 Text(buttonText, style = MaterialTheme.typography.labelSmall)
             }
         }
