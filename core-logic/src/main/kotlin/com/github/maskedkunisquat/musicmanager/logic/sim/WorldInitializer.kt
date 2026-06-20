@@ -10,6 +10,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.NeedState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ProspectState
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
+import com.github.maskedkunisquat.musicmanager.logic.model.SignabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.RivalState
 import com.github.maskedkunisquat.musicmanager.logic.model.ScoutState
 import com.github.maskedkunisquat.musicmanager.logic.model.RevenueSplit
@@ -42,6 +43,11 @@ object WorldInitializer {
         val prospects = (0 until prospectCount).associate { i ->
             val id = "prospect_${seed}_$i"
             id to buildProspect(id, rng)
+        } + run {
+            // One permanently unsignable prospect per world — high signabilityScore so scouts
+            // surface them often, but SignArtist always bounces. Intended as a recurring tease.
+            val id = "prospect_${seed}_whale"
+            mapOf(id to buildUnsignableProspect(id, rng))
         }
 
         // Two scouts, staggered by half the report interval so reports don't burst together.
@@ -120,6 +126,20 @@ object WorldInitializer {
         ),
         // 0.2–0.9: avoids trivially impossible or trivially easy negotiations.
         signabilityScore = 0.2f + rng.nextFloat() * 0.7f
+    )
+
+    private fun buildUnsignableProspect(id: String, rng: Random): ProspectState = ProspectState(
+        id = id,
+        name = "${ADJECTIVES.random(rng)} ${NOUNS.random(rng)}",
+        genre = GENRES.random(rng),
+        dimensions = ArtistDimensions(
+            confidence = 0.7f + rng.nextFloat() * 0.3f,
+            commercialAppetite = rng.nextFloat() * 0.25f,  // low commercial appetite
+            volatility = rng.nextFloat() * 0.3f,           // steady — consistent in their refusal
+            loyalty = rng.nextFloat() * 0.3f
+        ),
+        signabilityScore = 0.90f + rng.nextFloat() * 0.10f, // scouts surface them constantly
+        signability = SignabilityType.UNSIGNABLE
     )
 
     private fun buildRival(id: String, index: Int, rng: Random): RivalState {

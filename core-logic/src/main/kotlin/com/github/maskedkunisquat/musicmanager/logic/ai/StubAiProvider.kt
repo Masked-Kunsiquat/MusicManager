@@ -6,6 +6,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.CreativeControl
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
+import com.github.maskedkunisquat.musicmanager.logic.model.SignabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.RevenueSplit
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.model.WantType
@@ -467,6 +468,25 @@ class StubAiProvider : LabelAiProvider {
         val prospect = world.prospects[event.prospectId]
         val name = prospect?.name ?: "the artist"
         val score = prospect?.signabilityScore ?: 0.5f
+
+        if (prospect?.signability == SignabilityType.UNSIGNABLE) {
+            return when (event.round) {
+                1 -> Pair(
+                    "re: your outreach",
+                    "Hey — $name here. Thanks for reaching out, genuinely.\n\nI want to be upfront with you: I'm not looking to sign with anyone right now. " +
+                    "It's not about the terms or the label — I just need to stay independent for a while longer. I hope you understand."
+                )
+                2 -> Pair(
+                    "re: follow-up",
+                    "$name again.\n\nI appreciate you coming back — I do. But my position hasn't changed. I'm not ready to commit to anything structural. " +
+                    "I'm not sure I ever will be. The independence matters to me more than I can really explain on paper."
+                )
+                else -> Pair(
+                    "re: where things stand",
+                    "Not interested. But thanks for looking."
+                )
+            }
+        }
 
         return when (event.round) {
             1 -> {

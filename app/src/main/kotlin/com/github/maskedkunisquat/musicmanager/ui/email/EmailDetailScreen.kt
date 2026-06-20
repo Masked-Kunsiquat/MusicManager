@@ -63,7 +63,8 @@ fun EmailDetailScreen(
     val item = items.find { it.id == eventId }
 
     LaunchedEffect(item) {
-        item?.let { viewModel.requestOptionsFor(it) }
+        // RenewalOpened events are handled by DealBuilderPanel — no AI options needed.
+        item?.let { if (it.event !is SimEvent.RenewalOpened) viewModel.requestOptionsFor(it) }
     }
 
     val hasLoaded = rememberSaveable { mutableStateOf(false) }
@@ -138,31 +139,43 @@ fun EmailDetailScreen(
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
             Column(modifier = Modifier.padding(12.dp)) {
-                when {
-                    options == null -> {
-                        CircularProgressIndicator(
-                            modifier = Modifier
-                                .align(Alignment.CenterHorizontally)
-                                .padding(8.dp)
-                        )
-                    }
-                    options.isEmpty() -> Unit
-                    else -> {
-                        options.forEachIndexed { index, option ->
-                            RetroButton(
-                                onClick = {
-                                    if (option.needsPartnerPick()) {
-                                        pickerFor = option
-                                    } else {
-                                        viewModel.resolveEvent(eventId, option)
-                                        onBack()
-                                    }
-                                },
-                                filled = index == 0,
+                val renewalEvent = item.event as? SimEvent.RenewalOpened
+                if (renewalEvent != null) {
+                    DealBuilderPanel(
+                        event = renewalEvent,
+                        labelFunds = world.label.funds,
+                        onResolve = { option ->
+                            viewModel.resolveEvent(eventId, option)
+                            onBack()
+                        }
+                    )
+                } else {
+                    when {
+                        options == null -> {
+                            CircularProgressIndicator(
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 8.dp)
-                            ) { Text(option.text) }
+                                    .align(Alignment.CenterHorizontally)
+                                    .padding(8.dp)
+                            )
+                        }
+                        options.isEmpty() -> Unit
+                        else -> {
+                            options.forEachIndexed { index, option ->
+                                RetroButton(
+                                    onClick = {
+                                        if (option.needsPartnerPick()) {
+                                            pickerFor = option
+                                        } else {
+                                            viewModel.resolveEvent(eventId, option)
+                                            onBack()
+                                        }
+                                    },
+                                    filled = index == 0,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp)
+                                ) { Text(option.text) }
+                            }
                         }
                     }
                 }

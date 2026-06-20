@@ -7,6 +7,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.CreativeControl
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
+import com.github.maskedkunisquat.musicmanager.logic.model.SignabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.RevenueSplit
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
@@ -94,6 +95,14 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): Pair<SimWorld, Li
         }
         is StateEffect.SignArtist -> {
             val prospect = world.prospects[effect.prospectId] ?: return Pair(world, noEvents)
+            if (prospect.signability == SignabilityType.UNSIGNABLE) {
+                // Prospect refuses to sign — clear the active negotiation but keep them in the
+                // prospect pool with no cooldown so they remain available indefinitely.
+                val newWorld = world.copy(
+                    activeNegotiations = world.activeNegotiations - effect.prospectId
+                )
+                return Pair(newWorld, noEvents)
+            }
             val artistId = "signed_${effect.prospectId}"
             val contractId = "contract_${effect.prospectId}"
             val volatility = prospect.dimensions.volatility
