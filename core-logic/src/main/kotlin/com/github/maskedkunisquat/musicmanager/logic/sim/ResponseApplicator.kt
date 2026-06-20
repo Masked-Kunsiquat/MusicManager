@@ -74,6 +74,9 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): Pair<SimWorld, Li
             ), noEvents)
         }
         is StateEffect.AdvanceNegotiation -> {
+            if (effect.prospectId !in world.prospects || effect.prospectId in world.unavailableProspects) {
+                return Pair(world, noEvents)
+            }
             val nextRound = (world.activeNegotiations[effect.prospectId] ?: 0) + 1
             val newWorld = world.copy(
                 activeNegotiations = world.activeNegotiations + (effect.prospectId to nextRound)

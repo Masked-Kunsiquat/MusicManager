@@ -282,6 +282,23 @@ class ResponseApplicatorTest {
         assertEquals(2, events.filterIsInstance<SimEvent.NegotiationRound>().first().round)
     }
 
+    @Test
+    fun `AdvanceNegotiation for unknown prospect is a no-op`() {
+        val effect = StateEffect.AdvanceNegotiation("unknown")
+        val (result, events) = applyResponse(baseWorld, option(effects = listOf(effect)))
+        assertEquals(baseWorld, result)
+        assertTrue(events.isEmpty())
+    }
+
+    @Test
+    fun `AdvanceNegotiation for unavailable prospect is a no-op`() {
+        val world = worldWithProspect.copy(unavailableProspects = setOf("p0"))
+        val effect = StateEffect.AdvanceNegotiation("p0")
+        val (result, events) = applyResponse(world, option(effects = listOf(effect)))
+        assertEquals(world, result)
+        assertTrue(events.isEmpty())
+    }
+
     // --- SignArtist ---
 
     @Test

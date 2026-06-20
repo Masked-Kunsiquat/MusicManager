@@ -93,12 +93,11 @@ class SimRepositoryImpl(
         // preferable to losing the world effects with the event already marked gone.
         withContext(Dispatchers.IO) { saveWorld(world) }
         val now = System.currentTimeMillis()
-        dao.markResolved(eventId, option.id, now)
-        dao.insert(option.toResponseEntity(eventId, world.currentDay))
-        // Persist follow-on events immediately (e.g., NegotiationRound from AdvanceNegotiation).
-        injectedEvents.forEach { event ->
-            val email = aiProvider.generateEmail(event, world)
-            dao.insert(event.toEntity(email))
+        // Pre-compute entities outside the transaction — AI inference must not run inside it.
+        val responseEntity = option.toResponseEntity(eventId, world.currentDay)
+        val injectedEntities = injectedEvents.map { event ->
+            event.toEntity(aiProvider.generateEmail(event, world))
         }
+        dao.resolveWithFollowUps(eventId, option.id, now, responseEntity, injectedEntities)
     }
 }
