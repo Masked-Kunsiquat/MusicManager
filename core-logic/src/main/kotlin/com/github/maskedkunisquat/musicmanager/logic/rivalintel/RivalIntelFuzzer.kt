@@ -32,12 +32,11 @@ object RivalIntelFuzzer {
      */
     fun fuzzedRosterSize(snapshot: RivalSnapshot, currentDay: Int): Int {
         val conf = currentConfidence(snapshot, currentDay)
-        val noise = noiseSeed(snapshot.rivalId, snapshot.snapshotDay) % 3  // 0, 1, or 2
         val maxNoise = ((1f - conf) * 2f).toInt()  // 0 at conf=1.0, up to 2 at conf=0.0
+        if (maxNoise == 0) return snapshot.observedRosterSize.coerceAtLeast(1)
+        val noise = noiseSeed(snapshot.rivalId, snapshot.snapshotDay) % (maxNoise.toLong() + 1)
         val delta = if (noiseSeed(snapshot.rivalId, snapshot.snapshotDay + 1) % 2 == 0L) noise else -noise
-        return (snapshot.observedRosterSize + delta.coerceIn(-maxNoise.toLong(), maxNoise.toLong()))
-            .toInt()
-            .coerceAtLeast(1)
+        return (snapshot.observedRosterSize + delta).toInt().coerceAtLeast(1)
     }
 
     /**

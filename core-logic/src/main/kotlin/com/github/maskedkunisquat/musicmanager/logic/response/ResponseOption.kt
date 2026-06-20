@@ -90,13 +90,15 @@ sealed class StateEffect {
     @Serializable @SerialName("renewal_walked")
     data class RenewalWalked(val artistId: String) : StateEffect()
 
-    // Marks a want as fulfilled — removes it from activeWants and grants +0.15f loyalty.
+    // Marks a want as fulfilled — removes it from activeWants and grants RELATIONSHIP_BONUS loyalty.
     // No-op if the want is not currently active.
     @Serializable @SerialName("want_satisfied")
     data class WantSatisfied(
         val artistId: String,
         val wantType: WantType
-    ) : StateEffect()
+    ) : StateEffect() {
+        companion object { const val RELATIONSHIP_BONUS = 0.15f }
+    }
 
     // Captures a snapshot of the rival's current roster for display in RivalIntelScreen.
     // Confidence starts at 1.0f and decays at display time (not stored).

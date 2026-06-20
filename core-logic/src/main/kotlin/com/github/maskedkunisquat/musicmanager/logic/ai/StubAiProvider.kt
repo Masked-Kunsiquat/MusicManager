@@ -304,14 +304,15 @@ class StubAiProvider : LabelAiProvider {
                     cost = 150 * CENTS)
             )
             NeedType.BELONGING -> {
-                val hasPartner = world.artists.keys.any { it != a }
+                val partnerId = world.artists.keys.firstOrNull { it != a } ?: ""
+                val hasPartner = partnerId.isNotEmpty()
                 listOf(
                     option("$a:belong_dinner", "Host a label family dinner this week",
                         listOf(RNC(NeedType.BELONGING, +0.40f), RC(a, +0.15f))),
                     option("$a:belong_collab",
                         if (hasPartner) "Set up a studio session with a roster artist"
                         else "Arrange a creative session for ${world.artists[a]?.name ?: a}",
-                        if (hasPartner) listOf(PNC("", NeedType.BELONGING, +0.35f), NC(a, NeedType.BELONGING, +0.35f), NC(a, NeedType.CREATIVE_FULFILLMENT, +0.10f), RC(a, +0.10f))
+                        if (hasPartner) listOf(PNC(partnerId, NeedType.BELONGING, +0.35f), NC(a, NeedType.BELONGING, +0.35f), NC(a, NeedType.CREATIVE_FULFILLMENT, +0.10f), RC(a, +0.10f))
                         else listOf(NC(a, NeedType.BELONGING, +0.35f), NC(a, NeedType.CREATIVE_FULFILLMENT, +0.10f))),
                     option("$a:belong_checkin", "Send a personal check-in and schedule a call",
                         listOf(NC(a, NeedType.BELONGING, +0.15f), RC(a, +0.05f)))
@@ -355,7 +356,7 @@ class StubAiProvider : LabelAiProvider {
                     listOf(NC(a, NeedType.RECOGNITION, +0.30f), NC(a, NeedType.FINANCIAL_SECURITY, +0.20f), RC(a, +0.10f), WS(a, WantType.MAJOR_VENUE_TOUR)),
                     cost = 1_500 * CENTS),
                 option("$a:tour_support_slot", "Lock in a support slot on a bigger act's tour instead",
-                    listOf(NC(a, NeedType.RECOGNITION, +0.15f))),
+                    listOf(NC(a, NeedType.RECOGNITION, +0.15f), WS(a, WantType.MAJOR_VENUE_TOUR))),
                 option("$a:tour_defer", "Not yet — focus on the record first",
                     listOf(NC(a, NeedType.AUTONOMY, -0.10f), RC(a, -0.05f)))
             )
@@ -364,16 +365,16 @@ class StubAiProvider : LabelAiProvider {
                     listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.35f), RC(a, +0.08f), WS(a, WantType.COLLAB_WITH_PRODUCER)),
                     cost = 500 * CENTS),
                 option("$a:collab_network", "Reach out to producers in their network",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.25f), RC(a, +0.05f))),
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.25f), RC(a, +0.05f), WS(a, WantType.COLLAB_WITH_PRODUCER))),
                 option("$a:collab_label", "Suggest a producer from the label's existing relationships",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.15f)))
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.15f), WS(a, WantType.COLLAB_WITH_PRODUCER)))
             )
             WantType.GENRE_EXPERIMENT -> listOf(
                 option("$a:genre_ep", "Green-light a genre-experiment EP, separate from main release",
                     listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.40f), NC(a, NeedType.AUTONOMY, +0.20f), RC(a, +0.10f), WS(a, WantType.GENRE_EXPERIMENT)),
                     cost = 600 * CENTS),
                 option("$a:genre_one_track", "Allow one experimental track on the main album",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.20f))),
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.20f), WS(a, WantType.GENRE_EXPERIMENT))),
                 option("$a:genre_stay", "Not this cycle — stay on brand",
                     listOf(NC(a, NeedType.AUTONOMY, -0.15f), RC(a, -0.08f)))
             )
@@ -382,7 +383,7 @@ class StubAiProvider : LabelAiProvider {
                     listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.50f), NC(a, NeedType.RECOGNITION, +0.10f), RC(a, +0.15f), WS(a, WantType.RECORD_ALBUM)),
                     cost = 3_000 * CENTS),
                 option("$a:album_ep_first", "Propose an EP first to build momentum",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.20f))),
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.20f), WS(a, WantType.RECORD_ALBUM))),
                 option("$a:album_defer", "Not enough catalog depth yet — table it",
                     listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, -0.10f), NC(a, NeedType.AUTONOMY, -0.10f), RC(a, -0.08f)))
             )
@@ -390,7 +391,7 @@ class StubAiProvider : LabelAiProvider {
                 option("$a:royalties_agree", "Agree to a better royalty rate on the next deal",
                     listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.35f), RC(a, +0.12f), WS(a, WantType.INCREASED_ROYALTIES))),
                 option("$a:royalties_partial", "Offer a smaller bump now, revisit at renewal",
-                    listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.15f))),
+                    listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.15f), WS(a, WantType.INCREASED_ROYALTIES))),
                 option("$a:royalties_decline", "The deal stands — redirect to performance bonuses instead",
                     listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.05f), NC(a, NeedType.AUTONOMY, -0.10f), RC(a, -0.10f)))
             )

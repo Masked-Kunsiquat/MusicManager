@@ -234,12 +234,13 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): Pair<SimWorld, Li
         is StateEffect.WantSatisfied -> {
             val artist = world.artists[effect.artistId] ?: return Pair(world, noEvents)
             if (artist.activeWants.none { it.type == effect.wantType }) return Pair(world, noEvents)
-            val newLoyalty = (artist.dimensions.loyalty + 0.15f).coerceIn(0f, 1f)
+            val bonus = StateEffect.WantSatisfied.RELATIONSHIP_BONUS
+            val newLoyalty = (artist.dimensions.loyalty + bonus).coerceIn(0f, 1f)
             Pair(world.copy(
                 artists = world.artists + (effect.artistId to artist.copy(
                     activeWants = artist.activeWants.filter { it.type != effect.wantType },
                     dimensions = artist.dimensions.copy(loyalty = newLoyalty),
-                    relationshipBalance = artist.relationshipBalance + 0.15f
+                    relationshipBalance = artist.relationshipBalance + bonus
                 ))
             ), noEvents)
         }

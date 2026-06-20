@@ -46,10 +46,14 @@ the semantically correct value is the world snapshot *at the time of the
 event*, not the final world. Phase 0 ignores this (dimensions don't tick),
 but Phase 1 will need per-event snapshots.
 
-**`WantSurfaced` path is intentional dead code until Phase 1**
-`WorldInitializer.buildArtist()` always sets `activeWants = emptyList()`.
-The `wantEvents()` filter and all five `WantType` arms in `StubAiProvider`
-are unreachable. Don't remove them — they're scaffolding for Phase 1.
+**`WantSurfaced` path is live as of Phase 4-A**
+`WorldInitializer.buildArtistWants()` seeds 0–2 wants per artist based on dimension
+thresholds (loyalty, confidence, volatility, commercialAppetite). The `wantEvents()`
+filter and all five `WantType` arms in `StubAiProvider` are reachable. In Phase 0,
+wants are seeded once at world init — no dynamic re-surfacing until Phase 1. Partial
+response options carry `WS()` to prevent permanent want-stranding in Phase 0.
+`StateEffect.WantSatisfied.RELATIONSHIP_BONUS` is the single source of truth for the
++0.15f loyalty/balance bonus — do NOT hard-code 0.15f in `EntityMapper` or elsewhere.
 
 **`LeadSurfaced` events are NOT inbox emails**
 `EntityMapper.toInboxItemOrNull()` returns `null` for `eventType == "lead_surfaced"`.

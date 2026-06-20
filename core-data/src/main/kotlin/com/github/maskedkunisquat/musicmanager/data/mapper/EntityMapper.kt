@@ -12,6 +12,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.WantType
 import com.github.maskedkunisquat.musicmanager.data.db.worldJson
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
+import com.github.maskedkunisquat.musicmanager.logic.response.StateEffect
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
@@ -131,8 +132,26 @@ fun EventLogEntity.toRelationshipDeltas(): Map<String, Float> {
                     val delta = obj["delta"]?.jsonPrimitive?.content?.toFloatOrNull() ?: continue
                     result[artistId] = (result[artistId] ?: 0f) + delta
                 }
-                "want_satisfied" -> result[artistId] = (result[artistId] ?: 0f) + 0.15f
+                "want_satisfied" -> result[artistId] = (result[artistId] ?: 0f) + StateEffect.WantSatisfied.RELATIONSHIP_BONUS
             }
+        }
+    }
+    return result
+}
+
+// Returns the set of artist IDs directly touched by a response_applied entity.
+// Used to back-fill ArtistState.lastInteractionDay for saves predating 4-D.
+fun EventLogEntity.toTouchedArtistIds(): Set<String> {
+    if (eventType != "response_applied") return emptySet()
+    val result = mutableSetOf<String>()
+    runCatching {
+        val effects = worldJson.parseToJsonElement(payload).jsonObject["effects"]?.jsonArray
+            ?: return@runCatching
+        for (e in effects) {
+            val obj = e.jsonObject
+            (obj["artistId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+                ?: obj["partnerId"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() })
+                ?.let { result.add(it) }
         }
     }
     return result
