@@ -7,6 +7,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.github.maskedkunisquat.musicmanager.ui.charts.ChartsScreen
+import com.github.maskedkunisquat.musicmanager.ui.rivalintel.RivalIntelScreen
 import com.github.maskedkunisquat.musicmanager.ui.contacts.ContactsScreen
 import com.github.maskedkunisquat.musicmanager.ui.email.EmailDetailScreen
 import com.github.maskedkunisquat.musicmanager.ui.home.HomeScreen
@@ -25,6 +26,7 @@ object Route {
     const val LABEL_OFFICE = "label_office"
     const val TAPE_DECK = "tape_deck"
     const val CONTACTS = "contacts"
+    const val RIVAL_INTEL = "rival_intel"
     const val EMAIL_DETAIL = "email/{eventId}"
     fun emailDetail(eventId: String) = "email/$eventId"
 }
@@ -43,11 +45,16 @@ fun AppNavGraph(
                 onOpenPress = { navController.navigate(Route.PRESS) },
                 onOpenLabelOffice = { navController.navigate(Route.LABEL_OFFICE) },
                 onOpenTapeDeck = { navController.navigate(Route.TAPE_DECK) },
-                onOpenContacts = { navController.navigate(Route.CONTACTS) }
+                onOpenContacts = { navController.navigate(Route.CONTACTS) },
+                onOpenRivalIntel = { navController.navigate(Route.RIVAL_INTEL) },
+                viewModel = viewModel
             )
         }
         composable(Route.CONTACTS) {
             ContactsScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
+        }
+        composable(Route.RIVAL_INTEL) {
+            RivalIntelScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
         }
         composable(Route.TAPE_DECK) {
             TapeDeckScreen(viewModel = viewModel, onBack = { navController.popBackStack() })

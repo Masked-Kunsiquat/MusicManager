@@ -7,6 +7,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.CreativeControl
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
+import com.github.maskedkunisquat.musicmanager.logic.model.RivalSnapshot
 import com.github.maskedkunisquat.musicmanager.logic.model.SignabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.RevenueSplit
 import com.github.maskedkunisquat.musicmanager.logic.model.WantType
@@ -272,6 +273,29 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): Pair<SimWorld, Li
                 ),
                 passedLeads = world.passedLeads + (effect.prospectId to world.currentDay),
                 surfacedLeads = world.surfacedLeads - effect.prospectId
+            ), noEvents)
+        }
+        is StateEffect.UpdateRivalIntel -> {
+            val rival = world.rivals[effect.rivalId] ?: return Pair(world, noEvents)
+            // Rival roster isn't tracked individually in SimWorld; we observe genre focus weights.
+            // Each genre the rival prioritises (weight >= 0.5) implies ~2 signed artists on average.
+            val focusGenres = rival.genreWeights
+                .filter { (_, w) -> w >= 0.5f }
+                .keys
+                .toList()
+                .sorted()
+            val estimatedSize = (focusGenres.size * 2).coerceAtLeast(1)
+            val snapshot = RivalSnapshot(
+                rivalId = effect.rivalId,
+                observedRosterSize = estimatedSize,
+                observedGenres = focusGenres,
+                confidence = 1.0f,
+                snapshotDay = world.currentDay
+            )
+            Pair(world.copy(
+                label = world.label.copy(
+                    intelCache = world.label.intelCache + (effect.rivalId to snapshot)
+                )
             ), noEvents)
         }
         is StateEffect.WatchLead -> {

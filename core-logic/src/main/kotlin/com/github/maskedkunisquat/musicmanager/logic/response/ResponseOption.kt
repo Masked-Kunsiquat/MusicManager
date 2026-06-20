@@ -98,6 +98,11 @@ sealed class StateEffect {
         val wantType: WantType
     ) : StateEffect()
 
+    // Captures a snapshot of the rival's current roster for display in RivalIntelScreen.
+    // Confidence starts at 1.0f and decays at display time (not stored).
+    @Serializable @SerialName("update_rival_intel")
+    data class UpdateRivalIntel(val rivalId: String) : StateEffect()
+
     // Tape deck responses — move a surfaced lead into a negotiation, cooldown, or watch state.
     @Serializable @SerialName("pursue_lead")
     data class PursueLead(val prospectId: String) : StateEffect()

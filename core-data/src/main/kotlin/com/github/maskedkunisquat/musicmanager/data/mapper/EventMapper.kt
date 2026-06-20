@@ -147,6 +147,10 @@ fun ResponseOption.toResponseEntity(originalEventId: String, dayOfGame: Int): Ev
                             put("type", "watch_lead")
                             put("prospectId", effect.prospectId)
                         }
+                        is StateEffect.UpdateRivalIntel -> {
+                            put("type", "update_rival_intel")
+                            put("rivalId", effect.rivalId)
+                        }
                     }
                 })
             }

@@ -816,7 +816,10 @@ class StubAiProvider : LabelAiProvider {
             emptyList()),
         option("rival:sign:${event.rivalId}:watch",
             "Flag ${event.rivalName} for closer watching",
-            emptyList())
+            emptyList()),
+        option("rival:sign:${event.rivalId}:intel",
+            "Dig into what ${event.rivalName} is building",
+            listOf(StateEffect.UpdateRivalIntel(event.rivalId)))
     )
 
     private fun rivalPoachProse(event: SimEvent.RivalPoach): Pair<String, String> = Pair(
@@ -845,14 +848,17 @@ class StubAiProvider : LabelAiProvider {
         )
     )
 
-        private fun rivalPoachOptions(event: SimEvent.RivalPoach): List<ResponseOption> = listOf(
+    private fun rivalPoachOptions(event: SimEvent.RivalPoach): List<ResponseOption> = listOf(
         option("rival:poach:${event.rivalId}:accept",
             "Let them go — focus forward",
             emptyList()),
         option("rival:poach:${event.rivalId}:morale",
             "Emergency team meeting — hold the room together",
             listOf(RNC(NeedType.BELONGING, +0.15f)),
-            cost = 500 * CENTS)
+            cost = 500 * CENTS),
+        option("rival:poach:${event.rivalId}:intel",
+            "Dig into what ${event.rivalName} is building",
+            listOf(StateEffect.UpdateRivalIntel(event.rivalId)))
     )
 
     private fun NC(artistId: String, needType: NeedType, delta: Float) =
