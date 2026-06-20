@@ -152,6 +152,25 @@ before signing flow; new event types before their app screens.
 
 ### 2-D — App screens (`:app`)
 
+**UI aesthetic: retro/flip-phone (Nokia-era).** All screens in 2-D and beyond
+use this as the base. Lock it in once, apply globally — consistency is what
+makes it look intentional rather than unfinished. The fake-OS device-within-a-
+device framing is a natural fit.
+
+0. **Retro theme foundation** — before building any new screen, establish a
+   single Compose theme that all 2-D screens share:
+   - Monospace typeface throughout (`FontFamily.Monospace` or a bundled
+     pixel/terminal font)
+   - Palette: dark background, 2-3 accent colors max (e.g. amber/green on
+     near-black — Nokia-era terminal feel)
+   - Chunky border/divider treatment instead of Material3 cards (simple 1dp
+     lines, no elevation/shadow)
+   - No Material3 floating elements (no FABs, no bottom sheets with rounded
+     corners) — flat list rows and full-screen panels only
+   - Apply the theme via a dedicated `RetroTheme` wrapper composable used by
+     every screen in `:app`. Swap out of existing Material3 defaults at that
+     wrapper level, not screen by screen.
+
 1. **Charts app** — `ChartsScreen` Compose screen accessible from `HomeScreen`.
    Shows a ranked list of genres by trend value. Data is **intentionally
    delayed**: the screen reads a `chartSnapshot` stored in the world that
@@ -163,11 +182,11 @@ before signing flow; new event types before their app screens.
    beyond reading — the value is accumulating genre intuition over time.
    Pulls from `dao.observeByType("intel_drop")`.
 
-3. **Partner picker (Phase 2B)** — When an email's options contain a
-   `PairedNeedChange` effect with an empty `partnerId`, gate the resolve
-   button and show an artist picker overlay. Player selects a roster artist;
-   the ViewModel fills in `partnerId` before calling `resolveEvent`. Domain
-   model already in place — this is UI-only.
+3. **Partner picker** — When an email's options contain a `PairedNeedChange`
+   effect with an empty `partnerId`, gate the resolve button and show an
+   artist picker overlay. Player selects a roster artist; the ViewModel fills
+   in `partnerId` before calling `resolveEvent`. Domain model already in place
+   — this is UI-only.
 
 ### Content cadence targets (tune during 2-A/2-B)
 
