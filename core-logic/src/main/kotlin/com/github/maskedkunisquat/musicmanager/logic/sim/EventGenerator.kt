@@ -5,6 +5,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.ArtistState
 import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.MarketState
+import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import kotlin.math.abs
@@ -20,6 +21,8 @@ private const val INTEL_ROSTER_GENRE_WEIGHT = 0.70f
 private const val CAPABILITY_NOTICE_COOLDOWN = 20
 // Suppress repeated label-need warnings for this many ticks (~27 real hours).
 private const val LABEL_NEED_COOLDOWN = 10
+// Minimum ticks before the same want re-surfaces for the same artist.
+private const val WANT_RESURFACE_COOLDOWN = 5
 
 private val LABEL_NEED_THRESHOLDS = mapOf(
     LabelNeedType.CASH_FLOW      to 0.35f,
@@ -86,10 +89,13 @@ private fun contractEvents(artist: ArtistState, world: SimWorld): List<SimEvent>
     )
 }
 
-// Phase 1: activeWants is always empty until WorldInitializer populates it from archetypes.
 private fun wantEvents(artist: ArtistState, day: Int): List<SimEvent> =
     artist.activeWants
         .filter { it.urgency >= 0.7f }
+        .filter { want ->
+            val lastSurfaced = artist.wantLastSurfacedAt[want.type.name]
+            lastSurfaced == null || day - lastSurfaced >= WANT_RESURFACE_COOLDOWN
+        }
         .map { want ->
             SimEvent.WantSurfaced(
                 artistId = artist.id,
@@ -116,8 +122,15 @@ private fun intelDropEvents(world: SimWorld, rng: Random): List<SimEvent> {
     if (rng.nextFloat() > INTEL_BASE_CHANCE) return emptyList()
     val rosterGenres = world.artists.values.map { it.genre }.toSet()
     val genrePool = world.market.genreTrends.keys.toList().ifEmpty { return emptyList() }
-    val genre = if (rosterGenres.isNotEmpty() && rng.nextFloat() < INTEL_ROSTER_GENRE_WEIGHT) {
-        rosterGenres.random(rng)
+    // Artists with low RECOGNITION need benefit most from market awareness; their genre gets extra
+    // weight in the pool by appearing twice (once from rosterGenres, once from the recognition list).
+    val recognitionHungryGenres = world.artists.values
+        .filter { (it.needs[NeedType.RECOGNITION]?.value ?: 1f) < NEED_URGENT_THRESHOLD }
+        .map { it.genre }
+        .filter { it in world.market.genreTrends }
+    val weightedRosterPool = rosterGenres.toList() + recognitionHungryGenres
+    val genre = if (weightedRosterPool.isNotEmpty() && rng.nextFloat() < INTEL_ROSTER_GENRE_WEIGHT) {
+        weightedRosterPool.random(rng)
     } else {
         genrePool.random(rng)
     }

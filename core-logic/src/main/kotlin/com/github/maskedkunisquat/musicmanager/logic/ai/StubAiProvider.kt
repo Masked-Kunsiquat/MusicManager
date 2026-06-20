@@ -1,6 +1,7 @@
 package com.github.maskedkunisquat.musicmanager.logic.ai
 
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
+import com.github.maskedkunisquat.musicmanager.logic.model.ArtistState
 import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.CreativeControl
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
@@ -189,19 +190,53 @@ class StubAiProvider : LabelAiProvider {
 
     // --- Option generation ---
 
-    private fun options(event: SimEvent, world: SimWorld): List<ResponseOption> = when (event) {
-        is SimEvent.NeedUrgent -> needUrgentOptions(event, world)
-        is SimEvent.ContractExpiring -> contractExpiringOptions(event, world)
-        is SimEvent.WantSurfaced -> wantSurfacedOptions(event, world)
-        is SimEvent.MarketShift -> marketShiftOptions(event, world)
-        is SimEvent.IntelDrop -> intelDropOptions(event, world)
-        is SimEvent.ScoutReport -> scoutReportOptions(event, world)
-        is SimEvent.NegotiationRound -> negotiationRoundOptions(event, world)
-        is SimEvent.RenewalOpened -> renewalOpenedOptions(event, world)
-        is SimEvent.LabelNeedUrgent -> labelNeedUrgentOptions(event, world)
-        is SimEvent.CapabilityUnlockable -> capabilityUnlockableOptions(event)
-        is SimEvent.RivalSigning -> rivalSigningOptions(event)
-        is SimEvent.RivalPoach -> rivalPoachOptions(event)
+    private fun options(event: SimEvent, world: SimWorld): List<ResponseOption> {
+        val artist = world.artists[event.artistId]
+        val raw = when (event) {
+            is SimEvent.NeedUrgent -> needUrgentOptions(event, world)
+            is SimEvent.ContractExpiring -> contractExpiringOptions(event, world)
+            is SimEvent.WantSurfaced -> wantSurfacedOptions(event, world)
+            is SimEvent.MarketShift -> marketShiftOptions(event, world)
+            is SimEvent.IntelDrop -> intelDropOptions(event, world)
+            is SimEvent.ScoutReport -> scoutReportOptions(event, world)
+            is SimEvent.NegotiationRound -> negotiationRoundOptions(event, world)
+            is SimEvent.RenewalOpened -> renewalOpenedOptions(event, world)
+            is SimEvent.LabelNeedUrgent -> labelNeedUrgentOptions(event, world)
+            is SimEvent.CapabilityUnlockable -> capabilityUnlockableOptions(event)
+            is SimEvent.RivalSigning -> rivalSigningOptions(event)
+            is SimEvent.RivalPoach -> rivalPoachOptions(event)
+        }
+        return prioritize(raw, artist)
+    }
+
+    // Reorder options so those addressing the artist's lowest needs or active wants surface first.
+    // No-op for label/market events (artist == null) or single-option lists.
+    private fun prioritize(options: List<ResponseOption>, artist: ArtistState?): List<ResponseOption> {
+        if (artist == null || options.size <= 1) return options
+        return options.sortedByDescending { optionScore(it, artist) }
+    }
+
+    private fun optionScore(option: ResponseOption, artist: ArtistState): Float {
+        var score = 0f
+        for (effect in option.effects) {
+            when (effect) {
+                is StateEffect.NeedChange -> if (effect.artistId == artist.id) {
+                    val need = artist.needs[effect.needType]?.value ?: continue
+                    // Boost: positive delta on a low need. Penalty: negative delta on a low need.
+                    if (need < 0.30f) score += (0.30f - need) * effect.delta
+                }
+                is StateEffect.RosterNeedChange -> {
+                    // Applies to all artists; count it at half weight for this artist.
+                    val need = artist.needs[effect.needType]?.value ?: continue
+                    if (need < 0.30f) score += (0.30f - need) * effect.delta * 0.5f
+                }
+                is StateEffect.WantSatisfied -> if (effect.artistId == artist.id) {
+                    if (artist.activeWants.any { it.type == effect.wantType }) score += 1.0f
+                }
+                else -> Unit
+            }
+        }
+        return score
     }
 
     private fun needUrgentOptions(event: SimEvent.NeedUrgent, world: SimWorld): List<ResponseOption> {
