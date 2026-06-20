@@ -20,7 +20,8 @@ class SimEngine {
             currentDay = nextDay,
             artists = world.artists.mapValues { (_, artist) -> decayNeeds(artist) },
             market = tickMarket(world.market, marketRng),
-            scouts = updatedScouts
+            scouts = updatedScouts,
+            chartSnapshot = if (nextDay % 3 == 0) world.market else world.chartSnapshot
         )
         return TickResult(
             world = nextWorld,

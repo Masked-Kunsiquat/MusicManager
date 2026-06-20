@@ -6,6 +6,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.github.maskedkunisquat.musicmanager.ui.charts.ChartsScreen
 import com.github.maskedkunisquat.musicmanager.ui.email.EmailDetailScreen
 import com.github.maskedkunisquat.musicmanager.ui.home.HomeScreen
 import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxScreen
@@ -14,6 +15,7 @@ import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxViewModel
 object Route {
     const val HOME = "home"
     const val INBOX = "inbox"
+    const val CHARTS = "charts"
     const val EMAIL_DETAIL = "email/{eventId}"
     fun emailDetail(eventId: String) = "email/$eventId"
 }
@@ -22,7 +24,13 @@ object Route {
 fun AppNavGraph(navController: NavHostController, viewModel: InboxViewModel) {
     NavHost(navController = navController, startDestination = Route.HOME) {
         composable(Route.HOME) {
-            HomeScreen(onOpenInbox = { navController.navigate(Route.INBOX) })
+            HomeScreen(
+                onOpenInbox = { navController.navigate(Route.INBOX) },
+                onOpenCharts = { navController.navigate(Route.CHARTS) }
+            )
+        }
+        composable(Route.CHARTS) {
+            ChartsScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
         }
         composable(Route.INBOX) {
             InboxScreen(
