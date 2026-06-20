@@ -12,5 +12,7 @@ data class SimWorld(
     val contracts: Map<String, Contract>,
     // Defaults so snapshots written before these fields existed still deserialize.
     val prospects: Map<String, ProspectState> = emptyMap(),
-    val scouts: Map<String, ScoutState> = emptyMap()
+    val scouts: Map<String, ScoutState> = emptyMap(),
+    val activeNegotiations: Map<String, Int> = emptyMap(),    // prospectId → current round
+    val unavailableProspects: Set<String> = emptySet()         // cooldown after failed negotiation
 )

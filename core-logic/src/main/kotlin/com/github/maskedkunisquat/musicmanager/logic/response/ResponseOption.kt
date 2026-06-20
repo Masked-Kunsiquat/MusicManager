@@ -45,4 +45,13 @@ sealed class StateEffect {
         val needType: NeedType,
         val delta: Float
     ) : StateEffect()
+
+    @Serializable @SerialName("advance_negotiation")
+    data class AdvanceNegotiation(val prospectId: String) : StateEffect()
+
+    @Serializable @SerialName("sign_artist")
+    data class SignArtist(val prospectId: String) : StateEffect()
+
+    @Serializable @SerialName("negotiation_failed")
+    data class NegotiationFailed(val prospectId: String) : StateEffect()
 }

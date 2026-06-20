@@ -67,6 +67,7 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.MarketShift -> marketShiftProse(event)
         is SimEvent.IntelDrop -> intelDropProse(event)
         is SimEvent.ScoutReport -> scoutReportProse(event, world)
+        is SimEvent.NegotiationRound -> negotiationRoundProse(event, world)
     }
 
     private fun needUrgentProse(
@@ -184,6 +185,7 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.MarketShift -> marketShiftOptions(event)
         is SimEvent.IntelDrop -> intelDropOptions(event)
         is SimEvent.ScoutReport -> scoutReportOptions(event, world)
+        is SimEvent.NegotiationRound -> negotiationRoundOptions(event, world)
     }
 
     private fun needUrgentOptions(event: SimEvent.NeedUrgent, world: SimWorld): List<ResponseOption> {
@@ -413,7 +415,7 @@ class StubAiProvider : LabelAiProvider {
         return listOf(
             option("scout:${event.prospectId}:meet",
                 "Set up an intro meeting with $prospectName",
-                emptyList()),
+                listOf(StateEffect.AdvanceNegotiation(event.prospectId))),
             option("scout:${event.prospectId}:more",
                 "Ask the scout for more intel before committing",
                 emptyList()),
@@ -421,6 +423,68 @@ class StubAiProvider : LabelAiProvider {
                 "Pass — not the right fit right now",
                 emptyList())
         )
+    }
+
+    private fun negotiationRoundProse(event: SimEvent.NegotiationRound, world: SimWorld): Pair<String, String> {
+        val prospect = world.prospects[event.prospectId]
+        val name = prospect?.name ?: "the artist"
+        val score = prospect?.signabilityScore ?: 0.5f
+
+        return when (event.round) {
+            1 -> {
+                val vibe = when {
+                    score >= 0.70f -> "I've had a few conversations already and I'm being pretty selective about what I sign next. Just want to be upfront about that."
+                    score >= 0.45f -> "I'm genuinely open to seeing what's possible here. No pressure from my end — just want to understand your vision for the project."
+                    else -> "Honestly, I wasn't sure I'd hear back. I appreciate you taking the time."
+                }
+                Pair(
+                    "re: our intro call",
+                    "Hey — $name here. Good to connect. $vibe\n\nWhat are you thinking in terms of next steps?"
+                )
+            }
+            2 -> {
+                val pressure = when {
+                    score >= 0.70f -> "I'll be direct — I've got another conversation that's moving pretty fast. I need to know where your head is at."
+                    score >= 0.45f -> "I've been thinking about what a deal could look like and I have some questions about the support side — press, live, that kind of thing."
+                    else -> "I'm still figuring out what I need from a label, so bear with me. I just want to make sure I'm making the right call here."
+                }
+                Pair(
+                    "following up",
+                    "$name again. $pressure\n\nCan we get into specifics?"
+                )
+            }
+            else -> {
+                val tone = when {
+                    score >= 0.70f -> "I need an answer this week. I respect what you're building and I'd rather be here than anywhere else — but I can't keep this open."
+                    score >= 0.45f -> "I think I've got enough to make a decision. I'd like to close this out one way or the other."
+                    else -> "I really want this to work. Whatever you can offer, I'm ready to commit."
+                }
+                Pair(
+                    "where are we?",
+                    "$name here. $tone\n\nWhat's the move?"
+                )
+            }
+        }
+    }
+
+    private fun negotiationRoundOptions(event: SimEvent.NegotiationRound, world: SimWorld): List<ResponseOption> {
+        val p = event.prospectId
+        val prospectName = world.prospects[p]?.name ?: "the artist"
+        val maxRounds = 3
+
+        return buildList {
+            add(option("neg:$p:sign",
+                "Make an offer — sign $prospectName now",
+                listOf(StateEffect.SignArtist(p))))
+            if (event.round < maxRounds) {
+                add(option("neg:$p:continue",
+                    "Keep talking — schedule another conversation",
+                    listOf(StateEffect.AdvanceNegotiation(p))))
+            }
+            add(option("neg:$p:walk",
+                "Walk away — not the right fit",
+                listOf(StateEffect.NegotiationFailed(p))))
+        }
     }
 
     private fun option(id: String, text: String, effects: List<StateEffect>, cost: Long = 0L) =

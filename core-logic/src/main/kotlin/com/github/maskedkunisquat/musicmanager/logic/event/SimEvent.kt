@@ -47,4 +47,10 @@ sealed class SimEvent {
         val prospectId: String,
         override val dayOfGame: Int
     ) : SimEvent()
+
+    data class NegotiationRound(
+        val prospectId: String,
+        val round: Int,
+        override val dayOfGame: Int
+    ) : SimEvent()
 }

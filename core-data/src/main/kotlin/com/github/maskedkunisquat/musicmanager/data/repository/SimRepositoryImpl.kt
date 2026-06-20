@@ -86,13 +86,18 @@ class SimRepositoryImpl(
     }
 
     override suspend fun resolveEvent(eventId: String, option: ResponseOption) = tickMutex.withLock {
-        world = applyResponse(world, option)
+        val (newWorld, injectedEvents) = applyResponse(world, option)
+        world = newWorld
         // Persist world before touching the DAO. If the process dies between here and
         // markResolved the event re-appears as unresolved on next launch, which is
         // preferable to losing the world effects with the event already marked gone.
         withContext(Dispatchers.IO) { saveWorld(world) }
         val now = System.currentTimeMillis()
-        dao.markResolved(eventId, option.id, now)
-        dao.insert(option.toResponseEntity(eventId, world.currentDay))
+        // Pre-compute entities outside the transaction — AI inference must not run inside it.
+        val responseEntity = option.toResponseEntity(eventId, world.currentDay)
+        val injectedEntities = injectedEvents.map { event ->
+            event.toEntity(aiProvider.generateEmail(event, world))
+        }
+        dao.resolveWithFollowUps(eventId, option.id, now, responseEntity, injectedEntities)
     }
 }
