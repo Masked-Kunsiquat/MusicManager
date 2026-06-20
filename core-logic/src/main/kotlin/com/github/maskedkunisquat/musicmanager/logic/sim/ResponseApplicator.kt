@@ -8,7 +8,6 @@ import com.github.maskedkunisquat.musicmanager.logic.model.NeedState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.model.SignabilityType
-import java.util.UUID
 import com.github.maskedkunisquat.musicmanager.logic.model.RevenueSplit
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
@@ -192,7 +191,7 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): Pair<SimWorld, Li
         is StateEffect.RenewContract -> {
             val artist = world.artists[effect.artistId] ?: return Pair(world, noEvents)
             val oldContractId = artist.contractId
-            val newContractId = "renewal_${UUID.randomUUID()}"
+            val newContractId = "renewal_${effect.artistId}_${world.currentDay}_${effect.newExpiryTicks}"
             val newContract = Contract(
                 id = newContractId,
                 artistId = effect.artistId,

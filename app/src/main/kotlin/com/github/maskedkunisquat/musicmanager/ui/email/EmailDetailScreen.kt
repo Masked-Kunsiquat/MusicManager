@@ -190,7 +190,7 @@ fun EmailDetailScreen(
                     val final = pickerFor!!.withPartner(artistId)
                     viewModel.resolveEvent(eventId, final)
                     pickerFor = null
-                    onBack()
+                    // Navigation handled by LaunchedEffect(item) when the item disappears.
                 },
                 onDismiss = { pickerFor = null },
                 modifier = Modifier.fillMaxSize()

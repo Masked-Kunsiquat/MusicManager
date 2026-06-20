@@ -253,10 +253,13 @@ PRESS rep -0.03f applied in ticker for both events. Dedicated `rivalRng`
 and background weights (0.05–0.30). Full EventMapper/EntityMapper round-trip.
 17 tests in `RivalTickerTest`.
 
-**Deviations from spec:** Counters live entirely in `RivalTicker` instance
-state (not on SimWorld — cleaner). `RivalPoach` removal is immediate in
-ticker, not deferred to `ResponseApplicator` (avoids limbo-artist state).
-No `RenewalOpened` guard on poach (waits for 3-D). PRESS penalty is correct.
+**Deviations from spec:** Counters (`rivalProspectTargets`, `rivalProspectCounters`,
+`rivalPoachTargets`, `rivalPoachCounters`) are stored on `SimWorld` — not in
+`RivalTicker` instance state — so they survive session restarts (same pattern as
+`capabilityNoticedAt`). `RivalTicker` is a stateless pure function.
+`RivalPoach` removal is immediate in ticker, not deferred to `ResponseApplicator`
+(avoids limbo-artist state). No `RenewalOpened` guard on poach (waits for 3-D).
+PRESS penalty is correct.
 
 ### 3-D ✅ — Contract renewal (`:core-logic` + `:core-data`)
 
@@ -296,7 +299,7 @@ round-trip for `RenewalOpened`. 20 tests in `RenewalSystemTest`.
    genuinely doesn't want a deal, not someone haggling. Final round copy
    is flat: "Not interested. But thanks for looking."
 
-4. **`DealBuilderOverlay`** composable — shown instead of standard option
+4. **`DealBuilderPanel`** composable — shown instead of standard option
    buttons when the inbox email is a `RenewalOpened` event:
    - Revenue split selector: fixed steps — 50/50, 60/40, 70/30, 80/20
      (artist percentage). Lower cut for the label = lower `costFunds` on
@@ -332,7 +335,7 @@ round-trip for `RenewalOpened`. 20 tests in `RenewalSystemTest`.
    style entries ("ARTIST LEFT: [name] signed to [rival]."). Both pull from
    `dao.observeByType` with updated type string arms.
 
-3. **`DealBuilderOverlay`** (described in 3-E above) wired into
+3. **`DealBuilderPanel`** (described in 3-E above) wired into
    `EmailDetailScreen` — shown when `item.event` is a `RenewalOpened`.
    Standard response option buttons remain for all other event types.
 
@@ -343,7 +346,7 @@ round-trip for `RenewalOpened`. 20 tests in `RenewalSystemTest`.
   cleared (e.g. migration wipes pre-v4 rows), the balance diverges from
   event-log truth. Phase 4 audit pass should verify the balance against
   the event log on world load.
-- `DealBuilderOverlay` builds a `ResponseOption` directly in the UI layer,
+- `DealBuilderPanel` builds a `ResponseOption` directly in the UI layer,
   bypassing `StubAiProvider`. This is intentional — it's a player-authored
   deal, not AI-generated. Ensure the ViewModel constructs a valid UUID for
   the option id so the dedup guard in `SimRepository` works correctly.
