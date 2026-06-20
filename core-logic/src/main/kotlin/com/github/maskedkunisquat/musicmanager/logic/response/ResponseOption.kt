@@ -1,8 +1,10 @@
 package com.github.maskedkunisquat.musicmanager.logic.response
 
 import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
+import com.github.maskedkunisquat.musicmanager.logic.model.CreativeControl
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
+import com.github.maskedkunisquat.musicmanager.logic.model.RevenueSplit
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -65,4 +67,25 @@ sealed class StateEffect {
 
     @Serializable @SerialName("unlock_capability")
     data class UnlockCapability(val type: CapabilityType) : StateEffect()
+
+    // Initiates renewal round 1 for the given artist+contract.
+    @Serializable @SerialName("open_renewal")
+    data class OpenRenewal(val artistId: String, val contractId: String) : StateEffect()
+
+    // Advances to the next renewal round (max 3 total).
+    @Serializable @SerialName("advance_renewal")
+    data class AdvanceRenewal(val artistId: String, val contractId: String) : StateEffect()
+
+    // Seals the renewal — creates a new contract from currentDay + newExpiryTicks.
+    @Serializable @SerialName("renew_contract")
+    data class RenewContract(
+        val artistId: String,
+        val newExpiryTicks: Int,
+        val revenueSplit: RevenueSplit,
+        val creativeControl: CreativeControl
+    ) : StateEffect()
+
+    // Artist walked from renewal talks. Loyalty -0.2f; accelerates rival poach if running.
+    @Serializable @SerialName("renewal_walked")
+    data class RenewalWalked(val artistId: String) : StateEffect()
 }

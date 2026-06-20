@@ -69,6 +69,12 @@ fun EventLogEntity.toSimEventOrNull(): SimEvent? = try {
             round = json["round"]!!.jsonPrimitive.int,
             dayOfGame = dayOfGame
         )
+        "renewal_opened" -> SimEvent.RenewalOpened(
+            artistId = json["artistId"]!!.jsonPrimitive.content,
+            contractId = json["contractId"]!!.jsonPrimitive.content,
+            round = json["round"]!!.jsonPrimitive.int,
+            dayOfGame = dayOfGame
+        )
         "label_need_urgent" -> SimEvent.LabelNeedUrgent(
             needType = LabelNeedType.valueOf(json["needType"]!!.jsonPrimitive.content),
             severity = json["severity"]!!.jsonPrimitive.content.toFloat(),

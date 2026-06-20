@@ -2,9 +2,11 @@ package com.github.maskedkunisquat.musicmanager.logic.ai
 
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
+import com.github.maskedkunisquat.musicmanager.logic.model.CreativeControl
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
+import com.github.maskedkunisquat.musicmanager.logic.model.RevenueSplit
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.model.WantType
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
@@ -71,6 +73,7 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.IntelDrop -> intelDropProse(event)
         is SimEvent.ScoutReport -> scoutReportProse(event, world)
         is SimEvent.NegotiationRound -> negotiationRoundProse(event, world)
+        is SimEvent.RenewalOpened -> renewalOpenedProse(event, world)
         is SimEvent.LabelNeedUrgent -> labelNeedUrgentProse(event)
         is SimEvent.CapabilityUnlockable -> capabilityUnlockableProse(event)
         is SimEvent.RivalSigning -> rivalSigningProse(event)
@@ -193,6 +196,7 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.IntelDrop -> intelDropOptions(event, world)
         is SimEvent.ScoutReport -> scoutReportOptions(event, world)
         is SimEvent.NegotiationRound -> negotiationRoundOptions(event, world)
+        is SimEvent.RenewalOpened -> renewalOpenedOptions(event, world)
         is SimEvent.LabelNeedUrgent -> labelNeedUrgentOptions(event, world)
         is SimEvent.CapabilityUnlockable -> capabilityUnlockableOptions(event)
         is SimEvent.RivalSigning -> rivalSigningOptions(event)
@@ -260,13 +264,14 @@ class StubAiProvider : LabelAiProvider {
 
     private fun contractExpiringOptions(event: SimEvent.ContractExpiring, world: SimWorld): List<ResponseOption> {
         val a = event.artistId
+        val c = event.contractId
         val lowLoyalty = (world.artists[a]?.dimensions?.loyalty ?: 0.5f) < 0.35f
         return buildList {
-            add(option("$a:contract_proactive", "Open renewal talks now — lead with better terms",
-                listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.10f), RC(a, +0.08f))))
-            add(option("$a:contract_premium", "Prepare a premium renewal offer with a signing bonus",
-                listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.25f), RC(a, +0.15f)),
-                cost = 2_000 * CENTS))
+            add(option("$a:contract_open", "Open renewal talks now",
+                listOf(StateEffect.OpenRenewal(a, c))))
+            add(option("$a:contract_premium", "Open talks with a signing bonus to show commitment",
+                listOf(StateEffect.OpenRenewal(a, c), RC(a, +0.08f)),
+                cost = 1_500 * CENTS))
             add(option("$a:contract_wait", "Wait — let their team make the first move",
                 listOf(RC(a, -0.10f))))
             if (lowLoyalty) {
@@ -621,6 +626,114 @@ class StubAiProvider : LabelAiProvider {
 
     private fun option(id: String, text: String, effects: List<StateEffect>, cost: Long = 0L) =
         ResponseOption(id = id, text = text, effects = effects, costFunds = cost)
+
+    // --- Contract renewal ---
+
+    private fun renewalOpenedProse(event: SimEvent.RenewalOpened, world: SimWorld): Pair<String, String> {
+        val artist = world.artists[event.artistId]
+        val name = artist?.name ?: "your artist"
+        val balance = artist?.relationshipBalance ?: 0f
+        val tier = renewalTier(balance)
+        val subject = when (event.round) {
+            1 -> "re: contract renewal — round 1"
+            2 -> "re: renewal talks — your response"
+            else -> "re: renewal — final position"
+        }
+        val body = when (tier) {
+            RenewalTier.WARM -> when (event.round) {
+                1 -> "Hey — my team flagged the window. Honestly, I'm not shopping around. " +
+                     "We've built something real here and I want to keep building it. " +
+                     "That said, let's make it official before anyone gets nervous. What are you thinking?"
+                2 -> "Good conversation last time. I think we're close. " +
+                     "I just want to make sure the terms reflect where things are now — " +
+                     "not where they were when we first signed. Nothing dramatic. Let's land this."
+                else -> "I want to close this. Here's where I need to land: " +
+                        "the split needs to move a little in my direction — I've earned it. " +
+                        "Everything else, I'm flexible on. Tell me we can do this."
+            }
+            RenewalTier.NEUTRAL -> when (event.round) {
+                1 -> "My manager says we need to start this conversation. " +
+                     "I'm not panicking but I'm also not going to pretend I haven't heard from other people. " +
+                     "If we're doing this, let's actually do it. What's the offer?"
+                2 -> "Okay. I've had time to think. I know what I want and I think you know too. " +
+                     "Let's stop dancing and put something real on the table. I'm ready to sign if it's right."
+                else -> "This is it. I need to know where we stand. " +
+                        "I have other conversations I can take seriously if this doesn't work out. " +
+                        "I'm not trying to be difficult — I just need the right deal."
+            }
+            RenewalTier.STRAINED -> when (event.round) {
+                1 -> "My lawyer says I need to at least have this conversation. Fine. " +
+                     "But I want to be honest: there's a lot of ground to make up here. " +
+                     "The split isn't working for me, the control situation hasn't been great, " +
+                     "and I've had real interest from other labels. I'm listening. But I need more."
+                2 -> "I told you where I was last time. Has anything changed on your end? " +
+                     "Because I need full creative control and I need the split to reflect my actual contribution. " +
+                     "I'm not budging on those two things."
+                else -> "Final answer. These are my terms. If you can't meet them, " +
+                        "we go our separate ways and that's okay. No hard feelings. " +
+                        "But I need an answer now."
+            }
+        }
+        return Pair(subject, "$name said:\n\n$body")
+    }
+
+    private fun renewalOpenedOptions(event: SimEvent.RenewalOpened, world: SimWorld): List<ResponseOption> {
+        val a = event.artistId
+        val c = event.contractId
+        val balance = world.artists[a]?.relationshipBalance ?: 0f
+        val tier = renewalTier(balance)
+        val isFinal = event.round >= 3
+        return when (tier) {
+            RenewalTier.WARM -> buildList {
+                // Warm history: artist accepts favorable-to-artist terms easily
+                add(option("$a:renew:warm:sign:${event.round}",
+                    "Sign on warm terms — 55/45 split, shared control, 180-tick term",
+                    listOf(StateEffect.RenewContract(a, 180, RevenueSplit(55), CreativeControl.SHARED))))
+                if (!isFinal) {
+                    add(option("$a:renew:warm:counter:${event.round}",
+                        "Counter with standard 50/50 — see if they'll meet us there",
+                        listOf(StateEffect.AdvanceRenewal(a, c), RC(a, -0.05f))))
+                }
+                add(option("$a:renew:warm:walk:${event.round}",
+                    "Walk away from talks",
+                    listOf(StateEffect.RenewalWalked(a))))
+            }
+            RenewalTier.NEUTRAL -> buildList {
+                add(option("$a:renew:neutral:sign:${event.round}",
+                    "Sign on standard terms — 50/50 split, shared control, 180-tick term",
+                    listOf(StateEffect.RenewContract(a, 180, RevenueSplit(50), CreativeControl.SHARED))))
+                if (!isFinal) {
+                    add(option("$a:renew:neutral:counter:${event.round}",
+                        "Push back on the split — hold at 45/55 and see where it lands",
+                        listOf(StateEffect.AdvanceRenewal(a, c), RC(a, -0.08f))))
+                }
+                add(option("$a:renew:neutral:walk:${event.round}",
+                    "Table the conversation — let the contract expire",
+                    listOf(StateEffect.RenewalWalked(a))))
+            }
+            RenewalTier.STRAINED -> buildList {
+                // Strained: artist demands a bigger cut and full creative control
+                add(option("$a:renew:strained:sign:${event.round}",
+                    "Accept their terms — 65/35 split, full artist control, 90-tick short term",
+                    listOf(StateEffect.RenewContract(a, 90, RevenueSplit(65), CreativeControl.FULL_ARTIST))))
+                if (!isFinal) {
+                    add(option("$a:renew:strained:counter:${event.round}",
+                        "Hold firm on 50/50 — push back hard",
+                        listOf(StateEffect.AdvanceRenewal(a, c), RC(a, -0.15f))))
+                }
+                add(option("$a:renew:strained:walk:${event.round}",
+                    "Let them walk — the relationship isn't worth the terms they're asking for",
+                    listOf(StateEffect.RenewalWalked(a))))
+            }
+        }
+    }
+
+    private enum class RenewalTier { WARM, NEUTRAL, STRAINED }
+    private fun renewalTier(balance: Float) = when {
+        balance > 0.5f  -> RenewalTier.WARM
+        balance < -0.3f -> RenewalTier.STRAINED
+        else            -> RenewalTier.NEUTRAL
+    }
 
     // --- Rival events ---
 

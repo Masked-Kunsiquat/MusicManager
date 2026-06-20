@@ -20,6 +20,7 @@ data class SimWorld(
     val rivalPoachTargets: Map<String, String> = emptyMap(),       // rivalId → artistId
     val rivalPoachCounters: Map<String, Int> = emptyMap(),         // rivalId → ticks on poach
     val activeNegotiations: Map<String, Int> = emptyMap(),    // prospectId → current round
+    val activeRenewals: Map<String, Int> = emptyMap(),        // artistId → current renewal round
     val unavailableProspects: Set<String> = emptySet(),        // cooldown after failed negotiation
     val chartSnapshot: MarketState = MarketState(emptyMap()),  // delayed market data; updates every 3 ticks
     // CapabilityType.name → day the offer was last presented; prevents re-emit within cooldown window.

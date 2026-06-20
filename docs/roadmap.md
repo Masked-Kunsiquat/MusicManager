@@ -238,112 +238,45 @@ arms for unlock email + gated extra arms on `MarketShift` (IN_HOUSE_BOOKING
 after emission so the cooldown is enforced across sessions via world
 persistence.
 
-### 3-C — Rival NPC labels (`:core-logic`)
+### 3-C ✅ — Rival NPC labels (`:core-logic`)
 
-Rivals are never shown directly — only inferred through press and the
-prospect pool thinning. The poaching mechanic is what makes "losing an
-artist" possible.
+**Delivered:** `RivalState(id, name, genreWeights)` on `SimWorld.rivals`.
+`RivalTicker` (stateful class in `SimEngine`) handles prospect pursuit
+(10-tick threshold → `RivalSigning`, prospect removed) and poach pursuit
+(8-tick threshold when loyalty < 0.3f AND contract ≤ 15 ticks to expiry →
+`RivalPoach`, artist removed immediately in ticker). `RivalPoach` embeds
+`artistName` because the artist is already gone by prose render time.
+`RivalSigning.wasPlayerTarget` set when prospect was in `activeNegotiations`.
+PRESS rep -0.03f applied in ticker for both events. Dedicated `rivalRng`
+(seed xor nextDay+3) keeps rival randomness independent of `eventRng`.
+`WorldInitializer` seeds 2 rivals with 2–3 focus genres (weight 0.60–1.00)
+and background weights (0.05–0.30). Full EventMapper/EntityMapper round-trip.
+17 tests in `RivalTickerTest`.
 
-1. **`RivalState`**: `id: String`, `name: String`,
-   `genreWeights: Map<String, Float>` (higher = rival prioritizes this
-   genre when targeting prospects). Add `rivals: Map<String, RivalState>
-   = emptyMap()` to `SimWorld`. `WorldInitializer` seeds 2 rivals with
-   genre weights complementary to the player's starting roster — they
-   compete in adjacent territory, not identical.
+**Deviations from spec:** Counters live entirely in `RivalTicker` instance
+state (not on SimWorld — cleaner). `RivalPoach` removal is immediate in
+ticker, not deferred to `ResponseApplicator` (avoids limbo-artist state).
+No `RenewalOpened` guard on poach (waits for 3-D). PRESS penalty is correct.
 
-2. **`RivalTicker`** — called from `SimEngine.tick()` alongside other
-   tickers:
-   - Each rival scores available prospects by `(signabilityScore *
-     genreWeight[prospect.genre])`. Highest-scoring becomes their target.
-   - A `rivalProgress: Map<String, Int>` counter (rivalId → ticks on
-     current target) advances each tick. Not persisted to event log —
-     stored transiently on `SimWorld` via a new field
-     `rivalProgress: Map<String, String> = emptyMap()` (rivalId →
-     prospectId currently being pursued). Counter lives in a per-session
-     map inside `RivalTicker`; resets on world load (acceptable — rivals
-     restart their clock on reload, not a meaningful exploit).
-   - At 10 ticks on one target: rival "signs" them. Prospect removed from
-     `world.prospects`. Emits `SimEvent.RivalSigning`.
-   - Rival then picks their next target.
+### 3-D ✅ — Contract renewal (`:core-logic` + `:core-data`)
 
-3. **`SimEvent.RivalSigning(rivalId: String, rivalName: String,
-   prospectName: String, genre: String, wasPlayerTarget: Boolean,
-   dayOfGame: Int)`** — `wasPlayerTarget = true` if prospectId was in
-   `world.activeNegotiations` when poached. `StubAiProvider` copy varies:
-   `wasPlayerTarget = true` gets sharper copy ("Mercury Sound closed
-   [name]. Your offer was still open.").
+**Delivered:** `ArtistState.relationshipBalance: Float = 0f` — accumulated sum
+of `RelationshipChange.delta` values (unclamped running total; updated by
+`ResponseApplicator` on every resolved option). `activeRenewals: Map<String, Int>`
+on `SimWorld` tracks active renewal round per artist.
 
-4. **Poaching signed artists** — `RivalTicker` separately evaluates each
-   signed artist for poach risk:
-   - Condition: `artist.dimensions.loyalty < 0.3f` AND contract within 15
-     ticks of expiry AND no `RenewalOpened` event is currently unresolved
-     for this artist (i.e. player hasn't opened renewal talks).
-   - At threshold (8 ticks): emit `SimEvent.RivalPoach(rivalId, rivalName,
-     artistId, dayOfGame)`. `ResponseApplicator` arm removes the artist
-     from `world.artists` and `world.contracts` and `label.rosterIds`.
-   - `StubAiProvider` copy names the rival, the artist, and the loyalty
-     signal that tipped it — making the loss legible.
+Four new `StateEffect` variants: `OpenRenewal(artistId, contractId)` → emits
+`RenewalOpened` round 1; `AdvanceRenewal(artistId, contractId)` → emits next
+round; `RenewContract(artistId, newExpiryTicks, revenueSplit, creativeControl)`
+→ creates new `Contract`, removes old; `RenewalWalked(artistId)` → loyalty
+-0.2f, clears `activeRenewals`, accelerates any rival's running poach counter
+to `RIVAL_POACH_THRESHOLD - 1` (fires next tick).
 
-5. **Reputation effects of rival moves**: when a rival signs a prospect
-   or poaches an artist, apply a small `reputation[PRESS] -= 0.03f` delta
-   automatically (rivals gaining ground is always a mild press negative for
-   you). No new event needed — apply in `RivalTicker` directly.
-
-6. Serialization for `RivalState` + tests for `RivalTicker` (threshold
-   triggering, `wasPlayerTarget` flag, poach conditions).
-
-**Known tech debt from 3-C:**
-- `rivalProgress` counters reset on world reload. Rivals restart their
-  pursuit clock every session. Acceptable now; Phase 5 season structure
-  should persist this properly.
-- Rival genre weights are static — rivals don't react to market shifts.
-  Intentional for now; a dynamic rival strategy would need its own tick
-  logic and is Phase 4+ scope.
-
-### 3-D — Contract renewal (`:core-logic` + `:core-data`)
-
-Renewal must feel different from a fresh signing — history shapes the
-terms. This is the mechanic that makes the "rival poach" loss legible: if
-the player ignored renewal, they had warning.
-
-1. **`ArtistState.relationshipBalance: Float = 0f`** — accumulated sum of
-   all `RelationshipChange.delta` values applied to this artist since they
-   were signed. `ResponseApplicator` updates it on every resolved option.
-   Denormalized by design (event log is the audit trail; this is the
-   running total for fast reads). Default 0f for backward compat.
-
-2. **`StateEffect.OpenRenewal(artistId: String, contractId: String)`** —
-   add as a response option on `ContractExpiring` events ("open renewal
-   discussions"). `ResponseApplicator` arm emits `SimEvent.RenewalOpened`
-   round 1 into the repository.
-
-3. **`SimEvent.RenewalOpened(artistId: String, contractId: String,
-   round: Int, dayOfGame: Int)`** — multi-turn like `NegotiationRound`.
-   Up to 3 exchanges. Subsequent rounds triggered by
-   `StateEffect.AdvanceRenewal(artistId, contractId)`.
-
-4. **`StateEffect` additions for renewal**:
-   - `AdvanceRenewal(artistId, contractId)` — generates next `RenewalOpened`
-     round.
-   - `RenewContract(artistId, newExpiryTicks: Int, revenueSplit:
-     RevenueSplit, creativeControl: CreativeControl)` — `ResponseApplicator`
-     creates a new `Contract` from the current day, removes the old one.
-   - `RenewalWalked(artistId)` — artist walks; apply `loyalty -= 0.2f` and
-     mark contract as expired (remove from `world.contracts`). If a rival's
-     poach counter was running, this accelerates it to threshold immediately.
-
-5. **Option weighting by `relationshipBalance`** in `StubAiProvider`:
-   - `> 0.5f` (warm history): artist leads with favorable terms — generous
-     split, `SHARED` control, lower `costFunds`.
-   - `-0.3f..0.5f` (neutral): standard terms, both sides give a little.
-   - `< -0.3f` (strained history): artist demands better split AND
-     `FULL_ARTIST` control, higher cost. One option is always
-     `RenewalWalked` — they might walk regardless. Copy reflects the
-     tension without stating the number directly.
-
-6. **Entity mapper arms** for `RenewalOpened` + `AdvanceRenewal` +
-   `RenewContract` + `RenewalWalked`. Tests for `ResponseApplicator` arms
-   (all four effects) and for the balance-driven option generation.
+`StubAiProvider` `renewalOpenedProse/Options` vary by `RenewalTier` (WARM >0.5f,
+NEUTRAL, STRAINED <-0.3f based on `relationshipBalance`): warm → 55/45 split,
+strained → 65/35 + `FULL_ARTIST` on a 90-tick short term. `ContractExpiring`
+options updated to use `OpenRenewal` effect. `EventMapper`/`EntityMapper`
+round-trip for `RenewalOpened`. 20 tests in `RenewalSystemTest`.
 
 ### 3-E — Unsignable archetype + deal builder UI (`:core-logic` + `:app`)
 

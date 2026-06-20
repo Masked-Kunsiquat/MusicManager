@@ -56,6 +56,13 @@ sealed class SimEvent {
         override val dayOfGame: Int
     ) : SimEvent()
 
+    data class RenewalOpened(
+        override val artistId: String,
+        val contractId: String,
+        val round: Int,
+        override val dayOfGame: Int
+    ) : SimEvent()
+
     data class LabelNeedUrgent(
         val needType: LabelNeedType,
         val severity: Float,
