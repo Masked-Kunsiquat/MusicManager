@@ -21,7 +21,8 @@ import com.github.maskedkunisquat.musicmanager.ui.theme.RetroTheme
 @Composable
 fun HomeScreen(
     onOpenInbox: () -> Unit,
-    onOpenCharts: () -> Unit
+    onOpenCharts: () -> Unit,
+    onOpenPress: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -45,6 +46,10 @@ fun HomeScreen(
         RetroButton(onClick = onOpenCharts, modifier = Modifier.fillMaxWidth()) {
             Text("CHARTS")
         }
+        Spacer(modifier = Modifier.height(12.dp))
+        RetroButton(onClick = onOpenPress, modifier = Modifier.fillMaxWidth()) {
+            Text("PRESS")
+        }
     }
 }
 
@@ -52,6 +57,6 @@ fun HomeScreen(
 @Composable
 private fun HomeScreenPreview() {
     RetroTheme {
-        HomeScreen(onOpenInbox = {}, onOpenCharts = {})
+        HomeScreen(onOpenInbox = {}, onOpenCharts = {}, onOpenPress = {})
     }
 }
