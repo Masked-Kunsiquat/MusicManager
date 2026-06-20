@@ -4,6 +4,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.ArtistDimensions
 import com.github.maskedkunisquat.musicmanager.logic.model.ArtistState
 import com.github.maskedkunisquat.musicmanager.logic.model.Contract
 import com.github.maskedkunisquat.musicmanager.logic.model.CreativeControl
+import com.github.maskedkunisquat.musicmanager.logic.model.DemoState
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelState
 import com.github.maskedkunisquat.musicmanager.logic.model.MarketState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedState
@@ -28,10 +29,18 @@ object WorldInitializer {
     private val SCOUT_FIRST = listOf("Marcus", "Nina", "Dara", "Leon", "Priya", "Eli", "Tanya", "Jax")
     private val SCOUT_LAST = listOf("Cross", "Webb", "Reid", "Park", "Osei", "Vance", "Cole", "Marsh")
     private val RIVAL_NAMES = listOf("Mercury Sound", "Parallax Records", "Horizon Group", "Crestfall", "Vertex Label", "Meridian Music")
+    private val DEMO_DESCRIPTORS = mapOf(
+        "indie-rock" to listOf("lo-fi bedroom pop", "driving alt-rock", "sun-bleached indie", "noise-pop buzz"),
+        "pop"        to listOf("stadium shimmer", "candy gloss pop", "breezy electro-pop", "confessional power-pop"),
+        "hip-hop"    to listOf("street-corner rap", "jazzy boom-bap", "trap soul hybrid", "conscious flow"),
+        "electronic" to listOf("club-ready techno", "ethereal ambient", "synth-pop glow", "dark wave pulse"),
+        "folk"       to listOf("campfire storytelling", "sparse Appalachian", "indie folk warmth", "finger-picked dream"),
+        "r&b"        to listOf("late-night smooth r&b", "neo-soul warmth", "gospel-tinged r&b", "bedroom r&b haze")
+    )
 
     fun initializeWorld(seed: Long): SimWorld {
         val rng = Random(seed)
-        val artistCount = 3 + rng.nextInt(3) // 3–5
+        val artistCount = 3 + rng.nextInt(3) // 3-5
 
         val contracts = mutableMapOf<String, Contract>()
         val artists = (0 until artistCount).associate { i ->
@@ -41,12 +50,12 @@ object WorldInitializer {
             artistId to buildArtist(artistId, contractId, rng)
         }
 
-        val prospectCount = 6 + rng.nextInt(5) // 6–10
+        val prospectCount = 6 + rng.nextInt(5) // 6-10
         val prospects = (0 until prospectCount).associate { i ->
             val id = "prospect_${seed}_$i"
             id to buildProspect(id, rng)
         } + run {
-            // One permanently unsignable prospect per world — high signabilityScore so scouts
+            // One permanently unsignable prospect per world -- high signabilityScore so scouts
             // surface them often, but SignArtist always bounces. Intended as a recurring tease.
             val id = "prospect_${seed}_whale"
             mapOf(id to buildUnsignableProspect(id, rng))
@@ -103,7 +112,7 @@ object WorldInitializer {
         )
     }
 
-    // Derives 0-2 wants from the artist's dimension profile. Pure function — no RNG.
+    // Derives 0-2 wants from the artist's dimension profile. Pure function -- no RNG.
     // Rule: financial anxiety (low loyalty) surfaces first; career wants (confidence,
     // volatility) fill remaining slots up to a cap of 2.
     private fun buildArtistWants(d: ArtistDimensions): List<Want> {
@@ -132,55 +141,66 @@ object WorldInitializer {
         id = contractId,
         artistId = artistId,
         startDay = 0,
-        expiryDay = 180 + rng.nextInt(181),             // 6–12 months of ticks
-        revenueSplit = RevenueSplit(artistPercent = 40 + rng.nextInt(21)),  // 40–60%
+        expiryDay = 180 + rng.nextInt(181),             // 6-12 months of ticks
+        revenueSplit = RevenueSplit(artistPercent = 40 + rng.nextInt(21)),  // 40-60%
         creativeControl = CreativeControl.entries.random(rng)
     )
 
     private fun buildLabel(rosterIds: Set<String>, rng: Random): LabelState = LabelState(
         funds = rng.nextLong(50_000 * CENTS_PER_DOLLAR, 100_000 * CENTS_PER_DOLLAR),
         reputation = ReputationCommunity.entries.associateWith { 0.3f + rng.nextFloat() * 0.2f },
-        rosterIds = rosterIds
+        rosterIds = rosterIds,
+        tasteVector = GENRES.associateWith { 0.5f }
     )
 
     private fun buildMarket(rng: Random): MarketState = MarketState(
         genreTrends = GENRES.associateWith { rng.nextFloat() }
     )
 
-    private fun buildProspect(id: String, rng: Random): ProspectState = ProspectState(
-        id = id,
-        name = "${ADJECTIVES.random(rng)} ${NOUNS.random(rng)}",
-        genre = GENRES.random(rng),
-        dimensions = ArtistDimensions(
+    private fun buildProspect(id: String, rng: Random): ProspectState {
+        val name = "${ADJECTIVES.random(rng)} ${NOUNS.random(rng)}"
+        val genre = GENRES.random(rng)
+        val dims = ArtistDimensions(
             confidence = rng.nextFloat(),
             commercialAppetite = rng.nextFloat(),
             volatility = rng.nextFloat(),
             loyalty = rng.nextFloat()
-        ),
-        // 0.2–0.9: avoids trivially impossible or trivially easy negotiations.
-        signabilityScore = 0.2f + rng.nextFloat() * 0.7f
-    )
+        )
+        val signabilityScore = 0.2f + rng.nextFloat() * 0.7f  // 0.2-0.9: avoids trivially impossible or easy negotiations
+        val demo = DemoState(
+            descriptor = DEMO_DESCRIPTORS[genre]?.random(rng) ?: "$genre demo",
+            rawScore = 0.2f + rng.nextFloat() * 0.7f,
+            submittedDay = 0
+        )
+        return ProspectState(id = id, name = name, genre = genre, dimensions = dims,
+            signabilityScore = signabilityScore, demo = demo)
+    }
 
-    private fun buildUnsignableProspect(id: String, rng: Random): ProspectState = ProspectState(
-        id = id,
-        name = "${ADJECTIVES.random(rng)} ${NOUNS.random(rng)}",
-        genre = GENRES.random(rng),
-        dimensions = ArtistDimensions(
+    private fun buildUnsignableProspect(id: String, rng: Random): ProspectState {
+        val name = "${ADJECTIVES.random(rng)} ${NOUNS.random(rng)}"
+        val genre = GENRES.random(rng)
+        val dims = ArtistDimensions(
             confidence = 0.7f + rng.nextFloat() * 0.3f,
             commercialAppetite = rng.nextFloat() * 0.25f,  // low commercial appetite
-            volatility = rng.nextFloat() * 0.3f,           // steady — consistent in their refusal
+            volatility = rng.nextFloat() * 0.3f,           // steady -- consistent in their refusal
             loyalty = rng.nextFloat() * 0.3f
-        ),
-        signabilityScore = 0.90f + rng.nextFloat() * 0.10f, // scouts surface them constantly
-        signability = SignabilityType.UNSIGNABLE
-    )
+        )
+        val signabilityScore = 0.90f + rng.nextFloat() * 0.10f  // scouts surface them constantly
+        val demo = DemoState(
+            descriptor = DEMO_DESCRIPTORS[genre]?.random(rng) ?: "$genre demo",
+            rawScore = 0.2f + rng.nextFloat() * 0.7f,
+            submittedDay = 0
+        )
+        return ProspectState(id = id, name = name, genre = genre, dimensions = dims,
+            signabilityScore = signabilityScore, signability = SignabilityType.UNSIGNABLE, demo = demo)
+    }
 
     private fun buildRival(id: String, index: Int, rng: Random): RivalState {
-        val focusCount = 2 + rng.nextInt(2)  // 2–3 focus genres per rival
+        val focusCount = 2 + rng.nextInt(2)  // 2-3 focus genres per rival
         val focusGenres = (0 until focusCount).map { GENRES.random(rng) }.toSet()
         val genreWeights = GENRES.associateWith { genre ->
-            if (genre in focusGenres) 0.60f + rng.nextFloat() * 0.40f  // 0.60–1.00
-            else 0.05f + rng.nextFloat() * 0.25f                         // 0.05–0.30
+            if (genre in focusGenres) 0.60f + rng.nextFloat() * 0.40f  // 0.60-1.00
+            else 0.05f + rng.nextFloat() * 0.25f                         // 0.05-0.30
         }
         return RivalState(
             id = id,

@@ -86,6 +86,13 @@ sealed class SimEvent {
         override val dayOfGame: Int
     ) : SimEvent()
 
+    // A prospect tape was surfaced for the player to review in the tape deck.
+    // Not an inbox email -- resolved via TapeDeckScreen PURSUE/PASS/WATCH buttons.
+    data class LeadSurfaced(
+        val prospectId: String,
+        override val dayOfGame: Int
+    ) : SimEvent()
+
     // Rival poached a signed artist. Artist is already removed from world when this arrives.
     // artistName embedded because the world no longer contains the artist at render time.
     data class RivalPoach(

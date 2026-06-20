@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.github.maskedkunisquat.musicmanager.logic.ai.ModelLoadState
+import com.github.maskedkunisquat.musicmanager.logic.inbox.TapeDeckItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.SimRepository
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
@@ -27,6 +28,9 @@ class InboxViewModel(
     val world: StateFlow<SimWorld> = _world.asStateFlow()
 
     val inbox: StateFlow<List<InboxItem>> = repository.observeUnresolved()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val activeSurfacedLeads: StateFlow<List<TapeDeckItem>> = repository.observeActiveSurfacedLeads()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     // Keyed by event ID — populated asynchronously so real inference doesn't block composition.

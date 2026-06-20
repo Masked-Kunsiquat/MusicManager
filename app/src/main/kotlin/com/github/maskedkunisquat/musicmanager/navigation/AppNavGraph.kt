@@ -13,6 +13,7 @@ import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxScreen
 import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxViewModel
 import com.github.maskedkunisquat.musicmanager.ui.labeloffice.LabelOfficeScreen
 import com.github.maskedkunisquat.musicmanager.ui.press.PressScreen
+import com.github.maskedkunisquat.musicmanager.ui.tapedeck.TapeDeckScreen
 import com.github.maskedkunisquat.musicmanager.ui.press.PressViewModel
 
 object Route {
@@ -21,6 +22,7 @@ object Route {
     const val CHARTS = "charts"
     const val PRESS = "press"
     const val LABEL_OFFICE = "label_office"
+    const val TAPE_DECK = "tape_deck"
     const val EMAIL_DETAIL = "email/{eventId}"
     fun emailDetail(eventId: String) = "email/$eventId"
 }
@@ -37,8 +39,12 @@ fun AppNavGraph(
                 onOpenInbox = { navController.navigate(Route.INBOX) },
                 onOpenCharts = { navController.navigate(Route.CHARTS) },
                 onOpenPress = { navController.navigate(Route.PRESS) },
-                onOpenLabelOffice = { navController.navigate(Route.LABEL_OFFICE) }
+                onOpenLabelOffice = { navController.navigate(Route.LABEL_OFFICE) },
+                onOpenTapeDeck = { navController.navigate(Route.TAPE_DECK) }
             )
+        }
+        composable(Route.TAPE_DECK) {
+            TapeDeckScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
         }
         composable(Route.LABEL_OFFICE) {
             LabelOfficeScreen(viewModel = viewModel, onBack = { navController.popBackStack() })

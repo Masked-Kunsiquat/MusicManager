@@ -5,6 +5,7 @@ import com.github.maskedkunisquat.musicmanager.data.mapper.EVENT_TYPE_INTEL_DROP
 import com.github.maskedkunisquat.musicmanager.logic.ai.GeneratedEmail
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
+import com.github.maskedkunisquat.musicmanager.logic.inbox.TapeDeckItem
 import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
@@ -18,6 +19,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 
 fun EventLogEntity.toInboxItemOrNull(): InboxItem? {
+    if (eventType == "lead_surfaced") return null  // TapeDeck only -- not an inbox email
     val event = toSimEventOrNull() ?: return null
     val options = optionsJson?.let { json ->
         runCatching {
@@ -94,6 +96,10 @@ fun EventLogEntity.toSimEventOrNull(): SimEvent? = try {
             wasPlayerTarget = json["wasPlayerTarget"]!!.jsonPrimitive.content.toBoolean(),
             dayOfGame = dayOfGame
         )
+        "lead_surfaced" -> SimEvent.LeadSurfaced(
+            prospectId = json["prospectId"]!!.jsonPrimitive.content,
+            dayOfGame = dayOfGame
+        )
         "rival_poach" -> SimEvent.RivalPoach(
             rivalId = json["rivalId"]!!.jsonPrimitive.content,
             rivalName = json["rivalName"]!!.jsonPrimitive.content,
@@ -105,4 +111,14 @@ fun EventLogEntity.toSimEventOrNull(): SimEvent? = try {
     }
 } catch (_: Exception) {
     null // corrupt entity — skip rather than crash
+}
+
+fun EventLogEntity.toTapeDeckItemOrNull(): TapeDeckItem? {
+    if (eventType != "lead_surfaced") return null
+    val json = runCatching { worldJson.parseToJsonElement(payload).jsonObject }.getOrNull() ?: return null
+    val prospectId = json["prospectId"]?.jsonPrimitive?.content ?: return null
+    val options = optionsJson?.let { raw ->
+        runCatching { worldJson.decodeFromString(ListSerializer(ResponseOption.serializer()), raw) }.getOrNull()
+    } ?: emptyList()
+    return TapeDeckItem(id = id, prospectId = prospectId, dayOfGame = dayOfGame, options = options)
 }

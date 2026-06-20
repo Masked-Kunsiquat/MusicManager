@@ -3,11 +3,13 @@ package com.github.maskedkunisquat.musicmanager.data.repository
 import com.github.maskedkunisquat.musicmanager.data.dao.EventLogDao
 import com.github.maskedkunisquat.musicmanager.data.mapper.eventSignature
 import com.github.maskedkunisquat.musicmanager.data.mapper.toInboxItemOrNull
+import com.github.maskedkunisquat.musicmanager.data.mapper.toTapeDeckItemOrNull
 import com.github.maskedkunisquat.musicmanager.data.mapper.toResponseEntity
 import com.github.maskedkunisquat.musicmanager.data.mapper.toSimEventOrNull
 import com.github.maskedkunisquat.musicmanager.data.mapper.toEntity
 import com.github.maskedkunisquat.musicmanager.logic.ai.LabelAiProvider
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
+import com.github.maskedkunisquat.musicmanager.logic.inbox.TapeDeckItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.SimRepository
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
@@ -37,6 +39,9 @@ class SimRepositoryImpl(
 
     override fun observeUnresolved(): Flow<List<InboxItem>> =
         dao.observeUnresolved().map { entities -> entities.mapNotNull { it.toInboxItemOrNull() } }
+
+    override fun observeActiveSurfacedLeads(): Flow<List<TapeDeckItem>> =
+        dao.observeActiveSurfacedLeads().map { entities -> entities.mapNotNull { it.toTapeDeckItemOrNull() } }
 
     override suspend fun generateOptions(item: InboxItem): List<ResponseOption> {
         if (item.email.options.isNotEmpty()) return item.email.options

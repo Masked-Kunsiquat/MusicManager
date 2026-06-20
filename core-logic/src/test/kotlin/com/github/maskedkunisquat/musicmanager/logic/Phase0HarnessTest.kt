@@ -1,6 +1,7 @@
 package com.github.maskedkunisquat.musicmanager.logic
 
 import com.github.maskedkunisquat.musicmanager.logic.ai.StubAiProvider
+import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.sim.SimEngine
 import com.github.maskedkunisquat.musicmanager.logic.sim.WorldInitializer
 import kotlinx.coroutines.runBlocking
@@ -21,6 +22,8 @@ class Phase0HarnessTest {
         assertTrue("No events generated in 60 ticks — needs decay math may be broken", events.isNotEmpty())
 
         for (event in events) {
+            // LeadSurfaced goes to TapeDeckScreen, not the inbox — no subject/body expected.
+            if (event is SimEvent.LeadSurfaced) continue
             val email = runBlocking { ai.generateEmail(event, finalWorld) }
             assertTrue(
                 "Event ${event::class.simpleName} produced ${email.options.size} option(s), expected ≥ 2",

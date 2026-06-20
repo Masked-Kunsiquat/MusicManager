@@ -97,4 +97,14 @@ sealed class StateEffect {
         val artistId: String,
         val wantType: WantType
     ) : StateEffect()
+
+    // Tape deck responses — move a surfaced lead into a negotiation, cooldown, or watch state.
+    @Serializable @SerialName("pursue_lead")
+    data class PursueLead(val prospectId: String) : StateEffect()
+
+    @Serializable @SerialName("pass_lead")
+    data class PassLead(val prospectId: String) : StateEffect()
+
+    @Serializable @SerialName("watch_lead")
+    data class WatchLead(val prospectId: String) : StateEffect()
 }

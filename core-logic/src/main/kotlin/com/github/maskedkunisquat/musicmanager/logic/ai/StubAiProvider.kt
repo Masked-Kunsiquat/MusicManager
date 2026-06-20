@@ -79,6 +79,7 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.LabelNeedUrgent -> labelNeedUrgentProse(event)
         is SimEvent.CapabilityUnlockable -> capabilityUnlockableProse(event)
         is SimEvent.RivalSigning -> rivalSigningProse(event)
+        is SimEvent.LeadSurfaced -> Pair("", "")  // TapeDeck only -- no email rendered
         is SimEvent.RivalPoach -> rivalPoachProse(event)
     }
 
@@ -204,6 +205,7 @@ class StubAiProvider : LabelAiProvider {
             is SimEvent.LabelNeedUrgent -> labelNeedUrgentOptions(event, world)
             is SimEvent.CapabilityUnlockable -> capabilityUnlockableOptions(event)
             is SimEvent.RivalSigning -> rivalSigningOptions(event)
+            is SimEvent.LeadSurfaced -> leadSurfacedOptions(event)
             is SimEvent.RivalPoach -> rivalPoachOptions(event)
         }
         return prioritize(raw, artist)
@@ -825,7 +827,25 @@ class StubAiProvider : LabelAiProvider {
         "The remaining roster has noticed. Decide how you respond to the room."
     )
 
-    private fun rivalPoachOptions(event: SimEvent.RivalPoach): List<ResponseOption> = listOf(
+    private fun leadSurfacedOptions(event: SimEvent.LeadSurfaced): List<ResponseOption> = listOf(
+        option(
+            id = "lead:${event.prospectId}:pursue",
+            text = "Pursue",
+            effects = listOf(StateEffect.PursueLead(event.prospectId))
+        ),
+        option(
+            id = "lead:${event.prospectId}:pass",
+            text = "Pass",
+            effects = listOf(StateEffect.PassLead(event.prospectId))
+        ),
+        option(
+            id = "lead:${event.prospectId}:watch",
+            text = "Watch",
+            effects = listOf(StateEffect.WatchLead(event.prospectId))
+        )
+    )
+
+        private fun rivalPoachOptions(event: SimEvent.RivalPoach): List<ResponseOption> = listOf(
         option("rival:poach:${event.rivalId}:accept",
             "Let them go — focus forward",
             emptyList()),

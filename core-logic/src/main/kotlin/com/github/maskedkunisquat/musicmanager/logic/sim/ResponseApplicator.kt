@@ -221,6 +221,51 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): Pair<SimWorld, Li
                 ))
             ), noEvents)
         }
+        is StateEffect.PursueLead -> {
+            val prospect = world.prospects[effect.prospectId] ?: return Pair(world, noEvents)
+            if (effect.prospectId in world.unavailableProspects) return Pair(world, noEvents)
+            val genre = prospect.genre
+            val weight = (world.label.tasteVector[genre] ?: 0.5f)
+            val newWorld1 = world.copy(
+                label = world.label.copy(
+                    tasteVector = world.label.tasteVector + (genre to (weight + 0.05f).coerceIn(0f, 1f))
+                ),
+                surfacedLeads = world.surfacedLeads - effect.prospectId
+            )
+            val nextRound = (newWorld1.activeNegotiations[effect.prospectId] ?: 0) + 1
+            val newWorld2 = newWorld1.copy(
+                activeNegotiations = newWorld1.activeNegotiations + (effect.prospectId to nextRound)
+            )
+            val event = SimEvent.NegotiationRound(
+                prospectId = effect.prospectId, round = nextRound, dayOfGame = world.currentDay
+            )
+            Pair(newWorld2, listOf(event))
+        }
+        is StateEffect.PassLead -> {
+            val prospect = world.prospects[effect.prospectId] ?: return Pair(world, noEvents)
+            val genre = prospect.genre
+            val weight = (world.label.tasteVector[genre] ?: 0.5f)
+            Pair(world.copy(
+                label = world.label.copy(
+                    tasteVector = world.label.tasteVector + (genre to (weight - 0.03f).coerceIn(0f, 1f))
+                ),
+                passedLeads = world.passedLeads + (effect.prospectId to world.currentDay),
+                surfacedLeads = world.surfacedLeads - effect.prospectId
+            ), noEvents)
+        }
+        is StateEffect.WatchLead -> {
+            val prospect = world.prospects[effect.prospectId] ?: return Pair(world, noEvents)
+            val driftRaw = (prospect.id.hashCode().toLong() * world.currentDay) and 0xFF
+            val drift = driftRaw.toFloat() / 255f * 0.10f - 0.05f  // [-0.05, +0.05]
+            val newScore = (prospect.demo.rawScore + drift).coerceIn(0f, 1f)
+            Pair(world.copy(
+                prospects = world.prospects + (effect.prospectId to prospect.copy(
+                    demo = prospect.demo.copy(rawScore = newScore)
+                )),
+                watchedLeads = world.watchedLeads + (effect.prospectId to world.currentDay),
+                surfacedLeads = world.surfacedLeads - effect.prospectId
+            ), noEvents)
+        }
         is StateEffect.RenewalWalked -> {
             // Guard: only penalize if a renewal was actually in progress.
             if (effect.artistId !in world.activeRenewals) return Pair(world, noEvents)
