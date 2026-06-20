@@ -129,6 +129,11 @@ fun ResponseOption.toResponseEntity(originalEventId: String, dayOfGame: Int): Ev
                             put("type", "renewal_walked")
                             put("artistId", effect.artistId)
                         }
+                        is StateEffect.WantSatisfied -> {
+                            put("type", "want_satisfied")
+                            put("artistId", effect.artistId)
+                            put("wantType", effect.wantType.name)
+                        }
                     }
                 })
             }

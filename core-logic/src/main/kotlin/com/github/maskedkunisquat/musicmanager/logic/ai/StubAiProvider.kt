@@ -565,10 +565,10 @@ class StubAiProvider : LabelAiProvider {
     }
 
     private fun capabilityUnlockableOptions(event: SimEvent.CapabilityUnlockable): List<ResponseOption> {
-        val (name) = when (event.type) {
-            CapabilityType.PUBLICIST -> "in-house PR" to ""
-            CapabilityType.IN_HOUSE_BOOKING -> "in-house booking" to ""
-            CapabilityType.VIDEO_PRODUCTION -> "in-house video production" to ""
+        val name = when (event.type) {
+            CapabilityType.PUBLICIST -> "in-house PR"
+            CapabilityType.IN_HOUSE_BOOKING -> "in-house booking"
+            CapabilityType.VIDEO_PRODUCTION -> "in-house video production"
         }
         return listOf(
             option("cap:${event.type.name}:unlock",

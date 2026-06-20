@@ -27,7 +27,8 @@ object LabelNeedEvaluator {
 
     fun genreDiversity(world: SimWorld): Float {
         val artists = world.artists.values
-        if (artists.isEmpty()) return 1.0f
+        // Can't assess diversity with fewer than 2 artists — a 1-artist label is not "concentrated".
+        if (artists.size < 2) return 1.0f
         val distinctGenres = artists.map { it.genre }.toSet().size
         val denominator = maxOf(4, artists.size)
         return distinctGenres.toFloat() / denominator
