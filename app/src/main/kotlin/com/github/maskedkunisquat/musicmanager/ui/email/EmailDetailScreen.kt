@@ -86,6 +86,12 @@ fun EmailDetailScreen(
         is SimEvent.NegotiationRound -> world.prospects[e.prospectId]?.name ?: "prospect"
         else -> world.artists[e.artistId]?.name ?: e.artistId.orEmpty()
     }
+    val eventArtistId: String? = when (val e = item.event) {
+        is SimEvent.NeedUrgent -> e.artistId
+        is SimEvent.ContractExpiring -> e.artistId
+        is SimEvent.WantSurfaced -> e.artistId
+        else -> null
+    }
     val options = allOptions[item.id]
 
     var pickerFor by remember { mutableStateOf<ResponseOption?>(null) }
@@ -167,7 +173,7 @@ fun EmailDetailScreen(
 
         if (pickerFor != null) {
             PartnerPicker(
-                artists = world.artists,
+                artists = world.artists.filter { it.key != eventArtistId },
                 onPick = { artistId ->
                     val final = pickerFor!!.withPartner(artistId)
                     viewModel.resolveEvent(eventId, final)
