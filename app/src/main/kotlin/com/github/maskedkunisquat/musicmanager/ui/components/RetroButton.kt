@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -96,7 +97,7 @@ fun RetroButton(
         else     -> primary
     }
 
-    val segmentCache = remember { arrayOfNulls<Pair<Size, List<Segment>>>(1) }
+    val segmentCache = remember { object { var key = Size.Zero; var segments = emptyList<Segment>() } }
 
     CompositionLocalProvider(LocalContentColor provides contentColor) {
         Box(
@@ -105,11 +106,13 @@ fun RetroButton(
                 .drawBehind {
                     val px = PIXEL_SIZE.toPx()
                     if (filled && enabled) drawPixelFill(primary, px, CORNER_SIZE)
-                    val cached = segmentCache[0]
-                    val segments = if (cached != null && cached.first == size) {
-                        cached.second
+                    val segments = if (segmentCache.key == size) {
+                        segmentCache.segments
                     } else {
-                        buildBorderSegments(size, px, CORNER_SIZE).also { segmentCache[0] = size to it }
+                        buildBorderSegments(size, px, CORNER_SIZE).also {
+                            segmentCache.key = size
+                            segmentCache.segments = it
+                        }
                     }
                     drawSegments(segments, borderColor)
                 }
