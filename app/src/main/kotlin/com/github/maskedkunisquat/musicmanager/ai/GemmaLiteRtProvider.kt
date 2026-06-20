@@ -234,6 +234,7 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
                 val want = event.wantType.name.lowercase(Locale.ROOT).replace('_', ' ')
                 append("Write an email to your label manager about your desire to $want.\n\n")
             }
+            else -> Unit
         }
 
         append("Provide exactly $optionCount options.\n\n")

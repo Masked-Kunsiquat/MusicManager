@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.github.maskedkunisquat.musicmanager.R
 
 private val LabelGold = Color(0xFFC8A97C)
@@ -44,23 +45,24 @@ private val RetroShapes = Shapes(
 
 private val mono = FontFamily(Font(R.font.nokia_cellphone))
 
+// Font must be used at 8sp or exact multiples (16, 24, 32) — bitmap-emulating, no antialias.
 private val RetroTypography = Typography().run {
     copy(
-        displayLarge = displayLarge.copy(fontFamily = mono),
-        displayMedium = displayMedium.copy(fontFamily = mono),
-        displaySmall = displaySmall.copy(fontFamily = mono),
-        headlineLarge = headlineLarge.copy(fontFamily = mono),
-        headlineMedium = headlineMedium.copy(fontFamily = mono),
-        headlineSmall = headlineSmall.copy(fontFamily = mono),
-        titleLarge = titleLarge.copy(fontFamily = mono),
-        titleMedium = titleMedium.copy(fontFamily = mono),
-        titleSmall = titleSmall.copy(fontFamily = mono),
-        bodyLarge = bodyLarge.copy(fontFamily = mono),
-        bodyMedium = bodyMedium.copy(fontFamily = mono),
-        bodySmall = bodySmall.copy(fontFamily = mono),
-        labelLarge = labelLarge.copy(fontFamily = mono),
-        labelMedium = labelMedium.copy(fontFamily = mono),
-        labelSmall = labelSmall.copy(fontFamily = mono),
+        displayLarge  = displayLarge.copy(fontFamily = mono, fontSize = 32.sp),
+        displayMedium = displayMedium.copy(fontFamily = mono, fontSize = 32.sp),
+        displaySmall  = displaySmall.copy(fontFamily = mono, fontSize = 32.sp),
+        headlineLarge  = headlineLarge.copy(fontFamily = mono, fontSize = 32.sp),
+        headlineMedium = headlineMedium.copy(fontFamily = mono, fontSize = 24.sp),
+        headlineSmall  = headlineSmall.copy(fontFamily = mono, fontSize = 24.sp),
+        titleLarge  = titleLarge.copy(fontFamily = mono, fontSize = 24.sp),
+        titleMedium = titleMedium.copy(fontFamily = mono, fontSize = 16.sp),
+        titleSmall  = titleSmall.copy(fontFamily = mono, fontSize = 16.sp),
+        bodyLarge  = bodyLarge.copy(fontFamily = mono, fontSize = 16.sp),
+        bodyMedium = bodyMedium.copy(fontFamily = mono, fontSize = 16.sp),
+        bodySmall  = bodySmall.copy(fontFamily = mono, fontSize = 8.sp),
+        labelLarge  = labelLarge.copy(fontFamily = mono, fontSize = 16.sp),
+        labelMedium = labelMedium.copy(fontFamily = mono, fontSize = 16.sp),
+        labelSmall  = labelSmall.copy(fontFamily = mono, fontSize = 8.sp),
     )
 }
 
