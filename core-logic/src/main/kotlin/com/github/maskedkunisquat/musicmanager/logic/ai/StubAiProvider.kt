@@ -223,14 +223,14 @@ class StubAiProvider : LabelAiProvider {
                     cost = 150 * CENTS)
             )
             NeedType.BELONGING -> {
-                val partner = world.artists.keys.sorted().firstOrNull { it != a }
+                val hasPartner = world.artists.keys.any { it != a }
                 listOf(
                     option("$a:belong_dinner", "Host a label family dinner this week",
                         listOf(RNC(NeedType.BELONGING, +0.40f), RC(a, +0.15f))),
                     option("$a:belong_collab",
-                        if (partner != null) "Set up a session between ${world.artists[a]?.name ?: a} and ${world.artists[partner]?.name ?: partner}"
+                        if (hasPartner) "Set up a studio session with a roster artist"
                         else "Arrange a creative session for ${world.artists[a]?.name ?: a}",
-                        if (partner != null) listOf(PNC(partner, NeedType.BELONGING, +0.35f), NC(a, NeedType.BELONGING, +0.35f), NC(a, NeedType.CREATIVE_FULFILLMENT, +0.10f), RC(a, +0.10f))
+                        if (hasPartner) listOf(PNC("", NeedType.BELONGING, +0.35f), NC(a, NeedType.BELONGING, +0.35f), NC(a, NeedType.CREATIVE_FULFILLMENT, +0.10f), RC(a, +0.10f))
                         else listOf(NC(a, NeedType.BELONGING, +0.35f), NC(a, NeedType.CREATIVE_FULFILLMENT, +0.10f))),
                     option("$a:belong_checkin", "Send a personal check-in and schedule a call",
                         listOf(NC(a, NeedType.BELONGING, +0.15f), RC(a, +0.05f)))
