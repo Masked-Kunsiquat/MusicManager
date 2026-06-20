@@ -3,6 +3,7 @@ package com.github.maskedkunisquat.musicmanager.data.repository
 import com.github.maskedkunisquat.musicmanager.data.dao.EventLogDao
 import com.github.maskedkunisquat.musicmanager.data.mapper.eventSignature
 import com.github.maskedkunisquat.musicmanager.data.mapper.toInboxItemOrNull
+import com.github.maskedkunisquat.musicmanager.data.mapper.toRelationshipDeltas
 import com.github.maskedkunisquat.musicmanager.data.mapper.toTapeDeckItemOrNull
 import com.github.maskedkunisquat.musicmanager.data.mapper.toResponseEntity
 import com.github.maskedkunisquat.musicmanager.data.mapper.toSimEventOrNull
@@ -74,7 +75,29 @@ class SimRepositoryImpl(
 
     override suspend fun tick() = tickMutex.withLock { tickUnderLock() }
 
+    // Re-derives ArtistState.relationshipBalance from the event log and corrects any divergence.
+    // No-op when the world snapshot is current; only corrects pre-3-D saves where the field
+    // defaulted to 0f despite accumulated RelationshipChange and WantSatisfied effects.
+    private suspend fun reconcileRelationshipBalancesUnderLock() {
+        val derived = mutableMapOf<String, Float>()
+        for (entity in dao.getResponseEntities()) {
+            entity.toRelationshipDeltas().forEach { (id, delta) ->
+                derived[id] = (derived[id] ?: 0f) + delta
+            }
+        }
+        val corrections = world.artists.entries.mapNotNull { (id, artist) ->
+            val expected = derived[id] ?: 0f
+            if (expected != artist.relationshipBalance) id to artist.copy(relationshipBalance = expected)
+            else null
+        }.toMap()
+        if (corrections.isNotEmpty()) {
+            world = world.copy(artists = world.artists + corrections)
+            withContext(Dispatchers.IO) { saveWorld(world) }
+        }
+    }
+
     override suspend fun initializeIfEmpty(days: Int) = tickMutex.withLock {
+        reconcileRelationshipBalancesUnderLock()
         if (dao.getAll().isEmpty()) {
             // Tick until we have at least `days` inbox events, capped at 90 ticks to prevent
             // infinite loops on pathological seeds. `days` here means target event count.

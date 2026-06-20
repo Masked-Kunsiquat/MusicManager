@@ -26,6 +26,9 @@ abstract class EventLogDao {
     @Query("SELECT * FROM event_log WHERE selectedOptionId IS NULL")
     abstract suspend fun getUnresolved(): List<EventLogEntity>
 
+    @Query("SELECT * FROM event_log WHERE eventType = 'response_applied'")
+    abstract suspend fun getResponseEntities(): List<EventLogEntity>
+
     @Query("SELECT * FROM event_log WHERE eventType = :eventType ORDER BY dayOfGame DESC, recordedAt DESC")
     abstract fun observeByType(eventType: String): Flow<List<EventLogEntity>>
 

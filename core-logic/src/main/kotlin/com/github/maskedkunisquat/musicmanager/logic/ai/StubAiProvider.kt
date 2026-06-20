@@ -66,7 +66,7 @@ class StubAiProvider : LabelAiProvider {
         world: SimWorld
     ): Pair<String, String> = when (event) {
         is SimEvent.NeedUrgent ->
-            needUrgentProse(event.needType, event.currentValue, name, loyalty, confidence, volatility)
+            needUrgentProse(event.needType, event.currentValue, name, loyalty, confidence, volatility, event.artistId)
         is SimEvent.ContractExpiring ->
             contractExpiringProse(name, event.daysRemaining, loyalty, confidence)
         is SimEvent.WantSurfaced ->
@@ -89,47 +89,62 @@ class StubAiProvider : LabelAiProvider {
         name: String,
         loyalty: Float,
         confidence: Float,
-        volatility: Float
+        volatility: Float,
+        artistId: String
     ): Pair<String, String> {
         val h = hedge(confidence)
         val u = urgencyPrefix(currentValue, volatility)
         val s = signing(name, loyalty)
+        val subject = needUrgentSubject(needType, artistId)
         return when (needType) {
             NeedType.CREATIVE_FULFILLMENT -> Pair(
-                "creative direction — can we talk?",
+                subject,
                 "${h}${u}Hey — I don't want to make this weird but I need to be honest. I've been going " +
                 "through the motions lately and it's starting to show in the demos. I need to make " +
                 "something I actually care about. Can we block off some proper creative time — no " +
                 "brief, no deadline, just space to work? I think it'll pay off.$s"
             )
             NeedType.FINANCIAL_SECURITY -> Pair(
-                "royalties / advance — overdue conversation",
+                subject,
                 "${h}${u}My manager's been on me to bring this up and I keep putting it off because it's " +
                 "awkward, but here we are. The current setup isn't sustainable for me. Between releases " +
                 "I'm covering basics out of my own pocket and it's stressing me out in ways that " +
                 "affect the work. Can we look at the numbers together?$s"
             )
             NeedType.RECOGNITION -> Pair(
-                "feeling invisible lately",
+                subject,
                 "${h}${u}It's starting to feel like we're doing good work in a room with no windows. " +
                 "Other artists — on smaller labels, with less — are getting write-ups, festival slots, " +
                 "interviews. What's the strategy here? I just need to understand the plan.$s"
             )
             NeedType.BELONGING -> Pair(
-                "honest question",
+                subject,
                 "${h}${u}Is everything okay between us? I might be overthinking it but there's been a " +
                 "distance lately that I can't quite name. I see the label posting about other artists " +
                 "and the energy in the room when we meet feels different. I'm not going anywhere — " +
                 "I just want to make sure we're still on the same page.$s"
             )
             NeedType.AUTONOMY -> Pair(
-                "re: next single",
+                subject,
                 "${h}${u}The last three decisions on this album have gone the label's way and I've been " +
                 "okay with that — but this one feels different. I have a specific vision for the next " +
                 "single and I need it to be mine. Not a fight, not a power move — I just need one " +
                 "real win creatively. Can we talk?$s"
             )
         }
+    }
+
+    // Rotates subject templates by artistId hash for variety within a need type.
+    // ushr 1 drops the sign bit so the result is always non-negative.
+    private fun needUrgentSubject(needType: NeedType, artistId: String): String {
+        val templates = when (needType) {
+            NeedType.CREATIVE_FULFILLMENT -> CREATIVE_SUBJECTS
+            NeedType.FINANCIAL_SECURITY   -> FINANCIAL_SUBJECTS
+            NeedType.RECOGNITION          -> RECOGNITION_SUBJECTS
+            NeedType.BELONGING            -> BELONGING_SUBJECTS
+            NeedType.AUTONOMY             -> AUTONOMY_SUBJECTS
+        }
+        return templates[(artistId.hashCode() ushr 1) % templates.size]
     }
 
     private fun contractExpiringProse(
@@ -140,13 +155,26 @@ class StubAiProvider : LabelAiProvider {
     ): Pair<String, String> {
         val h = hedge(confidence)
         val s = signing(name, loyalty)
-        return Pair(
-            "re: contract renewal",
-            "${h}My manager flagged that we're coming up on the window — about $daysRemaining days out. " +
-            "I wanted to reach out directly before it gets too formal. I'm not in panic mode but I'm " +
-            "also not going to pretend I don't have other conversations in my back pocket. If we're " +
-            "doing this, let's figure it out soon.$s"
-        )
+        return when {
+            daysRemaining <= CONTRACT_TIER_URGENT -> Pair(
+                "contract — decision time",
+                "${h}$daysRemaining days. I need an answer, not a check-in. I've respected the process " +
+                "but I won't leave this open indefinitely. What are you offering?$s"
+            )
+            daysRemaining <= CONTRACT_TIER_WARN -> Pair(
+                "contract window — getting close",
+                "${h}$daysRemaining days left and I can't keep this in a holding pattern. I've been " +
+                "patient but I need to know where we stand. I'm not looking for a perfect deal — I'm " +
+                "looking for a real one. Can we have the actual conversation?$s"
+            )
+            else -> Pair(
+                "re: contract renewal",
+                "${h}My manager flagged that we're coming up on the window — about $daysRemaining days out. " +
+                "I wanted to reach out directly before it gets too formal. I'm not in panic mode but I'm " +
+                "also not going to pretend I don't have other conversations in my back pocket. If we're " +
+                "doing this, let's figure it out soon.$s"
+            )
+        }
     }
 
     // Phase 1: wants are populated from artist archetypes; this path is unreachable until then.
@@ -878,5 +906,33 @@ class StubAiProvider : LabelAiProvider {
 
     companion object {
         private const val CENTS = 100L
+        private const val CONTRACT_TIER_URGENT = 7
+        private const val CONTRACT_TIER_WARN = 15
+
+        private val CREATIVE_SUBJECTS = listOf(
+            "creative direction — can we talk?",
+            "I need to make something real",
+            "re: where my head is creatively"
+        )
+        private val FINANCIAL_SUBJECTS = listOf(
+            "royalties / advance — overdue conversation",
+            "the financial picture needs a conversation",
+            "re: money and what comes next"
+        )
+        private val RECOGNITION_SUBJECTS = listOf(
+            "feeling invisible lately",
+            "what's the strategy for visibility?",
+            "re: press and profile"
+        )
+        private val BELONGING_SUBJECTS = listOf(
+            "honest question",
+            "checking in — is everything okay?",
+            "something feels off, can we talk?"
+        )
+        private val AUTONOMY_SUBJECTS = listOf(
+            "re: next single",
+            "I need this one to be mine",
+            "creative control — a real conversation"
+        )
     }
 }

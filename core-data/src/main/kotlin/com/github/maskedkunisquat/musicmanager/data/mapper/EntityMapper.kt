@@ -14,6 +14,7 @@ import com.github.maskedkunisquat.musicmanager.data.db.worldJson
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
@@ -111,6 +112,30 @@ fun EventLogEntity.toSimEventOrNull(): SimEvent? = try {
     }
 } catch (_: Exception) {
     null // corrupt entity — skip rather than crash
+}
+
+// Sums RelationshipChange deltas and WantSatisfied bonuses (+0.15f each) per artist from a
+// response_applied entity. Used to re-derive ArtistState.relationshipBalance on world load.
+fun EventLogEntity.toRelationshipDeltas(): Map<String, Float> {
+    if (eventType != "response_applied") return emptyMap()
+    val result = mutableMapOf<String, Float>()
+    runCatching {
+        val effects = worldJson.parseToJsonElement(payload).jsonObject["effects"]?.jsonArray
+            ?: return@runCatching
+        for (e in effects) {
+            val obj = e.jsonObject
+            val type = obj["type"]?.jsonPrimitive?.content ?: continue
+            val artistId = obj["artistId"]?.jsonPrimitive?.content ?: continue
+            when (type) {
+                "relationship_change" -> {
+                    val delta = obj["delta"]?.jsonPrimitive?.content?.toFloatOrNull() ?: continue
+                    result[artistId] = (result[artistId] ?: 0f) + delta
+                }
+                "want_satisfied" -> result[artistId] = (result[artistId] ?: 0f) + 0.15f
+            }
+        }
+    }
+    return result
 }
 
 fun EventLogEntity.toTapeDeckItemOrNull(): TapeDeckItem? {
