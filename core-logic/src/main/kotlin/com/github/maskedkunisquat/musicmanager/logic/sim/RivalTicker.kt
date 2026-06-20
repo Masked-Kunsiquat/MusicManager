@@ -8,163 +8,153 @@ import com.github.maskedkunisquat.musicmanager.logic.model.RivalState
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import kotlin.random.Random
 
-internal const val RIVAL_PROSPECT_THRESHOLD = 10  // ticks to sign a prospect
-internal const val RIVAL_POACH_THRESHOLD = 8       // ticks to poach a signed artist
+internal const val RIVAL_PROSPECT_THRESHOLD = 10
+internal const val RIVAL_POACH_THRESHOLD = 8
 private const val PRESS_REP_PENALTY = -0.03f
 
-// Stateful per-session: counters reset on world reload (rivals restart their clock).
-// rivalProgress and poachProgress state is held here, not on SimWorld, per design.
-internal class RivalTicker {
+// Pure function — all counter state lives on SimWorld so it survives session restarts.
+internal fun tickRivals(world: SimWorld, rng: Random): Pair<SimWorld, List<SimEvent>> {
+    if (world.rivals.isEmpty()) return world to emptyList()
+    var current = world
+    val events = mutableListOf<SimEvent>()
+    for ((rivalId, rival) in world.rivals) {
+        val (w1, e1) = processProspectPursuit(rivalId, rival, current, rng)
+        current = w1; events += e1
+        val (w2, e2) = processPoachPursuit(rivalId, rival, current)
+        current = w2; events += e2
+    }
+    return current to events
+}
 
-    // rivalId → prospectId currently being pursued
-    private val prospectTargets = mutableMapOf<String, String>()
-    private val prospectCounters = mutableMapOf<String, Int>()
+// --- Prospect pursuit ---
 
-    // rivalId → artistId currently being poached
-    private val poachTargets = mutableMapOf<String, String>()
-    private val poachCounters = mutableMapOf<String, Int>()
-
-    fun tick(world: SimWorld, rng: Random): Pair<SimWorld, List<SimEvent>> {
-        if (world.rivals.isEmpty()) return world to emptyList()
-        var current = world
-        val events = mutableListOf<SimEvent>()
-        for ((rivalId, rival) in world.rivals) {
-            val (w1, e1) = processProspectPursuit(rivalId, rival, current, rng)
-            current = w1; events += e1
-            val (w2, e2) = processPoachPursuit(rivalId, rival, current)
-            current = w2; events += e2
-        }
-        return current to events
+private fun processProspectPursuit(
+    rivalId: String,
+    rival: RivalState,
+    world: SimWorld,
+    rng: Random
+): Pair<SimWorld, List<SimEvent>> {
+    val world1 = invalidateProspectTargetIfGone(rivalId, world)
+    val targetId = world1.rivalProspectTargets[rivalId] ?: run {
+        val target = pickProspect(rival, world1, rng) ?: return world1 to emptyList()
+        return processProspectPursuit(rivalId, rival,
+            world1.copy(
+                rivalProspectTargets = world1.rivalProspectTargets + (rivalId to target.id),
+                rivalProspectCounters = world1.rivalProspectCounters + (rivalId to 0)
+            ), rng)
     }
 
-    // --- Prospect pursuit ---
+    val counter = (world1.rivalProspectCounters[rivalId] ?: 0) + 1
+    val world2 = world1.copy(rivalProspectCounters = world1.rivalProspectCounters + (rivalId to counter))
 
-    private fun processProspectPursuit(
-        rivalId: String,
-        rival: RivalState,
-        world: SimWorld,
-        rng: Random
-    ): Pair<SimWorld, List<SimEvent>> {
-        invalidateProspectTargetIfGone(rivalId, world)
-        if (rivalId !in prospectTargets) {
-            val target = pickProspect(rival, world, rng) ?: return world to emptyList()
-            prospectTargets[rivalId] = target.id
-            prospectCounters[rivalId] = 0
-        }
-        val targetId = prospectTargets[rivalId]!!
-        val counter = (prospectCounters[rivalId] ?: 0) + 1
-        prospectCounters[rivalId] = counter
+    if (counter < RIVAL_PROSPECT_THRESHOLD) return world2 to emptyList()
 
-        if (counter < RIVAL_PROSPECT_THRESHOLD) return world to emptyList()
-
-        val prospect = world.prospects[targetId] ?: run {
-            clearProspectTarget(rivalId); return world to emptyList()
-        }
-        val wasPlayerTarget = targetId in world.activeNegotiations
-        val updatedWorld = world.copy(
-            prospects = world.prospects - targetId,
-            label = world.label.copy(reputation = penalizePress(world))
+    val prospect = world2.prospects[targetId] ?: return world2.clearProspectTarget(rivalId) to emptyList()
+    val wasPlayerTarget = targetId in world2.activeNegotiations
+    val world3 = world2.clearProspectTarget(rivalId).copy(
+        prospects = world2.prospects - targetId,
+        label = world2.label.copy(reputation = penalizePress(world2))
+    )
+    return world3 to listOf(
+        SimEvent.RivalSigning(
+            rivalId = rivalId,
+            rivalName = rival.name,
+            prospectName = prospect.name,
+            genre = prospect.genre,
+            wasPlayerTarget = wasPlayerTarget,
+            dayOfGame = world2.currentDay
         )
-        clearProspectTarget(rivalId)
-        return updatedWorld to listOf(
-            SimEvent.RivalSigning(
-                rivalId = rivalId,
-                rivalName = rival.name,
-                prospectName = prospect.name,
-                genre = prospect.genre,
-                wasPlayerTarget = wasPlayerTarget,
-                dayOfGame = world.currentDay
-            )
+    )
+}
+
+private fun invalidateProspectTargetIfGone(rivalId: String, world: SimWorld): SimWorld {
+    val t = world.rivalProspectTargets[rivalId] ?: return world
+    return if (t !in world.prospects || t in world.unavailableProspects) world.clearProspectTarget(rivalId) else world
+}
+
+private fun SimWorld.clearProspectTarget(rivalId: String) = copy(
+    rivalProspectTargets = rivalProspectTargets - rivalId,
+    rivalProspectCounters = rivalProspectCounters - rivalId
+)
+
+private fun pickProspect(rival: RivalState, world: SimWorld, rng: Random): ProspectState? {
+    val available = world.prospects.values.filter { it.id !in world.unavailableProspects }
+    if (available.isEmpty()) return null
+    return available.maxByOrNull { p ->
+        val w = rival.genreWeights[p.genre] ?: 0.1f
+        p.signabilityScore * w + rng.nextFloat() * 0.05f
+    }
+}
+
+// --- Poach pursuit ---
+
+private fun processPoachPursuit(
+    rivalId: String,
+    rival: RivalState,
+    world: SimWorld
+): Pair<SimWorld, List<SimEvent>> {
+    val world1 = invalidatePoachTargetIfGone(rivalId, world)
+    val targetId = world1.rivalPoachTargets[rivalId] ?: run {
+        val target = pickPoachTarget(rival, world1) ?: return world1 to emptyList()
+        return processPoachPursuit(rivalId, rival,
+            world1.copy(
+                rivalPoachTargets = world1.rivalPoachTargets + (rivalId to target.id),
+                rivalPoachCounters = world1.rivalPoachCounters + (rivalId to 0)
+            ))
+    }
+
+    val artist = world1.artists[targetId] ?: return world1.clearPoachTarget(rivalId) to emptyList()
+
+    if (!meetsPoachCondition(artist, world1)) {
+        return world1.clearPoachTarget(rivalId) to emptyList()
+    }
+
+    val counter = (world1.rivalPoachCounters[rivalId] ?: 0) + 1
+    val world2 = world1.copy(rivalPoachCounters = world1.rivalPoachCounters + (rivalId to counter))
+
+    if (counter < RIVAL_POACH_THRESHOLD) return world2 to emptyList()
+
+    val world3 = world2.clearPoachTarget(rivalId).copy(
+        artists = world2.artists - targetId,
+        contracts = if (artist.contractId != null) world2.contracts - artist.contractId!! else world2.contracts,
+        label = world2.label.copy(
+            rosterIds = world2.label.rosterIds - targetId,
+            reputation = penalizePress(world2)
         )
-    }
-
-    private fun invalidateProspectTargetIfGone(rivalId: String, world: SimWorld) {
-        val t = prospectTargets[rivalId] ?: return
-        if (t !in world.prospects || t in world.unavailableProspects) clearProspectTarget(rivalId)
-    }
-
-    private fun clearProspectTarget(rivalId: String) {
-        prospectTargets.remove(rivalId); prospectCounters.remove(rivalId)
-    }
-
-    private fun pickProspect(rival: RivalState, world: SimWorld, rng: Random): ProspectState? {
-        val available = world.prospects.values.filter { it.id !in world.unavailableProspects }
-        if (available.isEmpty()) return null
-        return available.maxByOrNull { p ->
-            val w = rival.genreWeights[p.genre] ?: 0.1f
-            p.signabilityScore * w + rng.nextFloat() * 0.05f  // small noise for tie-breaking
-        }
-    }
-
-    // --- Poach pursuit ---
-
-    private fun processPoachPursuit(
-        rivalId: String,
-        rival: RivalState,
-        world: SimWorld
-    ): Pair<SimWorld, List<SimEvent>> {
-        invalidatePoachTargetIfGone(rivalId, world)
-        if (rivalId !in poachTargets) {
-            val target = pickPoachTarget(rival, world) ?: return world to emptyList()
-            poachTargets[rivalId] = target.id
-            poachCounters[rivalId] = 0
-        }
-        val targetId = poachTargets[rivalId]!!
-        val artist = world.artists[targetId] ?: run {
-            clearPoachTarget(rivalId); return world to emptyList()
-        }
-
-        // Drop target if conditions no longer met (loyalty recovered or contract renewed).
-        if (!meetsPoachCondition(artist, world)) {
-            clearPoachTarget(rivalId); return world to emptyList()
-        }
-
-        val counter = (poachCounters[rivalId] ?: 0) + 1
-        poachCounters[rivalId] = counter
-        if (counter < RIVAL_POACH_THRESHOLD) return world to emptyList()
-
-        val updatedWorld = world.copy(
-            artists = world.artists - targetId,
-            contracts = if (artist.contractId != null) world.contracts - artist.contractId!! else world.contracts,
-            label = world.label.copy(
-                rosterIds = world.label.rosterIds - targetId,
-                reputation = penalizePress(world)
-            )
+    )
+    return world3 to listOf(
+        SimEvent.RivalPoach(
+            rivalId = rivalId,
+            rivalName = rival.name,
+            artistId = targetId,
+            artistName = artist.name,
+            dayOfGame = world2.currentDay
         )
-        clearPoachTarget(rivalId)
-        return updatedWorld to listOf(
-            SimEvent.RivalPoach(
-                rivalId = rivalId,
-                rivalName = rival.name,
-                artistId = targetId,
-                artistName = artist.name,
-                dayOfGame = world.currentDay
-            )
-        )
-    }
+    )
+}
 
-    private fun invalidatePoachTargetIfGone(rivalId: String, world: SimWorld) {
-        val t = poachTargets[rivalId] ?: return
-        if (t !in world.artists) clearPoachTarget(rivalId)
-    }
+private fun invalidatePoachTargetIfGone(rivalId: String, world: SimWorld): SimWorld {
+    val t = world.rivalPoachTargets[rivalId] ?: return world
+    return if (t !in world.artists) world.clearPoachTarget(rivalId) else world
+}
 
-    private fun clearPoachTarget(rivalId: String) {
-        poachTargets.remove(rivalId); poachCounters.remove(rivalId)
-    }
+private fun SimWorld.clearPoachTarget(rivalId: String) = copy(
+    rivalPoachTargets = rivalPoachTargets - rivalId,
+    rivalPoachCounters = rivalPoachCounters - rivalId
+)
 
-    private fun meetsPoachCondition(artist: ArtistState, world: SimWorld): Boolean {
-        if (artist.dimensions.loyalty >= 0.3f) return false
-        val contract = world.contracts[artist.contractId] ?: return false
-        return (contract.expiryDay - world.currentDay) <= 15
-    }
+private fun meetsPoachCondition(artist: ArtistState, world: SimWorld): Boolean {
+    if (artist.dimensions.loyalty >= 0.3f) return false
+    val contract = world.contracts[artist.contractId] ?: return false
+    return (contract.expiryDay - world.currentDay) <= 15
+}
 
-    private fun pickPoachTarget(rival: RivalState, world: SimWorld): ArtistState? =
-        world.artists.values
-            .filter { meetsPoachCondition(it, world) }
-            .maxByOrNull { artist -> rival.genreWeights[artist.genre] ?: 0.1f }
+private fun pickPoachTarget(rival: RivalState, world: SimWorld): ArtistState? =
+    world.artists.values
+        .filter { meetsPoachCondition(it, world) }
+        .maxByOrNull { artist -> rival.genreWeights[artist.genre] ?: 0.1f }
 
-    private fun penalizePress(world: SimWorld): Map<ReputationCommunity, Float> {
-        val current = world.label.reputation[ReputationCommunity.PRESS] ?: 0f
-        return world.label.reputation + (ReputationCommunity.PRESS to (current + PRESS_REP_PENALTY).coerceIn(0f, 1f))
-    }
+private fun penalizePress(world: SimWorld): Map<ReputationCommunity, Float> {
+    val current = world.label.reputation[ReputationCommunity.PRESS] ?: 0f
+    return world.label.reputation + (ReputationCommunity.PRESS to (current + PRESS_REP_PENALTY).coerceIn(0f, 1f))
 }

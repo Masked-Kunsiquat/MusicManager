@@ -16,11 +16,10 @@ import com.github.maskedkunisquat.musicmanager.logic.model.RivalState
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.sim.RIVAL_POACH_THRESHOLD
 import com.github.maskedkunisquat.musicmanager.logic.sim.RIVAL_PROSPECT_THRESHOLD
-import com.github.maskedkunisquat.musicmanager.logic.sim.RivalTicker
+import com.github.maskedkunisquat.musicmanager.logic.sim.tickRivals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.random.Random
@@ -76,141 +75,113 @@ class RivalTickerTest {
         activeNegotiations = activeNegotiations
     )
 
+    // Runs N ticks, threading the world through each one. Returns final world + all events.
+    private fun runTicks(initial: SimWorld, n: Int, r: Random = rng): Pair<SimWorld, List<SimEvent>> {
+        var current = initial
+        val allEvents = mutableListOf<SimEvent>()
+        repeat(n) {
+            val (w, events) = tickRivals(current, r)
+            current = w; allEvents += events
+        }
+        return current to allEvents
+    }
+
     // ===== Prospect pursuit =====
 
     @Test
     fun `rival does nothing when prospect pool is empty`() {
-        val ticker = RivalTicker()
-        val world = baseWorld()
-        val (_, events) = ticker.tick(world, rng)
+        val (_, events) = tickRivals(baseWorld(), rng)
         assertTrue(events.isEmpty())
     }
 
     @Test
     fun `rival accumulates counter without signing before threshold`() {
-        val ticker = RivalTicker()
         val world = baseWorld(prospects = mapOf("p0" to prospect("p0")))
-        val allEvents = mutableListOf<SimEvent>()
-        repeat(RIVAL_PROSPECT_THRESHOLD - 1) {
-            val (_, events) = ticker.tick(world, rng)
-            allEvents += events
-        }
+        val (_, allEvents) = runTicks(world, RIVAL_PROSPECT_THRESHOLD - 1)
         assertTrue(allEvents.none { it is SimEvent.RivalSigning })
     }
 
     @Test
     fun `rival signs prospect exactly at threshold`() {
-        val ticker = RivalTicker()
         val world = baseWorld(prospects = mapOf("p0" to prospect("p0")))
-        var current = world
-        var signing: SimEvent.RivalSigning? = null
-        repeat(RIVAL_PROSPECT_THRESHOLD) {
-            val (w, events) = ticker.tick(current, rng)
-            current = w
-            signing = events.filterIsInstance<SimEvent.RivalSigning>().firstOrNull() ?: signing
-        }
+        val (_, allEvents) = runTicks(world, RIVAL_PROSPECT_THRESHOLD)
+        val signing = allEvents.filterIsInstance<SimEvent.RivalSigning>().firstOrNull()
         assertNotNull(signing)
         assertEquals("Prospect p0", signing!!.prospectName)
-        assertEquals("r0", signing!!.rivalId)
+        assertEquals("r0", signing.rivalId)
     }
 
     @Test
     fun `signed prospect is removed from world`() {
-        val ticker = RivalTicker()
         val world = baseWorld(prospects = mapOf("p0" to prospect("p0")))
-        var current = world
-        repeat(RIVAL_PROSPECT_THRESHOLD) {
-            val (w, _) = ticker.tick(current, rng)
-            current = w
-        }
-        assertFalse(current.prospects.containsKey("p0"))
+        val (finalWorld, _) = runTicks(world, RIVAL_PROSPECT_THRESHOLD)
+        assertFalse(finalWorld.prospects.containsKey("p0"))
+    }
+
+    @Test
+    fun `rival counter persists across ticks via world state`() {
+        // Verify that counter is stored on world, not in a separate object.
+        // Manually inspect the world after each tick to see counter increment.
+        val world = baseWorld(prospects = mapOf("p0" to prospect("p0")))
+        val (w1, _) = tickRivals(world, rng)
+        assertEquals(1, w1.rivalProspectCounters["r0"])
+        val (w2, _) = tickRivals(w1, rng)
+        assertEquals(2, w2.rivalProspectCounters["r0"])
     }
 
     @Test
     fun `wasPlayerTarget is true when prospect was in activeNegotiations`() {
-        val ticker = RivalTicker()
         val world = baseWorld(
             prospects = mapOf("p0" to prospect("p0")),
             activeNegotiations = mapOf("p0" to 1)
         )
-        var current = world
-        var signing: SimEvent.RivalSigning? = null
-        repeat(RIVAL_PROSPECT_THRESHOLD) {
-            val (w, events) = ticker.tick(current, rng)
-            current = w
-            signing = events.filterIsInstance<SimEvent.RivalSigning>().firstOrNull() ?: signing
-        }
+        val (_, allEvents) = runTicks(world, RIVAL_PROSPECT_THRESHOLD)
+        val signing = allEvents.filterIsInstance<SimEvent.RivalSigning>().firstOrNull()
         assertTrue(signing!!.wasPlayerTarget)
     }
 
     @Test
     fun `wasPlayerTarget is false when prospect was not in activeNegotiations`() {
-        val ticker = RivalTicker()
         val world = baseWorld(prospects = mapOf("p0" to prospect("p0")))
-        var current = world
-        var signing: SimEvent.RivalSigning? = null
-        repeat(RIVAL_PROSPECT_THRESHOLD) {
-            val (w, events) = ticker.tick(current, rng)
-            current = w
-            signing = events.filterIsInstance<SimEvent.RivalSigning>().firstOrNull() ?: signing
-        }
+        val (_, allEvents) = runTicks(world, RIVAL_PROSPECT_THRESHOLD)
+        val signing = allEvents.filterIsInstance<SimEvent.RivalSigning>().firstOrNull()
         assertFalse(signing!!.wasPlayerTarget)
     }
 
     @Test
     fun `rival prefers high-weight genre prospects`() {
-        val ticker = RivalTicker()
-        // indie-rock weight=1.0, pop weight=0.3 in rival; both with equal signability
+        // indie-rock weight=1.0, pop weight=0.3; indie should win despite lower signability
+        // (0.8 * 1.0 = 0.80 vs 0.9 * 0.3 = 0.27)
         val world = baseWorld(prospects = mapOf(
-            "p_pop" to prospect("p_pop", genre = "pop", signability = 0.9f),
+            "p_pop"   to prospect("p_pop",   genre = "pop",        signability = 0.9f),
             "p_indie" to prospect("p_indie", genre = "indie-rock", signability = 0.8f)
         ))
-        // Run deterministically with fixed seed; indie-rock should win despite lower signability
-        // (0.8 * 1.0 = 0.80 vs 0.9 * 0.3 = 0.27)
-        var current = world
-        var signing: SimEvent.RivalSigning? = null
-        val deterministicRng = Random(1L)
-        repeat(RIVAL_PROSPECT_THRESHOLD) {
-            val (w, events) = ticker.tick(current, deterministicRng)
-            current = w
-            signing = events.filterIsInstance<SimEvent.RivalSigning>().firstOrNull() ?: signing
-        }
+        val (_, allEvents) = runTicks(world, RIVAL_PROSPECT_THRESHOLD, Random(1L))
+        val signing = allEvents.filterIsInstance<SimEvent.RivalSigning>().firstOrNull()
         assertEquals("indie-rock", signing!!.genre)
     }
 
     @Test
     fun `rival picks new target after signing`() {
-        val ticker = RivalTicker()
-        val world = baseWorld(prospects = mapOf(
-            "p0" to prospect("p0"),
-            "p1" to prospect("p1")
-        ))
-        var current = world
-        // First signing
-        repeat(RIVAL_PROSPECT_THRESHOLD) { val (w, _) = ticker.tick(current, rng); current = w }
-        // Second target — p0 gone, should move to p1
-        repeat(RIVAL_PROSPECT_THRESHOLD) { val (w, _) = ticker.tick(current, rng); current = w }
-        assertFalse(current.prospects.containsKey("p1"))
+        val world = baseWorld(prospects = mapOf("p0" to prospect("p0"), "p1" to prospect("p1")))
+        val (afterFirst, _) = runTicks(world, RIVAL_PROSPECT_THRESHOLD)
+        val (afterSecond, _) = runTicks(afterFirst, RIVAL_PROSPECT_THRESHOLD)
+        assertFalse(afterSecond.prospects.containsKey("p1"))
     }
 
     @Test
-    fun `rival signs apply PRESS rep penalty`() {
-        val ticker = RivalTicker()
+    fun `rival signing applies PRESS rep penalty`() {
         val world = baseWorld(prospects = mapOf("p0" to prospect("p0")))
         val initialPress = world.label.reputation[ReputationCommunity.PRESS]!!
-        var current = world
-        repeat(RIVAL_PROSPECT_THRESHOLD) { val (w, _) = ticker.tick(current, rng); current = w }
-        assertTrue(current.label.reputation[ReputationCommunity.PRESS]!! < initialPress)
+        val (finalWorld, _) = runTicks(world, RIVAL_PROSPECT_THRESHOLD)
+        assertTrue(finalWorld.label.reputation[ReputationCommunity.PRESS]!! < initialPress)
     }
 
     @Test
     fun `rival does not target unavailable prospects`() {
-        val ticker = RivalTicker()
-        val world = baseWorld(
-            prospects = mapOf("p0" to prospect("p0")),
-            // Mark p0 as unavailable — rival should do nothing
-        ).copy(unavailableProspects = setOf("p0"))
-        val (_, events) = ticker.tick(world, rng)
+        val world = baseWorld(prospects = mapOf("p0" to prospect("p0")))
+            .copy(unavailableProspects = setOf("p0"))
+        val (_, events) = tickRivals(world, rng)
         assertTrue(events.none { it is SimEvent.RivalSigning })
     }
 
@@ -218,93 +189,86 @@ class RivalTickerTest {
 
     @Test
     fun `rival does not poach when no artist meets conditions`() {
-        val ticker = RivalTicker()
-        // Artist with high loyalty — not poachable
         val a = artist("a0", loyalty = 0.8f)
         val c = contract("ca0", "a0", expiryDay = 5)
-        val world = baseWorld(artists = mapOf("a0" to a), contracts = mapOf("ca0" to c), currentDay = 0)
-        val (_, events) = ticker.tick(world, rng)
+        val world = baseWorld(artists = mapOf("a0" to a), contracts = mapOf("ca0" to c))
+        val (_, events) = tickRivals(world, rng)
         assertTrue(events.none { it is SimEvent.RivalPoach })
     }
 
     @Test
     fun `rival does not poach artist whose contract has more than 15 ticks remaining`() {
-        val ticker = RivalTicker()
         val a = artist("a0", loyalty = 0.1f)
-        // expiryDay=20, currentDay=0 → 20 ticks remaining > 15
-        val c = contract("ca0", "a0", expiryDay = 20)
+        val c = contract("ca0", "a0", expiryDay = 20)  // 20 ticks > 15
         val world = baseWorld(artists = mapOf("a0" to a), contracts = mapOf("ca0" to c), currentDay = 0)
-        repeat(RIVAL_POACH_THRESHOLD) { ticker.tick(world, rng) }
-        val (_, events) = ticker.tick(world, rng)
-        assertTrue(events.none { it is SimEvent.RivalPoach })
+        val (_, allEvents) = runTicks(world, RIVAL_POACH_THRESHOLD + 1)
+        assertTrue(allEvents.none { it is SimEvent.RivalPoach })
     }
 
     @Test
     fun `rival poaches artist exactly at threshold`() {
-        val ticker = RivalTicker()
         val a = artist("a0", loyalty = 0.1f)
-        // expiryDay=10, currentDay=0 → 10 ticks remaining ≤ 15
-        val c = contract("ca0", "a0", expiryDay = 10)
+        val c = contract("ca0", "a0", expiryDay = 10)  // 10 ticks ≤ 15
         val world = baseWorld(artists = mapOf("a0" to a), contracts = mapOf("ca0" to c), currentDay = 0)
-        var current = world
-        var poach: SimEvent.RivalPoach? = null
-        repeat(RIVAL_POACH_THRESHOLD) {
-            val (w, events) = ticker.tick(current, rng)
-            current = w
-            poach = events.filterIsInstance<SimEvent.RivalPoach>().firstOrNull() ?: poach
-        }
+        val (_, allEvents) = runTicks(world, RIVAL_POACH_THRESHOLD)
+        val poach = allEvents.filterIsInstance<SimEvent.RivalPoach>().firstOrNull()
         assertNotNull(poach)
         assertEquals("a0", poach!!.artistId)
-        assertEquals("Artist a0", poach!!.artistName)
+        assertEquals("Artist a0", poach.artistName)
+    }
+
+    @Test
+    fun `poach counter persists across ticks via world state`() {
+        val a = artist("a0", loyalty = 0.1f)
+        val c = contract("ca0", "a0", expiryDay = 10)
+        val world = baseWorld(artists = mapOf("a0" to a), contracts = mapOf("ca0" to c))
+        val (w1, _) = tickRivals(world, rng)
+        assertEquals(1, w1.rivalPoachCounters["r0"])
+        val (w2, _) = tickRivals(w1, rng)
+        assertEquals(2, w2.rivalPoachCounters["r0"])
     }
 
     @Test
     fun `poached artist is removed from world`() {
-        val ticker = RivalTicker()
         val a = artist("a0", loyalty = 0.1f)
         val c = contract("ca0", "a0", expiryDay = 10)
-        val world = baseWorld(artists = mapOf("a0" to a), contracts = mapOf("ca0" to c), currentDay = 0)
-        var current = world
-        repeat(RIVAL_POACH_THRESHOLD) { val (w, _) = ticker.tick(current, rng); current = w }
-        assertFalse(current.artists.containsKey("a0"))
-        assertFalse(current.label.rosterIds.contains("a0"))
-        assertFalse(current.contracts.containsKey("ca0"))
+        val world = baseWorld(artists = mapOf("a0" to a), contracts = mapOf("ca0" to c))
+        val (finalWorld, _) = runTicks(world, RIVAL_POACH_THRESHOLD)
+        assertFalse(finalWorld.artists.containsKey("a0"))
+        assertFalse(finalWorld.label.rosterIds.contains("a0"))
+        assertFalse(finalWorld.contracts.containsKey("ca0"))
     }
 
     @Test
     fun `poach applies PRESS rep penalty`() {
-        val ticker = RivalTicker()
         val a = artist("a0", loyalty = 0.1f)
         val c = contract("ca0", "a0", expiryDay = 10)
-        val world = baseWorld(artists = mapOf("a0" to a), contracts = mapOf("ca0" to c), currentDay = 0)
+        val world = baseWorld(artists = mapOf("a0" to a), contracts = mapOf("ca0" to c))
         val initialPress = world.label.reputation[ReputationCommunity.PRESS]!!
-        var current = world
-        repeat(RIVAL_POACH_THRESHOLD) { val (w, _) = ticker.tick(current, rng); current = w }
-        assertTrue(current.label.reputation[ReputationCommunity.PRESS]!! < initialPress)
+        val (finalWorld, _) = runTicks(world, RIVAL_POACH_THRESHOLD)
+        assertTrue(finalWorld.label.reputation[ReputationCommunity.PRESS]!! < initialPress)
     }
 
     @Test
     fun `rival drops poach target if loyalty recovers above threshold`() {
-        val ticker = RivalTicker()
-        // Start with low loyalty and near-expiry contract to activate poach target selection
         val initialArtist = artist("a0", loyalty = 0.1f)
         val c = contract("ca0", "a0", expiryDay = 10)
         val worldLow = baseWorld(artists = mapOf("a0" to initialArtist), contracts = mapOf("ca0" to c))
-        // Get rival to pick a0 as poach target
-        ticker.tick(worldLow, rng)
-        // Now present a world where loyalty is high — rival should abandon pursuit
+        // Prime: one tick so rival selects a0 as target (counter = 1, stored on world)
+        val (worldPrimed, _) = tickRivals(worldLow, rng)
+        assertEquals(1, worldPrimed.rivalPoachCounters["r0"])
+        // Loyalty recovers — splice into the primed world so rival state carries over
         val highLoyaltyArtist = initialArtist.copy(dimensions = initialArtist.dimensions.copy(loyalty = 0.9f))
-        val worldHigh = baseWorld(artists = mapOf("a0" to highLoyaltyArtist), contracts = mapOf("ca0" to c))
-        repeat(RIVAL_POACH_THRESHOLD) { ticker.tick(worldHigh, rng) }
-        val (_, events) = ticker.tick(worldHigh, rng)
-        assertTrue(events.none { it is SimEvent.RivalPoach })
+        val worldHighLoyalty = worldPrimed.copy(artists = mapOf("a0" to highLoyaltyArtist))
+        // Run many more ticks — rival should drop target and never reach threshold
+        val (_, allEvents) = runTicks(worldHighLoyalty, RIVAL_POACH_THRESHOLD + 2)
+        assertTrue(allEvents.none { it is SimEvent.RivalPoach })
     }
 
     @Test
     fun `no rival action when rivals map is empty`() {
-        val ticker = RivalTicker()
         val world = baseWorld(prospects = mapOf("p0" to prospect("p0"))).copy(rivals = emptyMap())
-        val (_, events) = ticker.tick(world, rng)
+        val (_, events) = tickRivals(world, rng)
         assertTrue(events.isEmpty())
     }
 }

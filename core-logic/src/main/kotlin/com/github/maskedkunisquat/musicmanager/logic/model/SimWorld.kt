@@ -14,6 +14,11 @@ data class SimWorld(
     val prospects: Map<String, ProspectState> = emptyMap(),
     val scouts: Map<String, ScoutState> = emptyMap(),
     val rivals: Map<String, RivalState> = emptyMap(),
+    // Rival pursuit state — persisted so counters survive session restarts.
+    val rivalProspectTargets: Map<String, String> = emptyMap(),   // rivalId → prospectId
+    val rivalProspectCounters: Map<String, Int> = emptyMap(),      // rivalId → ticks on target
+    val rivalPoachTargets: Map<String, String> = emptyMap(),       // rivalId → artistId
+    val rivalPoachCounters: Map<String, Int> = emptyMap(),         // rivalId → ticks on poach
     val activeNegotiations: Map<String, Int> = emptyMap(),    // prospectId → current round
     val unavailableProspects: Set<String> = emptySet(),        // cooldown after failed negotiation
     val chartSnapshot: MarketState = MarketState(emptyMap()),  // delayed market data; updates every 3 ticks

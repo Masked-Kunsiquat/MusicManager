@@ -6,8 +6,6 @@ import kotlin.random.Random
 
 class SimEngine {
 
-    internal val rivalTicker = RivalTicker()
-
     fun tick(world: SimWorld): TickResult {
         // Three independent seed-deterministic RNGs per tick. XOR operands differ by +0/+1/+2
         // from currentDay, which is sufficient since these are seeds (not offsets) into Random.
@@ -27,7 +25,7 @@ class SimEngine {
             scouts = updatedScouts,
             chartSnapshot = if (nextDay % 3 == 0) newMarket else world.chartSnapshot
         )
-        val (nextWorld, rivalEvents) = rivalTicker.tick(preRivalWorld, rivalRng)
+        val (nextWorld, rivalEvents) = tickRivals(preRivalWorld, rivalRng)
         val events = generateEvents(nextWorld, previousMarket, eventRng) + scoutReports + rivalEvents
         val capabilityEvents = events.filterIsInstance<SimEvent.CapabilityUnlockable>()
         val finalWorld = if (capabilityEvents.isEmpty()) nextWorld else nextWorld.copy(
