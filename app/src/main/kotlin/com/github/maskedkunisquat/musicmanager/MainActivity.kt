@@ -12,7 +12,7 @@ import com.github.maskedkunisquat.musicmanager.navigation.AppNavGraph
 import com.github.maskedkunisquat.musicmanager.ui.device.DeviceScreen
 import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxViewModel
 import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxViewModelFactory
-import com.github.maskedkunisquat.musicmanager.ui.theme.AppTheme
+import com.github.maskedkunisquat.musicmanager.ui.theme.RetroTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -25,7 +25,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            AppTheme {
+            RetroTheme {
                 val app = application as AppApplication
                 val modelLoadState by app.aiProvider.modelLoadState.collectAsStateWithLifecycle()
                 val navController = rememberNavController()
