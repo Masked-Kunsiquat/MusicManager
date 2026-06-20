@@ -26,7 +26,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,7 +66,7 @@ fun EmailDetailScreen(
         item?.let { viewModel.requestOptionsFor(it) }
     }
 
-    val hasLoaded = remember { mutableStateOf(false) }
+    val hasLoaded = rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(items.isNotEmpty()) { if (items.isNotEmpty()) hasLoaded.value = true }
     LaunchedEffect(item) {
         if (item == null && hasLoaded.value) onBack()
@@ -86,15 +88,11 @@ fun EmailDetailScreen(
         is SimEvent.NegotiationRound -> world.prospects[e.prospectId]?.name ?: "prospect"
         else -> world.artists[e.artistId]?.name ?: e.artistId.orEmpty()
     }
-    val eventArtistId: String? = when (val e = item.event) {
-        is SimEvent.NeedUrgent -> e.artistId
-        is SimEvent.ContractExpiring -> e.artistId
-        is SimEvent.WantSurfaced -> e.artistId
-        else -> null
-    }
+    val eventArtistId: String? = item.event.artistId
     val options = allOptions[item.id]
 
     var pickerFor by remember { mutableStateOf<ResponseOption?>(null) }
+    BackHandler(enabled = pickerFor != null) { pickerFor = null }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {

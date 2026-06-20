@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.github.maskedkunisquat.musicmanager.data.dao.EventLogDao
+import com.github.maskedkunisquat.musicmanager.data.mapper.EVENT_TYPE_INTEL_DROP
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -17,7 +18,7 @@ data class PressItem(
 
 class PressViewModel(dao: EventLogDao) : ViewModel() {
 
-    val feed = dao.observeByType("intel_drop")
+    val feed = dao.observeByType(EVENT_TYPE_INTEL_DROP)
         .map { entities ->
             entities.map { PressItem(it.id, it.emailSubject, it.emailBody, it.dayOfGame) }
         }

@@ -64,6 +64,7 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): Pair<SimWorld, Li
             Pair(world.copy(artists = updatedArtists), noEvents)
         }
         is StateEffect.PairedNeedChange -> {
+            require(effect.partnerId.isNotBlank()) { "PairedNeedChange.partnerId must be filled before resolving" }
             val artist = world.artists[effect.partnerId] ?: return Pair(world, noEvents)
             val need = artist.needs[effect.needType] ?: return Pair(world, noEvents)
             val newValue = (need.value + effect.delta).coerceIn(0f, 1f)

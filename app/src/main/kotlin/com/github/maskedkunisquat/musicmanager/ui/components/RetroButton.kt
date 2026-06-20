@@ -35,7 +35,7 @@ private fun DrawScope.drawSegments(segments: List<Segment>, color: Color) {
     segments.forEach { drawRect(color = color, topLeft = it.topLeft, size = it.size) }
 }
 
-private fun DrawScope.buildBorderSegments(px: Float, cornerSize: Int): List<Segment> {
+private fun buildBorderSegments(size: Size, px: Float, cornerSize: Int): List<Segment> {
     val c = cornerSize * px
     val segments = mutableListOf<Segment>()
 
@@ -46,7 +46,7 @@ private fun DrawScope.buildBorderSegments(px: Float, cornerSize: Int): List<Segm
 
     for (i in 1..cornerSize) {
         for (j in 1..cornerSize) {
-            if (i + j == cornerSize) {
+            if (i + j == cornerSize + 1) {
                 val s = Size(px, px)
                 segments += Segment(Offset(i * px, j * px), s)
                 segments += Segment(Offset(size.width - (i + 1) * px, j * px), s)
@@ -96,6 +96,8 @@ fun RetroButton(
         else     -> primary
     }
 
+    val segmentCache = remember { arrayOfNulls<Pair<Size, List<Segment>>>(1) }
+
     CompositionLocalProvider(LocalContentColor provides contentColor) {
         Box(
             modifier = modifier
@@ -103,7 +105,13 @@ fun RetroButton(
                 .drawBehind {
                     val px = PIXEL_SIZE.toPx()
                     if (filled && enabled) drawPixelFill(primary, px, CORNER_SIZE)
-                    drawSegments(buildBorderSegments(px, CORNER_SIZE), borderColor)
+                    val cached = segmentCache[0]
+                    val segments = if (cached != null && cached.first == size) {
+                        cached.second
+                    } else {
+                        buildBorderSegments(size, px, CORNER_SIZE).also { segmentCache[0] = size to it }
+                    }
+                    drawSegments(segments, borderColor)
                 }
                 .padding(contentPadding),
             contentAlignment = Alignment.Center
