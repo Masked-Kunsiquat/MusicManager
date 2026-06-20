@@ -387,7 +387,7 @@ their app screens; audit pass after all mechanics are stable; hash chain last
   does not yet fold event log to assert/correct the stored balance. Risk is low
   (only diverges if pre-v4 rows are partially present); revisit in 4-F.
 
-### 4-B — Broadcast mechanic (`:core-logic`)
+### 4-B ✅ — Broadcast mechanic (`:core-logic`)
 
 "Opportunities advertise satisfied needs/wants" — the event and option
 generation should be aware of each artist's current state so that the inbox
@@ -415,7 +415,7 @@ feels reactive, not generic.
    want-satisfying options appear first when urgency is high, `IntelDrop`
    prefers genres with recognition-hungry artists.
 
-### 4-C — A&R Tape Deck (`:core-logic` + `:app`)
+### 4-C ✅ — A&R Tape Deck (`:core-logic` + `:app`)
 
 A new app that surfaces unsigned prospects as "demo tapes" — pursue/pass/watch
 options that feed a hidden taste model shaping future scout reports.
@@ -455,7 +455,7 @@ options that feed a hidden taste model shaping future scout reports.
    passed lead hidden for correct duration, watch re-surfaces with drift,
    `LeadSurfaced` respects cap of 3 concurrent leads.
 
-### 4-D — Contacts screen (`:app`)
+### 4-D ✅ — Contacts screen (`:app`)
 
 Roster relationship health as a surface — recency and tone, not a number.
 

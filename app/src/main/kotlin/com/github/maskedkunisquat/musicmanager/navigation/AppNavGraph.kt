@@ -7,6 +7,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.github.maskedkunisquat.musicmanager.ui.charts.ChartsScreen
+import com.github.maskedkunisquat.musicmanager.ui.contacts.ContactsScreen
 import com.github.maskedkunisquat.musicmanager.ui.email.EmailDetailScreen
 import com.github.maskedkunisquat.musicmanager.ui.home.HomeScreen
 import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxScreen
@@ -23,6 +24,7 @@ object Route {
     const val PRESS = "press"
     const val LABEL_OFFICE = "label_office"
     const val TAPE_DECK = "tape_deck"
+    const val CONTACTS = "contacts"
     const val EMAIL_DETAIL = "email/{eventId}"
     fun emailDetail(eventId: String) = "email/$eventId"
 }
@@ -40,8 +42,12 @@ fun AppNavGraph(
                 onOpenCharts = { navController.navigate(Route.CHARTS) },
                 onOpenPress = { navController.navigate(Route.PRESS) },
                 onOpenLabelOffice = { navController.navigate(Route.LABEL_OFFICE) },
-                onOpenTapeDeck = { navController.navigate(Route.TAPE_DECK) }
+                onOpenTapeDeck = { navController.navigate(Route.TAPE_DECK) },
+                onOpenContacts = { navController.navigate(Route.CONTACTS) }
             )
+        }
+        composable(Route.CONTACTS) {
+            ContactsScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
         }
         composable(Route.TAPE_DECK) {
             TapeDeckScreen(viewModel = viewModel, onBack = { navController.popBackStack() })

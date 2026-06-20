@@ -30,6 +30,27 @@ fun applyResponse(world: SimWorld, option: ResponseOption): Pair<SimWorld, List<
         updated = newWorld
         injectedEvents += events
     }
+    // Stamp lastInteractionDay for any roster artist directly touched by this response.
+    val touchedArtistIds: Set<String> = option.effects.mapNotNull { effect ->
+        when (effect) {
+            is StateEffect.NeedChange         -> effect.artistId
+            is StateEffect.RelationshipChange -> effect.artistId
+            is StateEffect.PairedNeedChange   -> effect.partnerId
+            is StateEffect.OpenRenewal        -> effect.artistId
+            is StateEffect.AdvanceRenewal     -> effect.artistId
+            is StateEffect.RenewContract      -> effect.artistId
+            is StateEffect.RenewalWalked      -> effect.artistId
+            is StateEffect.WantSatisfied      -> effect.artistId
+            else -> null
+        }
+    }.toSet()
+    if (touchedArtistIds.isNotEmpty()) {
+        updated = updated.copy(
+            artists = updated.artists + touchedArtistIds.mapNotNull { id ->
+                updated.artists[id]?.let { id to it.copy(lastInteractionDay = updated.currentDay) }
+            }.toMap()
+        )
+    }
     return Pair(updated, injectedEvents)
 }
 
