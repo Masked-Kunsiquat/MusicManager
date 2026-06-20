@@ -21,10 +21,12 @@ class AppApplication : Application() {
 
     val modelDownloader: AndroidModelDownloader by lazy { AndroidModelDownloader(this) }
 
+    val dao by lazy { DatabaseFactory.eventLogDao(this) }
+
     val simRepository: SimRepository by lazy {
         val prefs = getSharedPreferences(WORLD_PREFS, MODE_PRIVATE)
         SimRepositoryImpl(
-            dao = DatabaseFactory.eventLogDao(this),
+            dao = dao,
             engine = SimEngine(),
             aiProvider = aiProvider,
             seed = DEFAULT_SEED,

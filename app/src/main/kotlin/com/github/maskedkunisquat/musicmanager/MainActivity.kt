@@ -12,7 +12,9 @@ import com.github.maskedkunisquat.musicmanager.navigation.AppNavGraph
 import com.github.maskedkunisquat.musicmanager.ui.device.DeviceScreen
 import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxViewModel
 import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxViewModelFactory
-import com.github.maskedkunisquat.musicmanager.ui.theme.AppTheme
+import com.github.maskedkunisquat.musicmanager.ui.press.PressViewModel
+import com.github.maskedkunisquat.musicmanager.ui.press.PressViewModelFactory
+import com.github.maskedkunisquat.musicmanager.ui.theme.RetroTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -21,11 +23,16 @@ class MainActivity : ComponentActivity() {
         InboxViewModelFactory(app.simRepository, app.aiProvider.modelLoadState)
     }
 
+    private val pressViewModel: PressViewModel by viewModels {
+        val app = application as AppApplication
+        PressViewModelFactory(app.dao)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            AppTheme {
+            RetroTheme {
                 val app = application as AppApplication
                 val modelLoadState by app.aiProvider.modelLoadState.collectAsStateWithLifecycle()
                 val navController = rememberNavController()
@@ -34,7 +41,11 @@ class MainActivity : ComponentActivity() {
                     modelLoadState = modelLoadState,
                     onDownloadModel = { app.aiProvider.downloadModel(app.modelDownloader) }
                 ) {
-                    AppNavGraph(navController = navController, viewModel = inboxViewModel)
+                    AppNavGraph(
+                        navController = navController,
+                        viewModel = inboxViewModel,
+                        pressViewModel = pressViewModel
+                    )
                 }
             }
         }

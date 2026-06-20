@@ -16,11 +16,13 @@ class SimEngine {
 
         val previousMarket = world.market
         val (updatedScouts, scoutReports) = tickScouts(world.scouts, nextDay, world.prospects, scoutRng)
+        val newMarket = tickMarket(world.market, marketRng)
         val nextWorld = world.copy(
             currentDay = nextDay,
             artists = world.artists.mapValues { (_, artist) -> decayNeeds(artist) },
-            market = tickMarket(world.market, marketRng),
-            scouts = updatedScouts
+            market = newMarket,
+            scouts = updatedScouts,
+            chartSnapshot = if (nextDay % 3 == 0) newMarket else world.chartSnapshot
         )
         return TickResult(
             world = nextWorld,

@@ -1,6 +1,7 @@
 package com.github.maskedkunisquat.musicmanager.data.mapper
 
 import com.github.maskedkunisquat.musicmanager.data.entity.EventLogEntity
+import com.github.maskedkunisquat.musicmanager.data.mapper.EVENT_TYPE_INTEL_DROP
 import com.github.maskedkunisquat.musicmanager.logic.ai.GeneratedEmail
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
@@ -51,7 +52,7 @@ fun EventLogEntity.toSimEventOrNull(): SimEvent? = try {
             currentTrend = json["currentTrend"]!!.jsonPrimitive.content.toFloat(),
             dayOfGame = dayOfGame
         )
-        "intel_drop" -> SimEvent.IntelDrop(
+        EVENT_TYPE_INTEL_DROP -> SimEvent.IntelDrop(
             genre = json["genre"]!!.jsonPrimitive.content,
             headline = json["headline"]!!.jsonPrimitive.content,
             dayOfGame = dayOfGame

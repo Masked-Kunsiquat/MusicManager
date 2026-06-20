@@ -26,6 +26,9 @@ abstract class EventLogDao {
     @Query("SELECT * FROM event_log WHERE selectedOptionId IS NULL")
     abstract suspend fun getUnresolved(): List<EventLogEntity>
 
+    @Query("SELECT * FROM event_log WHERE eventType = :eventType ORDER BY dayOfGame DESC, recordedAt DESC")
+    abstract fun observeByType(eventType: String): Flow<List<EventLogEntity>>
+
     // WHERE selectedOptionId IS NULL guards against double-resolve silently overwriting the first choice.
     @Query("UPDATE event_log SET selectedOptionId = :optionId, resolvedAt = :resolvedAt WHERE id = :id AND selectedOptionId IS NULL")
     abstract suspend fun markResolved(id: String, optionId: String, resolvedAt: Long)

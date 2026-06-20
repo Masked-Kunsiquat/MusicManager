@@ -13,6 +13,8 @@ import kotlinx.serialization.json.put
 import java.util.Locale
 import java.util.UUID
 
+const val EVENT_TYPE_INTEL_DROP = "intel_drop"
+
 // Stable identity key for deduplication — one unresolved event per (artist, need/want type),
 // per contract, per genre shift, or per scout/prospect pair.
 fun SimEvent.eventSignature(): String = when (this) {
@@ -113,7 +115,7 @@ private fun SimEvent.eventTypeKey(): String = when (this) {
     is SimEvent.ContractExpiring -> "contract_expiring"
     is SimEvent.WantSurfaced -> "want_surfaced"
     is SimEvent.MarketShift -> "market_shift"
-    is SimEvent.IntelDrop -> "intel_drop"
+    is SimEvent.IntelDrop -> EVENT_TYPE_INTEL_DROP
     is SimEvent.ScoutReport -> "scout_report"
     is SimEvent.NegotiationRound -> "negotiation_round"
 }

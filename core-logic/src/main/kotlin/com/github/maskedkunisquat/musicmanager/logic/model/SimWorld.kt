@@ -14,5 +14,6 @@ data class SimWorld(
     val prospects: Map<String, ProspectState> = emptyMap(),
     val scouts: Map<String, ScoutState> = emptyMap(),
     val activeNegotiations: Map<String, Int> = emptyMap(),    // prospectId → current round
-    val unavailableProspects: Set<String> = emptySet()         // cooldown after failed negotiation
+    val unavailableProspects: Set<String> = emptySet(),        // cooldown after failed negotiation
+    val chartSnapshot: MarketState = MarketState(emptyMap())   // delayed market data; updates every 3 ticks
 )
