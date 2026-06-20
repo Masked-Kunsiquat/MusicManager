@@ -5,7 +5,7 @@ import androidx.room.RoomDatabase
 import com.github.maskedkunisquat.musicmanager.data.dao.EventLogDao
 import com.github.maskedkunisquat.musicmanager.data.entity.EventLogEntity
 
-@Database(entities = [EventLogEntity::class], version = 5, exportSchema = false)
+@Database(entities = [EventLogEntity::class], version = 6, exportSchema = false)
 abstract class SimDatabase : RoomDatabase() {
     abstract fun eventLogDao(): EventLogDao
 }

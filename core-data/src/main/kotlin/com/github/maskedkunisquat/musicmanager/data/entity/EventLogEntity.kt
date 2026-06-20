@@ -22,5 +22,7 @@ data class EventLogEntity(
     val optionsJson: String?,       // JSON array of ResponseOption; null for response_applied rows
     val viewedAt: Long?,            // null = unread; set when player first opens the email
     val selectedOptionId: String?,  // null = pending player response
-    val resolvedAt: Long?           // null = pending
+    val resolvedAt: Long?,          // null = pending
+    val prevHash: String = "",      // payloadHash of the previous row; "" for genesis and pre-v6 rows
+    val payloadHash: String = ""    // SHA-256 of payload; "" for pre-v6 rows
 )

@@ -98,6 +98,9 @@ class SimRepositoryImpl(
 
     override suspend fun initializeIfEmpty(days: Int) = tickMutex.withLock {
         reconcileRelationshipBalancesUnderLock()
+        if (!dao.verifyChain()) {
+            android.util.Log.w("SimRepository", "Event log hash chain integrity check failed — possible DB tampering")
+        }
         if (dao.getAll().isEmpty()) {
             // Tick until we have at least `days` inbox events, capped at 90 ticks to prevent
             // infinite loops on pathological seeds. `days` here means target event count.

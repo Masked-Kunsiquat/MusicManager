@@ -546,7 +546,7 @@ No new types or mechanics. Pure content and variety pass across all
    differs across day tiers, that at least one arm references a dimension
    value in a test world.
 
-### 4-G — Event log hash chain (`:core-data`)
+### 4-G ✅ — Event log hash chain (`:core-data`)
 
 Integrity layer for the append-only event log. Detects direct DB edits
 without collecting user data.
