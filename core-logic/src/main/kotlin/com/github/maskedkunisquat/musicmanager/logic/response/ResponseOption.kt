@@ -114,4 +114,14 @@ sealed class StateEffect {
 
     @Serializable @SerialName("watch_lead")
     data class WatchLead(val prospectId: String) : StateEffect()
+
+    // Pushes deadline.dueTick forward 10 ticks; applies RelationshipChange(-0.10f).
+    // If status is already EXTENDED, applies -0.05f only (once-per-deadline extension limit).
+    @Serializable @SerialName("extend_deadline")
+    data class ExtendDeadline(val deadlineId: String, val artistId: String) : StateEffect()
+
+    // Sets deadline status to MET; applies RelationshipChange(+0.05f) and ReputationChange(PRESS, +0.02f).
+    // No-op if deadline is already MET.
+    @Serializable @SerialName("meet_deadline")
+    data class MeetDeadline(val deadlineId: String, val artistId: String) : StateEffect()
 }

@@ -1,6 +1,7 @@
 package com.github.maskedkunisquat.musicmanager.logic.sim
 
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
+import com.github.maskedkunisquat.musicmanager.logic.model.DeadlineStatus
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import kotlin.random.Random
 
@@ -31,7 +32,15 @@ class SimEngine {
         val labelNeedEvents = events.filterIsInstance<SimEvent.LabelNeedUrgent>()
         val wantSurfacedEvents = events.filterIsInstance<SimEvent.WantSurfaced>()
         val leadSurfacedEvents = events.filterIsInstance<SimEvent.LeadSurfaced>()
+        val missedDeadlineIds = events.filterIsInstance<SimEvent.DeadlineMissed>().map { it.deadlineId }.toSet()
         val surfacedIds = leadSurfacedEvents.map { it.prospectId }.toSet()
+
+        // Season-end: emit once when currentDay crosses seasonEndTick; guard via seasonEndedEmitted.
+        val seasonEndEvent: SimEvent.SeasonEnded? =
+            if (nextWorld.currentDay >= nextWorld.season.seasonEndTick && !nextWorld.seasonEndedEmitted)
+                SimEvent.SeasonEnded(nextWorld.season.seasonNumber, nextWorld.currentDay)
+            else null
+
         val updatedArtists = if (wantSurfacedEvents.isEmpty()) nextWorld.artists else {
             val stamps = wantSurfacedEvents.groupBy { it.artistId }
             nextWorld.artists.mapValues { (id, artist) ->
@@ -49,9 +58,15 @@ class SimEngine {
             capabilityNoticedAt = if (capabilityEvents.isEmpty()) nextWorld.capabilityNoticedAt
                 else nextWorld.capabilityNoticedAt + capabilityEvents.associate { it.type.name to nextWorld.currentDay },
             labelNeedNoticedAt = if (labelNeedEvents.isEmpty()) nextWorld.labelNeedNoticedAt
-                else nextWorld.labelNeedNoticedAt + labelNeedEvents.associate { it.needType.name to nextWorld.currentDay }
+                else nextWorld.labelNeedNoticedAt + labelNeedEvents.associate { it.needType.name to nextWorld.currentDay },
+            deadlines = if (missedDeadlineIds.isEmpty()) nextWorld.deadlines
+                else nextWorld.deadlines.mapValues { (id, d) ->
+                    if (id in missedDeadlineIds) d.copy(status = DeadlineStatus.MISSED) else d
+                },
+            seasonEndedEmitted = nextWorld.seasonEndedEmitted || seasonEndEvent != null
         )
-        return TickResult(world = finalWorld, events = events)
+        val allEvents = if (seasonEndEvent != null) events + seasonEndEvent else events
+        return TickResult(world = finalWorld, events = allEvents)
     }
 
     fun tickN(world: SimWorld, ticks: Int): TickResult {

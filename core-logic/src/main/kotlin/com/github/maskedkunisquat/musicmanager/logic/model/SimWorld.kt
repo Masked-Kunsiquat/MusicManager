@@ -35,5 +35,9 @@ data class SimWorld(
     val surfacedLeads: Set<String> = emptySet(),
     // Guards SeasonEnded from re-emitting on every tick after seasonEndTick is crossed.
     // Reset to false by NewSeasonInitializer when a new season begins.
-    val seasonEndedEmitted: Boolean = false
+    val seasonEndedEmitted: Boolean = false,
+    val season: SeasonState = SeasonState(),
+    // deadlineId -> Deadline; seeded at world init, status updated via MeetDeadline/ExtendDeadline effects
+    // and by SimEngine when DeadlineMissed events are emitted.
+    val deadlines: Map<String, Deadline> = emptyMap()
 )

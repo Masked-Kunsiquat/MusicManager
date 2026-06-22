@@ -1,6 +1,7 @@
 package com.github.maskedkunisquat.musicmanager.logic.event
 
 import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
+import com.github.maskedkunisquat.musicmanager.logic.model.DeadlineType
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.WantType
@@ -100,6 +101,31 @@ sealed class SimEvent {
         val rivalName: String,
         override val artistId: String,
         val artistName: String,
+        override val dayOfGame: Int
+    ) : SimEvent()
+
+    // Emitted at exactly 20, 10, and 5 ticks before dueTick — one event per threshold.
+    data class DeadlineApproaching(
+        val deadlineId: String,
+        override val artistId: String,
+        val type: DeadlineType,
+        val ticksRemaining: Int,
+        override val dayOfGame: Int
+    ) : SimEvent()
+
+    // Emitted the tick after dueTick when status is still PENDING.
+    // SimEngine immediately sets status = MISSED to prevent re-emission.
+    data class DeadlineMissed(
+        val deadlineId: String,
+        override val artistId: String,
+        val type: DeadlineType,
+        override val dayOfGame: Int
+    ) : SimEvent()
+
+    // Emitted once when currentDay >= seasonEndTick. Not an inbox item —
+    // surfaced via observeUnresolvedSeasonEnd() DAO query.
+    data class SeasonEnded(
+        val seasonNumber: Int,
         override val dayOfGame: Int
     ) : SimEvent()
 }
