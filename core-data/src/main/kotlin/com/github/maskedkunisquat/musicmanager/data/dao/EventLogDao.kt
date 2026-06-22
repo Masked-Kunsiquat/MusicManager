@@ -15,6 +15,8 @@ abstract class EventLogDao {
     protected abstract suspend fun insertRaw(event: EventLogEntity)
 
     // Computes SHA-256 hashes and links to the previous row before persisting.
+    // @Transaction ensures lastPayloadHash() and insertRaw() are atomic at the SQLite level.
+    @Transaction
     open suspend fun insert(event: EventLogEntity) {
         val hash = sha256(event.payload)
         val prev = lastPayloadHash() ?: ""
@@ -25,10 +27,10 @@ abstract class EventLogDao {
     // Returns false (and logs nothing here — caller handles warnings) if any link is broken.
     open suspend fun verifyChain(): Boolean = verifyChainOf(getAllOrdered())
 
-    @Query("SELECT payloadHash FROM event_log ORDER BY recordedAt DESC LIMIT 1")
+    @Query("SELECT payloadHash FROM event_log ORDER BY rowid DESC LIMIT 1")
     protected abstract suspend fun lastPayloadHash(): String?
 
-    @Query("SELECT * FROM event_log ORDER BY recordedAt ASC")
+    @Query("SELECT * FROM event_log ORDER BY rowid ASC")
     protected abstract suspend fun getAllOrdered(): List<EventLogEntity>
 
     @Query("SELECT * FROM event_log ORDER BY dayOfGame ASC, recordedAt ASC")

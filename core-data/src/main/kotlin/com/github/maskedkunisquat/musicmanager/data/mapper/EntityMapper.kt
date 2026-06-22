@@ -115,8 +115,9 @@ fun EventLogEntity.toSimEventOrNull(): SimEvent? = try {
     null // corrupt entity — skip rather than crash
 }
 
-// Sums RelationshipChange deltas and WantSatisfied bonuses (+0.15f each) per artist from a
-// response_applied entity. Used to re-derive ArtistState.relationshipBalance on world load.
+// Sums RelationshipChange deltas and WantSatisfied bonuses (StateEffect.WantSatisfied.RELATIONSHIP_BONUS
+// each) per artist from a response_applied entity. Used to re-derive ArtistState.relationshipBalance
+// on world load.
 fun EventLogEntity.toRelationshipDeltas(): Map<String, Float> {
     if (eventType != "response_applied") return emptyMap()
     val result = mutableMapOf<String, Float>()

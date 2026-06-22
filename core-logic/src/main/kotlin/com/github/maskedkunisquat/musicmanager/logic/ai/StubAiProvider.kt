@@ -356,7 +356,7 @@ class StubAiProvider : LabelAiProvider {
                     listOf(NC(a, NeedType.RECOGNITION, +0.30f), NC(a, NeedType.FINANCIAL_SECURITY, +0.20f), RC(a, +0.10f), WS(a, WantType.MAJOR_VENUE_TOUR)),
                     cost = 1_500 * CENTS),
                 option("$a:tour_support_slot", "Lock in a support slot on a bigger act's tour instead",
-                    listOf(NC(a, NeedType.RECOGNITION, +0.15f), WS(a, WantType.MAJOR_VENUE_TOUR))),
+                    listOf(NC(a, NeedType.RECOGNITION, +0.15f))),
                 option("$a:tour_defer", "Not yet — focus on the record first",
                     listOf(NC(a, NeedType.AUTONOMY, -0.10f), RC(a, -0.05f)))
             )
