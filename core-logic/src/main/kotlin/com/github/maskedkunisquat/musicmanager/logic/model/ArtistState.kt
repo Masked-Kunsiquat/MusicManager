@@ -13,5 +13,9 @@ data class ArtistState(
     val contractId: String?,
     // Running sum of all RelationshipChange deltas — drives renewal offer weighting.
     // Unclamped; negative = strained history, positive = warm history.
-    val relationshipBalance: Float = 0f
+    val relationshipBalance: Float = 0f,
+    // WantType.name → day the want was last surfaced; prevents re-surfacing within cooldown window.
+    val wantLastSurfacedAt: Map<String, Int> = emptyMap(),
+    // Day of the last player-resolved event touching this artist; drives recency descriptor.
+    val lastInteractionDay: Int = 0
 )

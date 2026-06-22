@@ -1,6 +1,7 @@
 package com.github.maskedkunisquat.musicmanager.logic.ai
 
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
+import com.github.maskedkunisquat.musicmanager.logic.model.ArtistState
 import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.CreativeControl
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
@@ -65,7 +66,7 @@ class StubAiProvider : LabelAiProvider {
         world: SimWorld
     ): Pair<String, String> = when (event) {
         is SimEvent.NeedUrgent ->
-            needUrgentProse(event.needType, event.currentValue, name, loyalty, confidence, volatility)
+            needUrgentProse(event.needType, event.currentValue, name, loyalty, confidence, volatility, event.artistId)
         is SimEvent.ContractExpiring ->
             contractExpiringProse(name, event.daysRemaining, loyalty, confidence)
         is SimEvent.WantSurfaced ->
@@ -78,6 +79,7 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.LabelNeedUrgent -> labelNeedUrgentProse(event)
         is SimEvent.CapabilityUnlockable -> capabilityUnlockableProse(event)
         is SimEvent.RivalSigning -> rivalSigningProse(event)
+        is SimEvent.LeadSurfaced -> Pair("", "")  // TapeDeck only -- no email rendered
         is SimEvent.RivalPoach -> rivalPoachProse(event)
     }
 
@@ -87,47 +89,62 @@ class StubAiProvider : LabelAiProvider {
         name: String,
         loyalty: Float,
         confidence: Float,
-        volatility: Float
+        volatility: Float,
+        artistId: String
     ): Pair<String, String> {
         val h = hedge(confidence)
         val u = urgencyPrefix(currentValue, volatility)
         val s = signing(name, loyalty)
+        val subject = needUrgentSubject(needType, artistId)
         return when (needType) {
             NeedType.CREATIVE_FULFILLMENT -> Pair(
-                "creative direction — can we talk?",
+                subject,
                 "${h}${u}Hey — I don't want to make this weird but I need to be honest. I've been going " +
                 "through the motions lately and it's starting to show in the demos. I need to make " +
                 "something I actually care about. Can we block off some proper creative time — no " +
                 "brief, no deadline, just space to work? I think it'll pay off.$s"
             )
             NeedType.FINANCIAL_SECURITY -> Pair(
-                "royalties / advance — overdue conversation",
+                subject,
                 "${h}${u}My manager's been on me to bring this up and I keep putting it off because it's " +
                 "awkward, but here we are. The current setup isn't sustainable for me. Between releases " +
                 "I'm covering basics out of my own pocket and it's stressing me out in ways that " +
                 "affect the work. Can we look at the numbers together?$s"
             )
             NeedType.RECOGNITION -> Pair(
-                "feeling invisible lately",
+                subject,
                 "${h}${u}It's starting to feel like we're doing good work in a room with no windows. " +
                 "Other artists — on smaller labels, with less — are getting write-ups, festival slots, " +
                 "interviews. What's the strategy here? I just need to understand the plan.$s"
             )
             NeedType.BELONGING -> Pair(
-                "honest question",
+                subject,
                 "${h}${u}Is everything okay between us? I might be overthinking it but there's been a " +
                 "distance lately that I can't quite name. I see the label posting about other artists " +
                 "and the energy in the room when we meet feels different. I'm not going anywhere — " +
                 "I just want to make sure we're still on the same page.$s"
             )
             NeedType.AUTONOMY -> Pair(
-                "re: next single",
+                subject,
                 "${h}${u}The last three decisions on this album have gone the label's way and I've been " +
                 "okay with that — but this one feels different. I have a specific vision for the next " +
                 "single and I need it to be mine. Not a fight, not a power move — I just need one " +
                 "real win creatively. Can we talk?$s"
             )
         }
+    }
+
+    // Rotates subject templates by artistId hash for variety within a need type.
+    // ushr 1 drops the sign bit so the result is always non-negative.
+    private fun needUrgentSubject(needType: NeedType, artistId: String): String {
+        val templates = when (needType) {
+            NeedType.CREATIVE_FULFILLMENT -> CREATIVE_SUBJECTS
+            NeedType.FINANCIAL_SECURITY   -> FINANCIAL_SUBJECTS
+            NeedType.RECOGNITION          -> RECOGNITION_SUBJECTS
+            NeedType.BELONGING            -> BELONGING_SUBJECTS
+            NeedType.AUTONOMY             -> AUTONOMY_SUBJECTS
+        }
+        return templates[(artistId.hashCode() ushr 1) % templates.size]
     }
 
     private fun contractExpiringProse(
@@ -138,13 +155,26 @@ class StubAiProvider : LabelAiProvider {
     ): Pair<String, String> {
         val h = hedge(confidence)
         val s = signing(name, loyalty)
-        return Pair(
-            "re: contract renewal",
-            "${h}My manager flagged that we're coming up on the window — about $daysRemaining days out. " +
-            "I wanted to reach out directly before it gets too formal. I'm not in panic mode but I'm " +
-            "also not going to pretend I don't have other conversations in my back pocket. If we're " +
-            "doing this, let's figure it out soon.$s"
-        )
+        return when {
+            daysRemaining <= CONTRACT_TIER_URGENT -> Pair(
+                "contract — decision time",
+                "${h}$daysRemaining days. I need an answer, not a check-in. I've respected the process " +
+                "but I won't leave this open indefinitely. What are you offering?$s"
+            )
+            daysRemaining <= CONTRACT_TIER_WARN -> Pair(
+                "contract window — getting close",
+                "${h}$daysRemaining days left and I can't keep this in a holding pattern. I've been " +
+                "patient but I need to know where we stand. I'm not looking for a perfect deal — I'm " +
+                "looking for a real one. Can we have the actual conversation?$s"
+            )
+            else -> Pair(
+                "re: contract renewal",
+                "${h}My manager flagged that we're coming up on the window — about $daysRemaining days out. " +
+                "I wanted to reach out directly before it gets too formal. I'm not in panic mode but I'm " +
+                "also not going to pretend I don't have other conversations in my back pocket. If we're " +
+                "doing this, let's figure it out soon.$s"
+            )
+        }
     }
 
     // Phase 1: wants are populated from artist archetypes; this path is unreachable until then.
@@ -189,19 +219,54 @@ class StubAiProvider : LabelAiProvider {
 
     // --- Option generation ---
 
-    private fun options(event: SimEvent, world: SimWorld): List<ResponseOption> = when (event) {
-        is SimEvent.NeedUrgent -> needUrgentOptions(event, world)
-        is SimEvent.ContractExpiring -> contractExpiringOptions(event, world)
-        is SimEvent.WantSurfaced -> wantSurfacedOptions(event, world)
-        is SimEvent.MarketShift -> marketShiftOptions(event, world)
-        is SimEvent.IntelDrop -> intelDropOptions(event, world)
-        is SimEvent.ScoutReport -> scoutReportOptions(event, world)
-        is SimEvent.NegotiationRound -> negotiationRoundOptions(event, world)
-        is SimEvent.RenewalOpened -> renewalOpenedOptions(event, world)
-        is SimEvent.LabelNeedUrgent -> labelNeedUrgentOptions(event, world)
-        is SimEvent.CapabilityUnlockable -> capabilityUnlockableOptions(event)
-        is SimEvent.RivalSigning -> rivalSigningOptions(event)
-        is SimEvent.RivalPoach -> rivalPoachOptions(event)
+    private fun options(event: SimEvent, world: SimWorld): List<ResponseOption> {
+        val artist = world.artists[event.artistId]
+        val raw = when (event) {
+            is SimEvent.NeedUrgent -> needUrgentOptions(event, world)
+            is SimEvent.ContractExpiring -> contractExpiringOptions(event, world)
+            is SimEvent.WantSurfaced -> wantSurfacedOptions(event, world)
+            is SimEvent.MarketShift -> marketShiftOptions(event, world)
+            is SimEvent.IntelDrop -> intelDropOptions(event, world)
+            is SimEvent.ScoutReport -> scoutReportOptions(event, world)
+            is SimEvent.NegotiationRound -> negotiationRoundOptions(event, world)
+            is SimEvent.RenewalOpened -> renewalOpenedOptions(event, world)
+            is SimEvent.LabelNeedUrgent -> labelNeedUrgentOptions(event, world)
+            is SimEvent.CapabilityUnlockable -> capabilityUnlockableOptions(event)
+            is SimEvent.RivalSigning -> rivalSigningOptions(event)
+            is SimEvent.LeadSurfaced -> leadSurfacedOptions(event)
+            is SimEvent.RivalPoach -> rivalPoachOptions(event)
+        }
+        return prioritize(raw, artist)
+    }
+
+    // Reorder options so those addressing the artist's lowest needs or active wants surface first.
+    // No-op for label/market events (artist == null) or single-option lists.
+    private fun prioritize(options: List<ResponseOption>, artist: ArtistState?): List<ResponseOption> {
+        if (artist == null || options.size <= 1) return options
+        return options.sortedByDescending { optionScore(it, artist) }
+    }
+
+    private fun optionScore(option: ResponseOption, artist: ArtistState): Float {
+        var score = 0f
+        for (effect in option.effects) {
+            when (effect) {
+                is StateEffect.NeedChange -> if (effect.artistId == artist.id) {
+                    val need = artist.needs[effect.needType]?.value ?: continue
+                    // Boost: positive delta on a low need. Penalty: negative delta on a low need.
+                    if (need < 0.30f) score += (0.30f - need) * effect.delta
+                }
+                is StateEffect.RosterNeedChange -> {
+                    // Applies to all artists; count it at half weight for this artist.
+                    val need = artist.needs[effect.needType]?.value ?: continue
+                    if (need < 0.30f) score += (0.30f - need) * effect.delta * 0.5f
+                }
+                is StateEffect.WantSatisfied -> if (effect.artistId == artist.id) {
+                    if (artist.activeWants.any { it.type == effect.wantType }) score += 1.0f
+                }
+                else -> Unit
+            }
+        }
+        return score
     }
 
     private fun needUrgentOptions(event: SimEvent.NeedUrgent, world: SimWorld): List<ResponseOption> {
@@ -239,14 +304,15 @@ class StubAiProvider : LabelAiProvider {
                     cost = 150 * CENTS)
             )
             NeedType.BELONGING -> {
-                val hasPartner = world.artists.keys.any { it != a }
+                val partnerId = world.artists.keys.firstOrNull { it != a } ?: ""
+                val hasPartner = partnerId.isNotEmpty()
                 listOf(
                     option("$a:belong_dinner", "Host a label family dinner this week",
                         listOf(RNC(NeedType.BELONGING, +0.40f), RC(a, +0.15f))),
                     option("$a:belong_collab",
                         if (hasPartner) "Set up a studio session with a roster artist"
                         else "Arrange a creative session for ${world.artists[a]?.name ?: a}",
-                        if (hasPartner) listOf(PNC("", NeedType.BELONGING, +0.35f), NC(a, NeedType.BELONGING, +0.35f), NC(a, NeedType.CREATIVE_FULFILLMENT, +0.10f), RC(a, +0.10f))
+                        if (hasPartner) listOf(PNC(partnerId, NeedType.BELONGING, +0.35f), NC(a, NeedType.BELONGING, +0.35f), NC(a, NeedType.CREATIVE_FULFILLMENT, +0.10f), RC(a, +0.10f))
                         else listOf(NC(a, NeedType.BELONGING, +0.35f), NC(a, NeedType.CREATIVE_FULFILLMENT, +0.10f))),
                     option("$a:belong_checkin", "Send a personal check-in and schedule a call",
                         listOf(NC(a, NeedType.BELONGING, +0.15f), RC(a, +0.05f)))
@@ -287,7 +353,7 @@ class StubAiProvider : LabelAiProvider {
         return when (event.wantType) {
             WantType.MAJOR_VENUE_TOUR -> listOf(
                 option("$a:tour_book", "Start venue negotiations for a headline tour",
-                    listOf(NC(a, NeedType.RECOGNITION, +0.30f), NC(a, NeedType.FINANCIAL_SECURITY, +0.20f), RC(a, +0.10f)),
+                    listOf(NC(a, NeedType.RECOGNITION, +0.30f), NC(a, NeedType.FINANCIAL_SECURITY, +0.20f), RC(a, +0.10f), WS(a, WantType.MAJOR_VENUE_TOUR)),
                     cost = 1_500 * CENTS),
                 option("$a:tour_support_slot", "Lock in a support slot on a bigger act's tour instead",
                     listOf(NC(a, NeedType.RECOGNITION, +0.15f))),
@@ -295,37 +361,37 @@ class StubAiProvider : LabelAiProvider {
                     listOf(NC(a, NeedType.AUTONOMY, -0.10f), RC(a, -0.05f)))
             )
             WantType.COLLAB_WITH_PRODUCER -> listOf(
-                option("$a:collab_network", "Reach out to producers in their network",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.25f), RC(a, +0.05f))),
-                option("$a:collab_label", "Suggest a producer from the label's existing relationships",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.15f))),
                 option("$a:collab_budget", "Allocate budget for an outside producer",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.35f), RC(a, +0.08f)),
-                    cost = 500 * CENTS)
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.35f), RC(a, +0.08f), WS(a, WantType.COLLAB_WITH_PRODUCER)),
+                    cost = 500 * CENTS),
+                option("$a:collab_network", "Reach out to producers in their network",
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.25f), RC(a, +0.05f), WS(a, WantType.COLLAB_WITH_PRODUCER))),
+                option("$a:collab_label", "Suggest a producer from the label's existing relationships",
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.15f), WS(a, WantType.COLLAB_WITH_PRODUCER)))
             )
             WantType.GENRE_EXPERIMENT -> listOf(
                 option("$a:genre_ep", "Green-light a genre-experiment EP, separate from main release",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.40f), NC(a, NeedType.AUTONOMY, +0.20f), RC(a, +0.10f)),
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.40f), NC(a, NeedType.AUTONOMY, +0.20f), RC(a, +0.10f), WS(a, WantType.GENRE_EXPERIMENT)),
                     cost = 600 * CENTS),
                 option("$a:genre_one_track", "Allow one experimental track on the main album",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.20f))),
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.20f), WS(a, WantType.GENRE_EXPERIMENT))),
                 option("$a:genre_stay", "Not this cycle — stay on brand",
                     listOf(NC(a, NeedType.AUTONOMY, -0.15f), RC(a, -0.08f)))
             )
             WantType.RECORD_ALBUM -> listOf(
                 option("$a:album_greenlight", "Approve full album budget and timeline",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.50f), NC(a, NeedType.RECOGNITION, +0.10f), RC(a, +0.15f)),
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.50f), NC(a, NeedType.RECOGNITION, +0.10f), RC(a, +0.15f), WS(a, WantType.RECORD_ALBUM)),
                     cost = 3_000 * CENTS),
                 option("$a:album_ep_first", "Propose an EP first to build momentum",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.20f))),
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.20f), WS(a, WantType.RECORD_ALBUM))),
                 option("$a:album_defer", "Not enough catalog depth yet — table it",
                     listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, -0.10f), NC(a, NeedType.AUTONOMY, -0.10f), RC(a, -0.08f)))
             )
             WantType.INCREASED_ROYALTIES -> listOf(
                 option("$a:royalties_agree", "Agree to a better royalty rate on the next deal",
-                    listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.35f), RC(a, +0.12f))),
+                    listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.35f), RC(a, +0.12f), WS(a, WantType.INCREASED_ROYALTIES))),
                 option("$a:royalties_partial", "Offer a smaller bump now, revisit at renewal",
-                    listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.15f))),
+                    listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.15f), WS(a, WantType.INCREASED_ROYALTIES))),
                 option("$a:royalties_decline", "The deal stands — redirect to performance bonuses instead",
                     listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.05f), NC(a, NeedType.AUTONOMY, -0.10f), RC(a, -0.10f)))
             )
@@ -565,10 +631,10 @@ class StubAiProvider : LabelAiProvider {
     }
 
     private fun capabilityUnlockableOptions(event: SimEvent.CapabilityUnlockable): List<ResponseOption> {
-        val (name) = when (event.type) {
-            CapabilityType.PUBLICIST -> "in-house PR" to ""
-            CapabilityType.IN_HOUSE_BOOKING -> "in-house booking" to ""
-            CapabilityType.VIDEO_PRODUCTION -> "in-house video production" to ""
+        val name = when (event.type) {
+            CapabilityType.PUBLICIST -> "in-house PR"
+            CapabilityType.IN_HOUSE_BOOKING -> "in-house booking"
+            CapabilityType.VIDEO_PRODUCTION -> "in-house video production"
         }
         return listOf(
             option("cap:${event.type.name}:unlock",
@@ -779,7 +845,10 @@ class StubAiProvider : LabelAiProvider {
             emptyList()),
         option("rival:sign:${event.rivalId}:watch",
             "Flag ${event.rivalName} for closer watching",
-            emptyList())
+            emptyList()),
+        option("rival:sign:${event.rivalId}:intel",
+            "Dig into what ${event.rivalName} is building",
+            listOf(StateEffect.UpdateRivalIntel(event.rivalId)))
     )
 
     private fun rivalPoachProse(event: SimEvent.RivalPoach): Pair<String, String> = Pair(
@@ -790,6 +859,24 @@ class StubAiProvider : LabelAiProvider {
         "The remaining roster has noticed. Decide how you respond to the room."
     )
 
+    private fun leadSurfacedOptions(event: SimEvent.LeadSurfaced): List<ResponseOption> = listOf(
+        option(
+            id = "lead:${event.prospectId}:pursue",
+            text = "Pursue",
+            effects = listOf(StateEffect.PursueLead(event.prospectId))
+        ),
+        option(
+            id = "lead:${event.prospectId}:pass",
+            text = "Pass",
+            effects = listOf(StateEffect.PassLead(event.prospectId))
+        ),
+        option(
+            id = "lead:${event.prospectId}:watch",
+            text = "Watch",
+            effects = listOf(StateEffect.WatchLead(event.prospectId))
+        )
+    )
+
     private fun rivalPoachOptions(event: SimEvent.RivalPoach): List<ResponseOption> = listOf(
         option("rival:poach:${event.rivalId}:accept",
             "Let them go — focus forward",
@@ -797,7 +884,10 @@ class StubAiProvider : LabelAiProvider {
         option("rival:poach:${event.rivalId}:morale",
             "Emergency team meeting — hold the room together",
             listOf(RNC(NeedType.BELONGING, +0.15f)),
-            cost = 500 * CENTS)
+            cost = 500 * CENTS),
+        option("rival:poach:${event.rivalId}:intel",
+            "Dig into what ${event.rivalName} is building",
+            listOf(StateEffect.UpdateRivalIntel(event.rivalId)))
     )
 
     private fun NC(artistId: String, needType: NeedType, delta: Float) =
@@ -805,6 +895,9 @@ class StubAiProvider : LabelAiProvider {
 
     private fun RC(artistId: String, delta: Float) =
         StateEffect.RelationshipChange(artistId, delta)
+
+    private fun WS(artistId: String, wantType: WantType) =
+        StateEffect.WantSatisfied(artistId, wantType)
 
     private fun RNC(needType: NeedType, delta: Float) =
         StateEffect.RosterNeedChange(needType, delta)
@@ -814,5 +907,33 @@ class StubAiProvider : LabelAiProvider {
 
     companion object {
         private const val CENTS = 100L
+        private const val CONTRACT_TIER_URGENT = 7
+        private const val CONTRACT_TIER_WARN = 15
+
+        private val CREATIVE_SUBJECTS = listOf(
+            "creative direction — can we talk?",
+            "I need to make something real",
+            "re: where my head is creatively"
+        )
+        private val FINANCIAL_SUBJECTS = listOf(
+            "royalties / advance — overdue conversation",
+            "the financial picture needs a conversation",
+            "re: money and what comes next"
+        )
+        private val RECOGNITION_SUBJECTS = listOf(
+            "feeling invisible lately",
+            "what's the strategy for visibility?",
+            "re: press and profile"
+        )
+        private val BELONGING_SUBJECTS = listOf(
+            "honest question",
+            "checking in — is everything okay?",
+            "something feels off, can we talk?"
+        )
+        private val AUTONOMY_SUBJECTS = listOf(
+            "re: next single",
+            "I need this one to be mine",
+            "creative control — a real conversation"
+        )
     }
 }

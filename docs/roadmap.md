@@ -5,7 +5,7 @@ until the "Done when" criterion for Phase N is met and demonstrable (ideally
 via a test or a runnable CLI/debug harness, since most early phases have no
 UI).
 
-## Phase 0 — Foundation (no UI)
+## Phase 0 — Foundation (no UI) ✅
 
 Build and test `:core-logic` and `:core-data` in isolation. No Compose
 screens. Validate via unit tests and/or a debug-only command-line harness
@@ -28,7 +28,7 @@ that prints sim state, not via the app UI.
 tick it forward N times, and print/assert a list of events each carrying a
 non-empty, context-appropriate set of response options.
 
-## Phase 1 — The Inbox (v0.1, first real playable slice)
+## Phase 1 — The Inbox (v0.1, first real playable slice) ✅
 
 **Completed:**
 - Fake-OS shell: Compose scaffold, device-within-a-device chrome, inbox nav
@@ -46,7 +46,7 @@ non-empty, context-appropriate set of response options.
   9-tick catchup cap (≈ 24h). 180 ticks ≈ 20 real days.
 - Event log: append-only Room schema, `initializeIfEmpty` seeds 10 days on first run
 
-**Remaining:**
+**Deferred by choice (Gemma integration — Phase 1 gate met with StubAiProvider):**
 - `GemmaLiteRtProvider` full implementation: LiteRT-LM SDK integration,
   NPU → GPU (OpenCL) → CPU backend cascade, `generateEmail()` via real inference
 - Model download flow: resumable HTTP to `filesDir`, SHA-256 verification,
@@ -54,16 +54,12 @@ non-empty, context-appropriate set of response options.
 - Download/load state UI: progress indicator in DeviceScreen chrome while
   model is absent or loading (maps to `modelLoadState` StateFlow)
 
-**Done when:** one artist feels alive through their emails across multiple
-in-game days, powered by on-device Gemma 4 E4B inference, and a player's choices
-visibly change that artist's subsequent behavior/tone.
-
 ## Phase 2 — The Market (v0.2)
 
 Work is ordered by dependency. Domain layer must land before UI; scout model
 before signing flow; new event types before their app screens.
 
-### 2-A — Market domain layer (`:core-logic`)
+### 2-A — Market domain layer (`:core-logic`) ✅
 
 1. **Genre trend ticking** — `MarketState.genreTrends` already exists as a
    `Map<String, Float>` stub. Add tick logic: each genre drifts by a small
@@ -131,7 +127,7 @@ before signing flow; new event types before their app screens.
    tests added: full `SimWorld`, prospects-only, scouts-only, and legacy
    snapshot backward-compat (confirms `emptyMap()` defaults on pre-2-A rows).
 
-### 2-C — Signing flow (`:core-logic` + `:core-data`)
+### 2-C — Signing flow (`:core-logic` + `:core-data`) ✅
 
 1. **Multi-turn negotiation events** — signing unfolds across 2-4 inbox
    exchanges. Add `SimEvent.NegotiationRound(prospectId, round: Int, ...)`.
@@ -150,7 +146,7 @@ before signing flow; new event types before their app screens.
    `SignArtist` constructs a full `ArtistState` from `ProspectState` + seeds
    initial needs from dimensions (high volatility → needs start lower).
 
-### 2-D — App screens (`:app`)
+### 2-D — App screens (`:app`) ✅
 
 **UI aesthetic: retro/flip-phone (Nokia-era).** All screens in 2-D and beyond
 use this as the base. Lock it in once, apply globally — consistency is what
@@ -281,7 +277,7 @@ strained → 65/35 + `FULL_ARTIST` on a 90-tick short term. `ContractExpiring`
 options updated to use `OpenRenewal` effect. `EventMapper`/`EntityMapper`
 round-trip for `RenewalOpened`. 20 tests in `RenewalSystemTest`.
 
-### 3-E — Unsignable archetype + deal builder UI (`:core-logic` + `:app`)
+### 3-E — Unsignable archetype + deal builder UI (`:core-logic` + `:app`) ✅
 
 1. **`SignabilityType`** enum: `NORMAL`, `UNSIGNABLE`. Add
    `signability: SignabilityType = NORMAL` to `ProspectState`. One
@@ -314,7 +310,7 @@ round-trip for `RenewalOpened`. 20 tests in `RenewalSystemTest`.
      flavor text above the deal builder ("She said the split wasn't the
      issue. It's the control.").
 
-### 3-F — App screens (`:app`)
+### 3-F — App screens (`:app`) ✅
 
 1. **`LabelOfficeScreen`** — accessible from `HomeScreen`. Retro theme
    (inside `RetroTheme` like all other screens). Shows:
@@ -360,26 +356,229 @@ appears in scout reports repeatedly and always refuses.
 
 ## Phase 4 — Depth Pass (v0.4)
 
-Polish existing systems before adding scope.
+Polish existing systems before adding scope. Work is ordered by dependency:
+want mechanic before broadcast (which consumes it); domain mechanics before
+their app screens; audit pass after all mechanics are stable; hash chain last
+(pure infrastructure, no gameplay dependency).
 
-- A&R Tape Deck app: generated demo descriptors, pursue/pass/watch options,
-  quietly feeds the taste model
-- Contacts app: relationship health via recency/tone, not a number
-- Rival Intel app: unlocks with reputation, intentionally incomplete/
-  sometimes wrong
-- Want satisfaction as a loyalty mechanic distinct from money
-- Broadcast mechanic fully wired: opportunities advertise satisfied needs/
-  wants, weighted against current artist state, reflected in which options
-  surface to the player
-- Full audit pass: no two emails/decisions should feel mechanically
-  identical
-- Event log hash chain: each appended event stores `SHA-256(prev_hash || payload)`,
-  verified on load. Detects direct DB edits without collecting user data; fits
-  naturally with the append-only architecture. Also a prerequisite for any
-  future multiplayer/co-op save-state sync (see v-infinity.md).
+### 4-A — Want activation + tech debt cleanup (`:core-logic`) ✅ (partial)
+
+**Delivered:**
+
+- ✅ `WorldInitializer.buildArtist()` — `buildArtistWants()` pure fn derives 0–2 wants
+  from dimensions: low loyalty (<0.40f) → `INCREASED_ROYALTIES`; high confidence
+  (≥0.65f) → `MAJOR_VENUE_TOUR` or `RECORD_ALBUM` by commercial appetite; high
+  volatility (≥0.70f) → `GENRE_EXPERIMENT`; mid-confidence + low commercial → `COLLAB_WITH_PRODUCER`.
+- ✅ `StateEffect.WantSatisfied(artistId, wantType)` — removes want from `activeWants`,
+  +0.15f loyalty via `RelationshipChange`. No-op guard if want is not active.
+- ✅ `StubAiProvider` `WantSurfaced` arms — all 5 `WantType` branches wired. Fully-
+  satisfying option carries `WantSatisfied`; partial options deliberately omit it
+  (want stays active = cost-vs-loyalty tension preserved).
+- ✅ EventMapper/EntityMapper — decided at implementation time: `WantSatisfied` lives
+  only as a `StateEffect`, not a persisted `SimEvent`. No EventMapper/EntityMapper arms
+  needed for SimEvent dispatch; serialization is still handled as a StateEffect inside
+  `ResponseOption.toResponseEntity()`.
+- ✅ `DealBuilderPanel` deterministic option id (`"deal_builder:${artistId}:${round}"`)
+  fixes the dedup-guard issue from 3-E tech debt.
+- ✅ `WantActivationTest` — 10 tests: seeding rules, urgency threshold, loyalty bump,
+  clamp, `relationshipBalance` update, no-op guard, partial-satisfaction isolation.
+  All 182 core-logic tests pass.
+
+**Skipped (carry to 4-F audit pass):**
+- `ArtistState.relationshipBalance` verification on world load — `WorldInitializer`
+  does not yet fold event log to assert/correct the stored balance. Risk is low
+  (only diverges if pre-v4 rows are partially present); revisit in 4-F.
+
+### 4-B ✅ — Broadcast mechanic (`:core-logic`)
+
+"Opportunities advertise satisfied needs/wants" — the event and option
+generation should be aware of each artist's current state so that the inbox
+feels reactive, not generic.
+
+1. **Need/want-weighted option scoring in `StubAiProvider`** — when generating
+   options for any artist event, check `artist.needs` and `artist.activeWants`.
+   Options that address a currently-low need or active want should be listed
+   first (index 0 = the `filled` button in the UI). Options that conflict with
+   a low need should be listed last or omitted. This is a reordering pass on
+   the existing option lists, not new option types.
+
+2. **`EventGenerator` cadence weighting** — `WantSurfaced` urgency should scale
+   with time elapsed since the want was last surfaced (if tracking is needed,
+   add `wantLastSurfacedAt: Map<String, Int>` to `ArtistState`, defaulting to
+   empty — same pattern as `capabilityNoticedAt`). Prevents spam while ensuring
+   high-urgency wants always surface within 5 ticks.
+
+3. **`IntelDrop` genre weighting** — already roster-weighted at 70%. Increase
+   relevance: also weight toward genres where the label has active `activeWants`
+   for `RECOGNITION` (those artists benefit most from market awareness). No new
+   types — adjust the weight constant and document the intent.
+
+4. **Tests** — `BroadcastMechanicTest`: options are reordered by need priority,
+   want-satisfying options appear first when urgency is high, `IntelDrop`
+   prefers genres with recognition-hungry artists.
+
+### 4-C ✅ — A&R Tape Deck (`:core-logic` + `:app`)
+
+A new app that surfaces unsigned prospects as "demo tapes" — pursue/pass/watch
+options that feed a hidden taste model shaping future scout reports.
+
+1. **`DemoState`** — add `demo: DemoState` to `ProspectState`. Fields:
+   `descriptor: String` (2-3 word genre/vibe label, e.g. "lo-fi bedroom pop",
+   generated stub in `WorldInitializer`), `rawScore: Float` (0–1, not shown
+   to player), `submittedDay: Int`. Seeded for all prospects at world init.
+
+2. **`TasteVector`** — add `tasteVector: Map<String, Float>` to `LabelState`
+   (genre → preference weight, default 0.5f for all). Updated by:
+   - **Pursue** (`StateEffect.PursueLead(prospectId)`): weight for prospect's
+     genre += 0.05f (clamped 0–1). Also advances negotiation (calls
+     `AdvanceNegotiation` internally or as a paired effect).
+   - **Pass** (`StateEffect.PassLead(prospectId)`): weight -= 0.03f. Removes
+     prospect from the tape deck view for 10 ticks (add `passedLeads:
+     Map<String, Int>` to `SimWorld`).
+   - **Watch** (`StateEffect.WatchLead(prospectId)`): no weight change; re-
+     surfaces the prospect after 5 ticks with an updated `rawScore` (small
+     random drift). Signals genuine uncertainty.
+
+3. **`SimEvent.LeadSurfaced(prospectId, dayOfGame)`** — emitted by
+   `EventGenerator` when a prospect is not passed/pursuing and not in
+   `unavailableProspects`. Rate: 1 per 3 ticks per available prospect (cap
+   at 3 leads visible at once in the tape deck). Not an inbox email — feeds
+   the `TapeDeckScreen` directly via its own DAO query.
+
+4. **`TapeDeckScreen`** (`:app`) — retro style, full-screen list of surfaced
+   leads. Each row: prospect name, genre, demo descriptor (flavor), and three
+   action buttons: PURSUE / PASS / WATCH. No scores visible. Nav wired from
+   `HomeScreen`.
+
+5. **`EventMapper` / `EntityMapper`** round-trip for `LeadSurfaced`,
+   `PursueLead`, `PassLead`, `WatchLead` as needed.
+
+6. **Tests** — `TapeDeckTest`: taste vector updates correctly on pursue/pass,
+   passed lead hidden for correct duration, watch re-surfaces with drift,
+   `LeadSurfaced` respects cap of 3 concurrent leads.
+
+### 4-D ✅ — Contacts screen (`:app`)
+
+Roster relationship health as a surface — recency and tone, not a number.
+
+1. **`lastInteractionDay: Int`** — add to `ArtistState` (default 0). Updated
+   by `ResponseApplicator` on any resolved event for that artist (set to
+   `world.currentDay`). No DB migration needed — the default is safe.
+
+2. **Recency descriptor** — derive from `world.currentDay - artist.lastInteractionDay`:
+   - ≤ 5 ticks: "recent"
+   - 6–15 ticks: "quiet"
+   - 16–30 ticks: "distant"
+   - > 30 ticks: "cold"
+
+3. **Tone descriptor** — derive from `artist.relationshipBalance`:
+   - > 0.5f: "warm"
+   - 0.1–0.5f: "neutral"
+   - -0.1–0.1f: "tense"
+   - < -0.1f: "strained"
+
+4. **`ContactsScreen`** (`:app`) — retro list, one row per roster artist.
+   Each row: artist name, genre, then `"[recency] / [tone]"` (e.g.
+   `"quiet / warm"`). Tapping a row does nothing in Phase 4 (future: opens
+   relationship history). Nav wired from `HomeScreen`.
+
+5. **Tests** — `ContactsDescriptorTest`: recency/tone labels emit correctly
+   at boundary values; `lastInteractionDay` updated on resolve.
+
+### 4-E — Rival Intel screen (`:core-logic` + `:app`)
+
+Reputation-gated competitive intelligence — intentionally incomplete and
+occasionally wrong.
+
+1. **Gate** — `RivalIntelScreen` only appears in `HomeScreen` nav when
+   `label.reputation[PRESS] >= 0.5f`. Below that threshold, the nav entry
+   is hidden entirely (no greyed-out button — the player discovers it when
+   they cross the threshold via a `LabelNeedUrgent` or capability event).
+
+2. **`RivalIntelState`** — add `intelCache: Map<String, RivalSnapshot>` to
+   `LabelState` (default emptyMap). `RivalSnapshot(rivalId, observedRosterSize:
+   Int, observedGenres: List<String>, confidence: Float, snapshotDay: Int)`.
+   Updated by a new `StateEffect.UpdateRivalIntel(rivalId)` emitted as an
+   option on `RivalSigning` / `RivalPoach` events ("dig into what they're
+   building" option, costs 0, updates the cache).
+
+3. **Fuzz layer** — when reading `RivalSnapshot` for display, apply noise
+   proportional to `(1f - confidence)`: roster size ± 1–2, genre list may
+   drop one entry or add a spurious one. Confidence decays 0.05f per 10 ticks
+   since `snapshotDay` (stale intel gets fuzzier). The fuzz is applied at
+   display time, not stored.
+
+4. **`RivalIntelScreen`** (`:app`) — one card per known rival. Shows rival
+   name, estimated roster size (with `~` prefix to signal uncertainty),
+   observed genres. Stale entries (confidence < 0.3f) shown with a `[STALE]`
+   tag. Nav from `HomeScreen` (hidden until gate met).
+
+5. **Tests** — `RivalIntelTest`: fuzz applied correctly at confidence
+   boundaries, confidence decays over ticks, gate hides screen below
+   reputation threshold, `UpdateRivalIntel` populates cache.
+
+### 4-F — Email audit pass (`:core-logic`)
+
+No new types or mechanics. Pure content and variety pass across all
+`StubAiProvider` arms. Also pick up the one item skipped in 4-A: verify
+`ArtistState.relationshipBalance` against the event log on world load.
+
+1. **Audit checklist** — for every `StubAiProvider` arm, verify:
+   - Prose is inflected by at least one artist dimension (loyalty, confidence,
+     volatility, or `relationshipBalance`). Arms that ignore artist state
+     produce flat, identical-feeling emails — fix them.
+   - At least two options feel meaningfully different (not just cost variants
+     of the same outcome).
+   - No two event types produce structurally identical subject lines.
+
+2. **`NeedUrgent` variation** — currently the most repetitive. Add 2–3
+   subject-line templates per `NeedType` and rotate by `artist.id.hashCode()
+   % templates.size` for deterministic but varied output. Do not use
+   `currentDay` as the rotation key (causes every artist to get the same
+   template on the same day).
+
+3. **`ContractExpiring` tension arc** — prose should escalate across the
+   `daysRemaining` window: casual mention at 30 days, mild urgency at 15,
+   direct ask at 7. Currently flat. Add tier constants and branch the copy.
+
+4. **Regression tests** — `AuditPassTest`: spot-check that subjects differ
+   across artist IDs for the same need type, that `ContractExpiring` prose
+   differs across day tiers, that at least one arm references a dimension
+   value in a test world.
+
+### 4-G ✅ — Event log hash chain (`:core-data`)
+
+Integrity layer for the append-only event log. Detects direct DB edits
+without collecting user data.
+
+1. **Schema migration** — bump DB version to 5. Add `prevHash TEXT NOT NULL
+   DEFAULT ''` and `payloadHash TEXT NOT NULL DEFAULT ''` to `event_log`.
+   Existing rows get empty strings (migration is non-destructive).
+
+2. **Hash computation** — on every `insertEvent()` call in `EventLogDao`:
+   - `payloadHash = SHA-256(payload)`
+   - `prevHash = payloadHash of the most recently inserted row` (query
+     `SELECT payloadHash FROM event_log ORDER BY recordedAt DESC LIMIT 1`
+     before each insert; empty string for the genesis row).
+   Store both alongside the event.
+
+3. **Chain verification** — add `EventLogDao.verifyChain(): Boolean`. Reads
+   all rows ordered by `recordedAt ASC`, recomputes each `payloadHash` from
+   the stored `payload`, and checks that each row's `prevHash` matches the
+   previous row's `payloadHash`. Called once on app startup (in `AppApplication`
+   or `SimRepository.initialize()`); logs a warning if broken, does not crash.
+
+4. **Tests** — `HashChainTest`: chain verifies on a clean sequence, breaks
+   correctly when a payload is mutated, genesis row passes with empty
+   `prevHash`, migration leaves existing rows with empty strings that still
+   pass verification (since empty-string chain is internally consistent).
 
 **Done when:** the game has texture, not just mechanics — playtesting
-doesn't feel repetitive within a season.
+doesn't feel repetitive within a season. Specifically: wants create
+genuine tension between artist satisfaction and label cost; the tape deck
+makes scouting feel like curation; contacts give the roster emotional
+legibility; rival intel creates paranoia without perfect information; no
+two inbox sessions feel mechanically identical.
 
 ## Phase 5 — Season Structure (v1.0)
 

@@ -33,6 +33,7 @@ fun SimEvent.eventSignature(): String = when (this) {
     is SimEvent.LabelNeedUrgent -> "label_need_urgent:${needType.name}"
     is SimEvent.CapabilityUnlockable -> "capability_unlockable:${type.name}"
     is SimEvent.RivalSigning -> "rival_signing:$rivalId:$prospectName"
+    is SimEvent.LeadSurfaced -> "lead_surfaced:$prospectId"
     is SimEvent.RivalPoach -> "rival_poach:$rivalId:$artistId"
 }
 
@@ -129,6 +130,27 @@ fun ResponseOption.toResponseEntity(originalEventId: String, dayOfGame: Int): Ev
                             put("type", "renewal_walked")
                             put("artistId", effect.artistId)
                         }
+                        is StateEffect.WantSatisfied -> {
+                            put("type", "want_satisfied")
+                            put("artistId", effect.artistId)
+                            put("wantType", effect.wantType.name)
+                        }
+                        is StateEffect.PursueLead -> {
+                            put("type", "pursue_lead")
+                            put("prospectId", effect.prospectId)
+                        }
+                        is StateEffect.PassLead -> {
+                            put("type", "pass_lead")
+                            put("prospectId", effect.prospectId)
+                        }
+                        is StateEffect.WatchLead -> {
+                            put("type", "watch_lead")
+                            put("prospectId", effect.prospectId)
+                        }
+                        is StateEffect.UpdateRivalIntel -> {
+                            put("type", "update_rival_intel")
+                            put("rivalId", effect.rivalId)
+                        }
                     }
                 })
             }
@@ -161,6 +183,7 @@ private fun SimEvent.eventTypeKey(): String = when (this) {
     is SimEvent.LabelNeedUrgent -> "label_need_urgent"
     is SimEvent.CapabilityUnlockable -> "capability_unlockable"
     is SimEvent.RivalSigning -> "rival_signing"
+    is SimEvent.LeadSurfaced -> "lead_surfaced"
     is SimEvent.RivalPoach -> "rival_poach"
 }
 
@@ -205,6 +228,9 @@ private fun SimEvent.toPayloadJson(): String = when (this) {
     is SimEvent.LabelNeedUrgent -> buildJsonObject {
         put("needType", needType.name)
         put("severity", String.format(Locale.US, "%.4f", severity))
+    }
+    is SimEvent.LeadSurfaced -> buildJsonObject {
+        put("prospectId", prospectId)
     }
     is SimEvent.CapabilityUnlockable -> buildJsonObject {
         put("type", type.name)

@@ -192,6 +192,38 @@ class EventGeneratorTest {
         assertEquals(42, event.dayOfGame)
     }
 
+    @Test
+    fun `LabelNeedUrgent CASH_FLOW suppressed within 10-tick cooldown`() {
+        // currentDay=10, lastNoticed=5 → gap=5 < 10 → no event
+        val w = world().copy(
+            label = world().label.copy(funds = 400_000L),
+            labelNeedNoticedAt = mapOf("CASH_FLOW" to 5)
+        )
+        assertTrue("Expected no CASH_FLOW event within cooldown",
+            generateEvents(w).none { it is SimEvent.LabelNeedUrgent && (it as SimEvent.LabelNeedUrgent).needType == LabelNeedType.CASH_FLOW }
+        )
+    }
+
+    @Test
+    fun `LabelNeedUrgent CASH_FLOW emitted once cooldown expires`() {
+        // currentDay=10, lastNoticed=0 → gap=10 which is NOT < 10 → event fires
+        val w = world().copy(
+            label = world().label.copy(funds = 400_000L),
+            labelNeedNoticedAt = mapOf("CASH_FLOW" to 0)
+        )
+        assertNotNull("Expected CASH_FLOW event after cooldown expires",
+            generateEvents(w).filterIsInstance<SimEvent.LabelNeedUrgent>()
+                .firstOrNull { it.needType == LabelNeedType.CASH_FLOW }
+        )
+    }
+
+    @Test
+    fun `LabelNeedUrgent GENRE_DIVERSITY not emitted for single-artist roster`() {
+        // 1 artist with 1 genre: diversity = 1/max(4,1) would be 0.25 without the size<2 guard
+        val w = world()  // default world has exactly 1 artist
+        assertTrue(generateEvents(w).none { it is SimEvent.LabelNeedUrgent && (it as SimEvent.LabelNeedUrgent).needType == LabelNeedType.GENRE_DIVERSITY })
+    }
+
     // --- Determinism ---
 
     @Test

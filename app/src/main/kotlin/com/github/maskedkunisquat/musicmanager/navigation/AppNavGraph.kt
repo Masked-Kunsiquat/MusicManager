@@ -7,12 +7,15 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.github.maskedkunisquat.musicmanager.ui.charts.ChartsScreen
+import com.github.maskedkunisquat.musicmanager.ui.rivalintel.RivalIntelScreen
+import com.github.maskedkunisquat.musicmanager.ui.contacts.ContactsScreen
 import com.github.maskedkunisquat.musicmanager.ui.email.EmailDetailScreen
 import com.github.maskedkunisquat.musicmanager.ui.home.HomeScreen
 import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxScreen
 import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxViewModel
 import com.github.maskedkunisquat.musicmanager.ui.labeloffice.LabelOfficeScreen
 import com.github.maskedkunisquat.musicmanager.ui.press.PressScreen
+import com.github.maskedkunisquat.musicmanager.ui.tapedeck.TapeDeckScreen
 import com.github.maskedkunisquat.musicmanager.ui.press.PressViewModel
 
 object Route {
@@ -21,6 +24,9 @@ object Route {
     const val CHARTS = "charts"
     const val PRESS = "press"
     const val LABEL_OFFICE = "label_office"
+    const val TAPE_DECK = "tape_deck"
+    const val CONTACTS = "contacts"
+    const val RIVAL_INTEL = "rival_intel"
     const val EMAIL_DETAIL = "email/{eventId}"
     fun emailDetail(eventId: String) = "email/$eventId"
 }
@@ -37,8 +43,21 @@ fun AppNavGraph(
                 onOpenInbox = { navController.navigate(Route.INBOX) },
                 onOpenCharts = { navController.navigate(Route.CHARTS) },
                 onOpenPress = { navController.navigate(Route.PRESS) },
-                onOpenLabelOffice = { navController.navigate(Route.LABEL_OFFICE) }
+                onOpenLabelOffice = { navController.navigate(Route.LABEL_OFFICE) },
+                onOpenTapeDeck = { navController.navigate(Route.TAPE_DECK) },
+                onOpenContacts = { navController.navigate(Route.CONTACTS) },
+                onOpenRivalIntel = { navController.navigate(Route.RIVAL_INTEL) },
+                viewModel = viewModel
             )
+        }
+        composable(Route.CONTACTS) {
+            ContactsScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
+        }
+        composable(Route.RIVAL_INTEL) {
+            RivalIntelScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
+        }
+        composable(Route.TAPE_DECK) {
+            TapeDeckScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
         }
         composable(Route.LABEL_OFFICE) {
             LabelOfficeScreen(viewModel = viewModel, onBack = { navController.popBackStack() })

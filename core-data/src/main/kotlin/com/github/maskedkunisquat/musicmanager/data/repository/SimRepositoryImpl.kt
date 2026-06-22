@@ -3,11 +3,16 @@ package com.github.maskedkunisquat.musicmanager.data.repository
 import com.github.maskedkunisquat.musicmanager.data.dao.EventLogDao
 import com.github.maskedkunisquat.musicmanager.data.mapper.eventSignature
 import com.github.maskedkunisquat.musicmanager.data.mapper.toInboxItemOrNull
+import com.github.maskedkunisquat.musicmanager.data.mapper.toRelationshipDeltas
+import com.github.maskedkunisquat.musicmanager.data.mapper.toTouchedArtistIds
+import kotlin.math.abs
+import com.github.maskedkunisquat.musicmanager.data.mapper.toTapeDeckItemOrNull
 import com.github.maskedkunisquat.musicmanager.data.mapper.toResponseEntity
 import com.github.maskedkunisquat.musicmanager.data.mapper.toSimEventOrNull
 import com.github.maskedkunisquat.musicmanager.data.mapper.toEntity
 import com.github.maskedkunisquat.musicmanager.logic.ai.LabelAiProvider
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
+import com.github.maskedkunisquat.musicmanager.logic.inbox.TapeDeckItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.SimRepository
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
@@ -34,9 +39,13 @@ class SimRepositoryImpl(
         private set
 
     private val tickMutex = Mutex()
+    private var startupChecksRan = false
 
     override fun observeUnresolved(): Flow<List<InboxItem>> =
         dao.observeUnresolved().map { entities -> entities.mapNotNull { it.toInboxItemOrNull() } }
+
+    override fun observeActiveSurfacedLeads(): Flow<List<TapeDeckItem>> =
+        dao.observeActiveSurfacedLeads().map { entities -> entities.mapNotNull { it.toTapeDeckItemOrNull() } }
 
     override suspend fun generateOptions(item: InboxItem): List<ResponseOption> {
         if (item.email.options.isNotEmpty()) return item.email.options
@@ -69,7 +78,56 @@ class SimRepositoryImpl(
 
     override suspend fun tick() = tickMutex.withLock { tickUnderLock() }
 
+    // Re-derives ArtistState.relationshipBalance from the event log and corrects any divergence.
+    // No-op when the world snapshot is current; only corrects pre-3-D saves where the field
+    // defaulted to 0f despite accumulated RelationshipChange and WantSatisfied effects.
+    private suspend fun reconcileRelationshipBalancesUnderLock() {
+        val derived = mutableMapOf<String, Float>()
+        for (entity in dao.getResponseEntities()) {
+            entity.toRelationshipDeltas().forEach { (id, delta) ->
+                derived[id] = (derived[id] ?: 0f) + delta
+            }
+        }
+        val corrections = world.artists.entries.mapNotNull { (id, artist) ->
+            val expected = derived[id] ?: 0f
+            if (abs(expected - artist.relationshipBalance) > 0.001f) id to artist.copy(relationshipBalance = expected)
+            else null
+        }.toMap()
+        if (corrections.isNotEmpty()) {
+            world = world.copy(artists = world.artists + corrections)
+            withContext(Dispatchers.IO) { saveWorld(world) }
+        }
+    }
+
+    // Back-fills ArtistState.lastInteractionDay for saves predating 4-D (where it defaulted to 0).
+    private suspend fun reconcileLastInteractionDaysUnderLock() {
+        val latestDay = mutableMapOf<String, Int>()
+        for (entity in dao.getResponseEntities()) {
+            val day = entity.dayOfGame
+            for (artistId in entity.toTouchedArtistIds()) {
+                if ((latestDay[artistId] ?: -1) < day) latestDay[artistId] = day
+            }
+        }
+        val corrections = world.artists.entries.mapNotNull { (id, artist) ->
+            val expected = latestDay[id] ?: return@mapNotNull null
+            if (expected > artist.lastInteractionDay) id to artist.copy(lastInteractionDay = expected)
+            else null
+        }.toMap()
+        if (corrections.isNotEmpty()) {
+            world = world.copy(artists = world.artists + corrections)
+            withContext(Dispatchers.IO) { saveWorld(world) }
+        }
+    }
+
     override suspend fun initializeIfEmpty(days: Int) = tickMutex.withLock {
+        if (!startupChecksRan) {
+            reconcileRelationshipBalancesUnderLock()
+            reconcileLastInteractionDaysUnderLock()
+            if (!dao.verifyChain()) {
+                android.util.Log.w("SimRepository", "Event log hash chain integrity check failed — possible DB tampering")
+            }
+            startupChecksRan = true
+        }
         if (dao.getAll().isEmpty()) {
             // Tick until we have at least `days` inbox events, capped at 90 ticks to prevent
             // infinite loops on pathological seeds. `days` here means target event count.

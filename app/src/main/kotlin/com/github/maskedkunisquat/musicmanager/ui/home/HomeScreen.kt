@@ -10,21 +10,35 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import com.github.maskedkunisquat.musicmanager.ui.components.RetroButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
+import com.github.maskedkunisquat.musicmanager.ui.components.RetroButton
+import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxViewModel
 import com.github.maskedkunisquat.musicmanager.ui.theme.RetroTheme
+
+private const val RIVAL_INTEL_REP_GATE = 0.5f
 
 @Composable
 fun HomeScreen(
     onOpenInbox: () -> Unit,
     onOpenCharts: () -> Unit,
     onOpenPress: () -> Unit,
-    onOpenLabelOffice: () -> Unit
+    onOpenLabelOffice: () -> Unit,
+    onOpenTapeDeck: () -> Unit,
+    onOpenContacts: () -> Unit,
+    onOpenRivalIntel: () -> Unit,
+    viewModel: InboxViewModel
 ) {
+    val world by viewModel.world.collectAsStateWithLifecycle()
+    val pressRep = world.label.reputation[ReputationCommunity.PRESS] ?: 0f
+    val rivalIntelUnlocked = pressRep >= RIVAL_INTEL_REP_GATE
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -55,13 +69,20 @@ fun HomeScreen(
         RetroButton(onClick = onOpenLabelOffice, modifier = Modifier.fillMaxWidth()) {
             Text("LABEL OFFICE")
         }
+        Spacer(modifier = Modifier.height(12.dp))
+        RetroButton(onClick = onOpenTapeDeck, modifier = Modifier.fillMaxWidth()) {
+            Text("TAPE DECK")
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+        RetroButton(onClick = onOpenContacts, modifier = Modifier.fillMaxWidth()) {
+            Text("CONTACTS")
+        }
+        if (rivalIntelUnlocked) {
+            Spacer(modifier = Modifier.height(12.dp))
+            RetroButton(onClick = onOpenRivalIntel, modifier = Modifier.fillMaxWidth()) {
+                Text("RIVAL INTEL")
+            }
+        }
     }
 }
 
-@Preview(showBackground = true)
-@Composable
-private fun HomeScreenPreview() {
-    RetroTheme {
-        HomeScreen(onOpenInbox = {}, onOpenCharts = {}, onOpenPress = {}, onOpenLabelOffice = {})
-    }
-}

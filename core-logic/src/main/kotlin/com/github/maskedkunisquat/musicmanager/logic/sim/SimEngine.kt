@@ -29,7 +29,23 @@ class SimEngine {
         val events = generateEvents(nextWorld, previousMarket, eventRng) + scoutReports + rivalEvents
         val capabilityEvents = events.filterIsInstance<SimEvent.CapabilityUnlockable>()
         val labelNeedEvents = events.filterIsInstance<SimEvent.LabelNeedUrgent>()
+        val wantSurfacedEvents = events.filterIsInstance<SimEvent.WantSurfaced>()
+        val leadSurfacedEvents = events.filterIsInstance<SimEvent.LeadSurfaced>()
+        val surfacedIds = leadSurfacedEvents.map { it.prospectId }.toSet()
+        val updatedArtists = if (wantSurfacedEvents.isEmpty()) nextWorld.artists else {
+            val stamps = wantSurfacedEvents.groupBy { it.artistId }
+            nextWorld.artists.mapValues { (id, artist) ->
+                val artistWants = stamps[id] ?: return@mapValues artist
+                artist.copy(
+                    wantLastSurfacedAt = artist.wantLastSurfacedAt +
+                        artistWants.associate { it.wantType.name to nextWorld.currentDay }
+                )
+            }
+        }
         val finalWorld = nextWorld.copy(
+            artists = updatedArtists,
+            surfacedLeads = nextWorld.surfacedLeads + surfacedIds,
+            watchedLeads = nextWorld.watchedLeads - surfacedIds,
             capabilityNoticedAt = if (capabilityEvents.isEmpty()) nextWorld.capabilityNoticedAt
                 else nextWorld.capabilityNoticedAt + capabilityEvents.associate { it.type.name to nextWorld.currentDay },
             labelNeedNoticedAt = if (labelNeedEvents.isEmpty()) nextWorld.labelNeedNoticedAt

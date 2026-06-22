@@ -46,10 +46,27 @@ the semantically correct value is the world snapshot *at the time of the
 event*, not the final world. Phase 0 ignores this (dimensions don't tick),
 but Phase 1 will need per-event snapshots.
 
-**`WantSurfaced` path is intentional dead code until Phase 1**
-`WorldInitializer.buildArtist()` always sets `activeWants = emptyList()`.
-The `wantEvents()` filter and all five `WantType` arms in `StubAiProvider`
-are unreachable. Don't remove them — they're scaffolding for Phase 1.
+**`WantSurfaced` path is live as of Phase 4-A**
+`WorldInitializer.buildArtistWants()` seeds 0–2 wants per artist based on dimension
+thresholds (loyalty, confidence, volatility, commercialAppetite). The `wantEvents()`
+filter and all five `WantType` arms in `StubAiProvider` are reachable. In Phase 0,
+wants are seeded once at world init — no dynamic re-surfacing until Phase 1. Partial
+response options carry `WS()` to prevent permanent want-stranding in Phase 0.
+`StateEffect.WantSatisfied.RELATIONSHIP_BONUS` is the single source of truth for the
++0.15f loyalty/balance bonus — do NOT hard-code 0.15f in `EntityMapper` or elsewhere.
+
+**`LeadSurfaced` events are NOT inbox emails**
+`EntityMapper.toInboxItemOrNull()` returns `null` for `eventType == "lead_surfaced"`.
+They surface via `SimRepository.observeActiveSurfacedLeads()` into `TapeDeckScreen`.
+`StubAiProvider.prose()` intentionally returns `Pair("", "")` for them. If a harness
+test checks that all events have non-blank subject/body, skip `LeadSurfaced` explicitly —
+that is correct behaviour, not a missing case.
+
+**`SimWorld.surfacedLeads` is the live set; `EventLogDao` is the source of truth**
+`SimEngine.tick()` adds newly surfaced prospect IDs to `surfacedLeads` and removes
+watched IDs from it. The Room query `observeActiveSurfacedLeads()` filters
+`eventType = 'lead_surfaced' AND selectedOptionId IS NULL` — these two must stay in
+sync. If you add a dedup dedup key for leads, derive it from `"lead_surfaced:$prospectId"`.
 
 ---
 
@@ -82,6 +99,39 @@ Don't introduce a custom `WorkerFactory` just to inject — the cast is intentio
 than "one fire = one tick". Catchup is capped at 9 ticks (≈ 24h) to avoid flooding
 the inbox after a long absence. `TICK_INTERVAL_MS` is the source of truth — don't
 hardcode 160 min elsewhere. A 180-tick contract expires in ~20 real days.
+
+---
+
+## Common workflows
+
+**Running all tests after a change**
+```
+./gradlew :core-logic:test                   # JVM module — fast
+./gradlew :core-data:testDebugUnitTest       # Android library — needs Debug variant
+```
+Both must pass before committing. `:core-logic:test` covers the domain model, sim,
+event generation, and AI provider. `:core-data:testDebugUnitTest` covers mappers and DAO.
+
+**Adding a new `SimEvent` subclass — checklist**
+1. `SimEvent.kt` — add the `data class`
+2. `EventMapper.kt` — add to `eventSignature()`, `eventTypeKey()`, `toPayloadJson()`
+3. `EntityMapper.kt` — add to `toSimEventOrNull()` switch
+4. `StubAiProvider.kt` — add to `prose()` and `options()` when-blocks
+5. `ResponseApplicator.kt` — add any new `StateEffect` arms
+6. `EventMapper.kt` / `EntityMapper.kt` — add any new `StateEffect` subclasses to `toResponseEntity`
+7. If it's NOT an inbox email (like `LeadSurfaced`): add guard in `toInboxItemOrNull()`; add a custom `toXyzOrNull()` mapper; add a DAO query; add `observeXyz()` to `SimRepository`.
+
+**Adding a new `StateEffect` subclass**
+1. `ResponseOption.kt` — add `@Serializable @SerialName("snake_name")` subclass
+2. `ResponseApplicator.kt` — add arm in the `when (effect)` block
+3. `EventMapper.kt` `toResponseEntity()` — add arm to serialize the effect to JSON
+
+**PowerShell multi-line string replacements corrupt files if encoding drifts**
+Don't use PowerShell `-replace` with embedded newlines or smart-quote characters
+when editing Kotlin files. Use the `Edit` tool or `Write` tool instead — they are
+reliable and track file state. PowerShell `-replace` with `\`n` in here-strings
+has produced corrupted files in this project (LabelState.kt rewritten with wrong
+content; SimWorld.kt losing new fields).
 
 ---
 

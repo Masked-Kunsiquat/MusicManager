@@ -7,8 +7,10 @@ import com.github.maskedkunisquat.musicmanager.logic.model.CreativeControl
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
+import com.github.maskedkunisquat.musicmanager.logic.model.RivalSnapshot
 import com.github.maskedkunisquat.musicmanager.logic.model.SignabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.RevenueSplit
+import com.github.maskedkunisquat.musicmanager.logic.model.WantType
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
 import com.github.maskedkunisquat.musicmanager.logic.response.StateEffect
@@ -28,6 +30,27 @@ fun applyResponse(world: SimWorld, option: ResponseOption): Pair<SimWorld, List<
         val (newWorld, events) = applyEffect(updated, effect)
         updated = newWorld
         injectedEvents += events
+    }
+    // Stamp lastInteractionDay for any roster artist directly touched by this response.
+    val touchedArtistIds: Set<String> = option.effects.mapNotNull { effect ->
+        when (effect) {
+            is StateEffect.NeedChange         -> effect.artistId
+            is StateEffect.RelationshipChange -> effect.artistId
+            is StateEffect.PairedNeedChange   -> effect.partnerId
+            is StateEffect.OpenRenewal        -> effect.artistId
+            is StateEffect.AdvanceRenewal     -> effect.artistId
+            is StateEffect.RenewContract      -> effect.artistId
+            is StateEffect.RenewalWalked      -> effect.artistId
+            is StateEffect.WantSatisfied      -> effect.artistId
+            else -> null
+        }
+    }.toSet()
+    if (touchedArtistIds.isNotEmpty()) {
+        updated = updated.copy(
+            artists = updated.artists + touchedArtistIds.mapNotNull { id ->
+                updated.artists[id]?.let { id to it.copy(lastInteractionDay = updated.currentDay) }
+            }.toMap()
+        )
     }
     return Pair(updated, injectedEvents)
 }
@@ -207,6 +230,87 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): Pair<SimWorld, Li
                 activeRenewals = world.activeRenewals - effect.artistId
             )
             Pair(newWorld, noEvents)
+        }
+        is StateEffect.WantSatisfied -> {
+            val artist = world.artists[effect.artistId] ?: return Pair(world, noEvents)
+            if (artist.activeWants.none { it.type == effect.wantType }) return Pair(world, noEvents)
+            val bonus = StateEffect.WantSatisfied.RELATIONSHIP_BONUS
+            val newLoyalty = (artist.dimensions.loyalty + bonus).coerceIn(0f, 1f)
+            Pair(world.copy(
+                artists = world.artists + (effect.artistId to artist.copy(
+                    activeWants = artist.activeWants.filter { it.type != effect.wantType },
+                    dimensions = artist.dimensions.copy(loyalty = newLoyalty),
+                    relationshipBalance = artist.relationshipBalance + bonus
+                ))
+            ), noEvents)
+        }
+        is StateEffect.PursueLead -> {
+            val prospect = world.prospects[effect.prospectId] ?: return Pair(world, noEvents)
+            if (effect.prospectId in world.unavailableProspects) return Pair(world, noEvents)
+            val genre = prospect.genre
+            val weight = (world.label.tasteVector[genre] ?: 0.5f)
+            val newWorld1 = world.copy(
+                label = world.label.copy(
+                    tasteVector = world.label.tasteVector + (genre to (weight + 0.05f).coerceIn(0f, 1f))
+                ),
+                surfacedLeads = world.surfacedLeads - effect.prospectId
+            )
+            val nextRound = (newWorld1.activeNegotiations[effect.prospectId] ?: 0) + 1
+            val newWorld2 = newWorld1.copy(
+                activeNegotiations = newWorld1.activeNegotiations + (effect.prospectId to nextRound)
+            )
+            val event = SimEvent.NegotiationRound(
+                prospectId = effect.prospectId, round = nextRound, dayOfGame = world.currentDay
+            )
+            Pair(newWorld2, listOf(event))
+        }
+        is StateEffect.PassLead -> {
+            val prospect = world.prospects[effect.prospectId] ?: return Pair(world, noEvents)
+            val genre = prospect.genre
+            val weight = (world.label.tasteVector[genre] ?: 0.5f)
+            Pair(world.copy(
+                label = world.label.copy(
+                    tasteVector = world.label.tasteVector + (genre to (weight - 0.03f).coerceIn(0f, 1f))
+                ),
+                passedLeads = world.passedLeads + (effect.prospectId to world.currentDay),
+                surfacedLeads = world.surfacedLeads - effect.prospectId
+            ), noEvents)
+        }
+        is StateEffect.UpdateRivalIntel -> {
+            val rival = world.rivals[effect.rivalId] ?: return Pair(world, noEvents)
+            // Rival roster isn't tracked individually in SimWorld; we observe genre focus weights.
+            // Each genre the rival prioritises (weight >= 0.5) implies ~2 signed artists on average.
+            val focusGenres = rival.genreWeights
+                .filter { (_, w) -> w >= 0.5f }
+                .keys
+                .toList()
+                .sorted()
+            val estimatedSize = (focusGenres.size * 2).coerceAtLeast(1)
+            val snapshot = RivalSnapshot(
+                rivalId = effect.rivalId,
+                observedRosterSize = estimatedSize,
+                observedGenres = focusGenres,
+                confidence = 1.0f,
+                snapshotDay = world.currentDay
+            )
+            Pair(world.copy(
+                label = world.label.copy(
+                    intelCache = world.label.intelCache + (effect.rivalId to snapshot)
+                )
+            ), noEvents)
+        }
+        is StateEffect.WatchLead -> {
+            val prospect = world.prospects[effect.prospectId] ?: return Pair(world, noEvents)
+            val driftRaw = (prospect.id.hashCode().toLong() * world.currentDay) and 0xFF
+            val drift = driftRaw.toFloat() / 255f * 0.10f - 0.05f  // [-0.05, +0.05]
+            val newScore = (prospect.demo.rawScore + drift).coerceIn(0f, 1f)
+            Pair(world.copy(
+                prospects = world.prospects + (effect.prospectId to prospect.copy(
+                    demo = prospect.demo.copy(rawScore = newScore)
+                )),
+                watchedLeads = world.watchedLeads + (effect.prospectId to world.currentDay),
+                surfacedLeads = world.surfacedLeads - effect.prospectId
+            ), noEvents)
         }
         is StateEffect.RenewalWalked -> {
             // Guard: only penalize if a renewal was actually in progress.

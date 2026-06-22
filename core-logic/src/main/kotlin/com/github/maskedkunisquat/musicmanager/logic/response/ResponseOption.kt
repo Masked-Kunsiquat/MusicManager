@@ -5,6 +5,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.CreativeControl
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.model.RevenueSplit
+import com.github.maskedkunisquat.musicmanager.logic.model.WantType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -88,4 +89,29 @@ sealed class StateEffect {
     // Artist walked from renewal talks. Loyalty -0.2f; accelerates rival poach if running.
     @Serializable @SerialName("renewal_walked")
     data class RenewalWalked(val artistId: String) : StateEffect()
+
+    // Marks a want as fulfilled — removes it from activeWants and grants RELATIONSHIP_BONUS loyalty.
+    // No-op if the want is not currently active.
+    @Serializable @SerialName("want_satisfied")
+    data class WantSatisfied(
+        val artistId: String,
+        val wantType: WantType
+    ) : StateEffect() {
+        companion object { const val RELATIONSHIP_BONUS = 0.15f }
+    }
+
+    // Captures a snapshot of the rival's current roster for display in RivalIntelScreen.
+    // Confidence starts at 1.0f and decays at display time (not stored).
+    @Serializable @SerialName("update_rival_intel")
+    data class UpdateRivalIntel(val rivalId: String) : StateEffect()
+
+    // Tape deck responses — move a surfaced lead into a negotiation, cooldown, or watch state.
+    @Serializable @SerialName("pursue_lead")
+    data class PursueLead(val prospectId: String) : StateEffect()
+
+    @Serializable @SerialName("pass_lead")
+    data class PassLead(val prospectId: String) : StateEffect()
+
+    @Serializable @SerialName("watch_lead")
+    data class WatchLead(val prospectId: String) : StateEffect()
 }
