@@ -1,6 +1,9 @@
 package com.github.maskedkunisquat.musicmanager.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -15,6 +18,7 @@ import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxScreen
 import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxViewModel
 import com.github.maskedkunisquat.musicmanager.ui.labeloffice.LabelOfficeScreen
 import com.github.maskedkunisquat.musicmanager.ui.press.PressScreen
+import com.github.maskedkunisquat.musicmanager.ui.recap.SeasonRecapScreen
 import com.github.maskedkunisquat.musicmanager.ui.tapedeck.TapeDeckScreen
 import com.github.maskedkunisquat.musicmanager.ui.press.PressViewModel
 
@@ -27,6 +31,7 @@ object Route {
     const val TAPE_DECK = "tape_deck"
     const val CONTACTS = "contacts"
     const val RIVAL_INTEL = "rival_intel"
+    const val SEASON_RECAP = "season_recap"
     const val EMAIL_DETAIL = "email/{eventId}"
     fun emailDetail(eventId: String) = "email/$eventId"
 }
@@ -37,6 +42,11 @@ fun AppNavGraph(
     viewModel: InboxViewModel,
     pressViewModel: PressViewModel
 ) {
+    val showRecap by viewModel.showRecap.collectAsStateWithLifecycle()
+    LaunchedEffect(showRecap) {
+        if (showRecap) navController.navigate(Route.SEASON_RECAP) { launchSingleTop = true }
+    }
+
     NavHost(navController = navController, startDestination = Route.HOME) {
         composable(Route.HOME) {
             HomeScreen(
@@ -73,6 +83,18 @@ fun AppNavGraph(
                 viewModel = viewModel,
                 onOpenEmail = { eventId -> navController.navigate(Route.emailDetail(eventId)) },
                 onBack = { navController.popBackStack() }
+            )
+        }
+        composable(Route.SEASON_RECAP) {
+            SeasonRecapScreen(
+                viewModel = viewModel,
+                onStartNewSeason = {
+                    viewModel.startNewSeason()
+                    navController.navigate(Route.HOME) {
+                        popUpTo(0) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
             )
         }
         composable(

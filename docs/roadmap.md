@@ -763,7 +763,7 @@ background work is needed — season boundary detection happens inside the exist
    for high-volatility roster; scout weighting skews toward `primaryGenre` when
    `focusScore > 0.6f`; null identity produces unchanged event output.
 
-### 5-E — Season-end UI + new-season flow (`:app`)
+### 5-E — Season-end UI + new-season flow (`:app`) ✓ DONE
 
 1. **`SeasonRecapScreen`** — full-screen interstitial triggered when
    `SeasonEnded` reaches the top of the inbox stream. Retro style: monospace,

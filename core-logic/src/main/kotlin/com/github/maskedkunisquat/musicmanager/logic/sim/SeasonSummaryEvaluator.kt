@@ -17,7 +17,8 @@ object SeasonSummaryEvaluator {
             fundsNet = world.label.funds - world.season.startFunds,
             reputationDeltas = world.label.reputation.entries.associate { (community, current) ->
                 community.name to (current - (world.season.startReputation[community.name] ?: current))
-            }
+            },
+            departedArtistNames = facts.departedArtistNames
         )
     }
 }

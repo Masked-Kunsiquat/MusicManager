@@ -170,11 +170,14 @@ class SimRepositoryImpl(
                 }
             }
         }
+        val lostIds = poachIds + walkedIds
+        val departedNames = lostIds.mapNotNull { id -> world.artists[id]?.name }.sorted()
         return SeasonFacts(
             rivalPoachArtistIds = poachIds,
             renewalWalkedArtistIds = walkedIds,
             deadlinesMet = met,
-            deadlinesMissed = missed
+            deadlinesMissed = missed,
+            departedArtistNames = departedNames
         )
     }
 

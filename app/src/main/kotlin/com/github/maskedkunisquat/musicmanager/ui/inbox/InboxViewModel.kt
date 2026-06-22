@@ -8,12 +8,14 @@ import com.github.maskedkunisquat.musicmanager.logic.ai.ModelLoadState
 import com.github.maskedkunisquat.musicmanager.logic.inbox.TapeDeckItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.SimRepository
+import com.github.maskedkunisquat.musicmanager.logic.model.SeasonSummary
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -32,6 +34,16 @@ class InboxViewModel(
 
     val activeSurfacedLeads: StateFlow<List<TapeDeckItem>> = repository.observeActiveSurfacedLeads()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // Suppressed while startNewSeason() is in flight to prevent the recap re-appearing
+    // between "button pressed" and "SeasonEnded event marked resolved".
+    private val _recapNavigating = MutableStateFlow(false)
+    val showRecap: StateFlow<Boolean> = repository.observeUnresolvedSeasonEnd()
+        .combine(_recapNavigating) { unresolved, navigating -> unresolved && !navigating }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    private val _seasonSummary = MutableStateFlow<SeasonSummary?>(null)
+    val seasonSummary: StateFlow<SeasonSummary?> = _seasonSummary.asStateFlow()
 
     // Keyed by event ID — populated asynchronously so real inference doesn't block composition.
     private val _options = MutableStateFlow<Map<String, List<ResponseOption>>>(emptyMap())
@@ -68,6 +80,27 @@ class InboxViewModel(
 
     fun markViewed(eventId: String) {
         viewModelScope.launch { repository.markViewed(eventId) }
+    }
+
+    fun loadSeasonSummary() {
+        if (_seasonSummary.value != null) return
+        viewModelScope.launch {
+            _seasonSummary.value = repository.getSeasonSummary()
+        }
+    }
+
+    fun startNewSeason() {
+        _recapNavigating.value = true
+        viewModelScope.launch {
+            runCatching {
+                repository.startNewSeason()
+                _world.value = repository.world
+            }.onFailure { e ->
+                Log.e(TAG, "startNewSeason failed", e)
+            }
+            _seasonSummary.value = null
+            _recapNavigating.value = false
+        }
     }
 
     fun resolveEvent(eventId: String, option: ResponseOption) {

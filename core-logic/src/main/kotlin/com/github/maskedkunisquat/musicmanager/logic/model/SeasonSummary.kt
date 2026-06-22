@@ -7,5 +7,6 @@ data class SeasonSummary(
     val deadlinesMet: Int,
     val deadlinesMissed: Int,
     val fundsNet: Long,                              // cents; positive = profit, negative = loss
-    val reputationDeltas: Map<String, Float>         // keyed by ReputationCommunity.name
+    val reputationDeltas: Map<String, Float>,        // keyed by ReputationCommunity.name
+    val departedArtistNames: List<String> = emptyList()
 )
