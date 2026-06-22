@@ -133,10 +133,11 @@ private fun RecapContent(summary: SeasonSummary) {
 
 private fun formatFundsDelta(cents: Long): String {
     val dollars = cents / 100L
-    val sign = if (dollars >= 0L) "+" else ""
-    return if (abs(dollars) >= 1000L) {
-        "$sign\$${dollars / 1000L}k"
+    val absDollars = abs(dollars)
+    val sign = if (dollars >= 0L) "+" else "-"
+    return if (absDollars >= 1000L) {
+        "$sign\$${absDollars / 1000L}k"
     } else {
-        "$sign\$$dollars"
+        "$sign\$$absDollars"
     }
 }

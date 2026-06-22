@@ -23,6 +23,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
 import com.github.maskedkunisquat.musicmanager.logic.sim.LabelIdentityEvaluator
 import com.github.maskedkunisquat.musicmanager.logic.sim.NewSeasonInitializer
+import com.github.maskedkunisquat.musicmanager.logic.sim.SIGNED_ARTIST_ID_PREFIX
 import com.github.maskedkunisquat.musicmanager.logic.sim.SeasonSummaryEvaluator
 import com.github.maskedkunisquat.musicmanager.logic.sim.SimEngine
 import com.github.maskedkunisquat.musicmanager.logic.sim.WorldInitializer
@@ -108,6 +109,8 @@ class SimRepositoryImpl(
 
     // All world mutation goes through this; callers must already hold tickMutex.
     private suspend fun tickUnderLock() {
+        // TODO: cache identity between ticks and invalidate only on response_applied writes;
+        //  currently dao.getAll() is called on every tick (O(N) full scan).
         val identity = getLabelIdentity()
         aiProvider.onIdentityUpdated(identity)
         val result = engine.tick(world, identity)
@@ -261,7 +264,9 @@ class SimRepositoryImpl(
         val entities = previousSeasonEntities()
         if (entities.isEmpty()) return null
         val actions = extractGenreActions(entities)
-        return LabelIdentityEvaluator.evaluate(actions, world.artists.values).primaryGenre
+        // Pass empty artist list: only primaryGenre is used by callers; aesthetic (roster-driven)
+        // would be wrong here since world.artists reflects the current season.
+        return LabelIdentityEvaluator.evaluate(actions, emptyList()).primaryGenre
     }
 
     // Extracts GenreAction list from current-season response_applied entities.
@@ -300,10 +305,10 @@ class SimRepositoryImpl(
     // within a season. If the prospect was signed, the new artist carries the same genre.
     private fun resolveProspectGenre(prospectId: String): String? =
         world.prospects[prospectId]?.genre
-            ?: world.artists["signed_$prospectId"]?.genre
+            ?: world.artists["$SIGNED_ARTIST_ID_PREFIX$prospectId"]?.genre
 
     private fun resolveSignedGenre(prospectId: String): String? =
-        world.artists["signed_$prospectId"]?.genre
+        world.artists["$SIGNED_ARTIST_ID_PREFIX$prospectId"]?.genre
             ?: world.prospects[prospectId]?.genre
 
     override suspend fun startNewSeason() = tickMutex.withLock {

@@ -16,7 +16,7 @@ object LabelIdentityEvaluator {
             val current = weights.getOrDefault(action.genre, 0.5f)
             weights[action.genre] = (current + action.delta).coerceIn(0f, 1f)
         }
-        val primaryGenre = weights.entries.maxByOrNull { it.value }?.takeIf { weights.isNotEmpty() }?.key
+        val primaryGenre = weights.entries.maxByOrNull { it.value }?.takeIf { it.value > 0f }?.key
         return LabelIdentity(
             genreWeights = weights.toMap(),
             primaryGenre = primaryGenre,

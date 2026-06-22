@@ -17,6 +17,9 @@ import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
 import com.github.maskedkunisquat.musicmanager.logic.response.StateEffect
 import com.github.maskedkunisquat.musicmanager.logic.sim.RIVAL_POACH_THRESHOLD
 
+// Key prefix for artists created by SignArtist. Shared with core-data's genre-resolution lookups.
+const val SIGNED_ARTIST_ID_PREFIX = "signed_"
+
 // Returns the updated world and any events to immediately persist (e.g., NegotiationRound).
 fun applyResponse(world: SimWorld, option: ResponseOption): Pair<SimWorld, List<SimEvent>> {
     require(option.costFunds >= 0L) { "costFunds must be non-negative, was ${option.costFunds}" }
@@ -129,7 +132,7 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): Pair<SimWorld, Li
                 )
                 return Pair(newWorld, noEvents)
             }
-            val artistId = "signed_${effect.prospectId}"
+            val artistId = "$SIGNED_ARTIST_ID_PREFIX${effect.prospectId}"
             val contractId = "contract_${effect.prospectId}"
             val volatility = prospect.dimensions.volatility
             val newArtist = ArtistState(

@@ -92,11 +92,12 @@ class InboxViewModel(
     fun loadSeasonSummary() {
         if (_seasonSummary.value != null) return
         viewModelScope.launch {
-            _seasonSummary.value = repository.getSeasonSummary()
+            _seasonSummary.value = runCatching { repository.getSeasonSummary() }.getOrNull()
         }
     }
 
     fun loadLabelIdentity() {
+        if (_labelIdentity.value != null) return
         viewModelScope.launch {
             _labelIdentity.value = runCatching { repository.getLabelIdentity() }.getOrNull()
             _prevSeasonPrimaryGenre.value = runCatching { repository.getPreviousSeasonPrimaryGenre() }.getOrNull()
