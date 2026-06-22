@@ -226,7 +226,7 @@ object WorldInitializer {
     internal fun buildDeadlines(artistIds: Set<String>, rng: Random, seasonNumber: Int): Map<String, Deadline> {
         val result = mutableMapOf<String, Deadline>()
         val allTypes = DeadlineType.entries
-        for (artistId in artistIds) {
+        for (artistId in artistIds.toList().sorted()) {
             val count = 1 + rng.nextInt(2)  // 1-2 deadlines per artist
             val shuffledTypes = allTypes.shuffled(rng)
             for (i in 0 until count) {

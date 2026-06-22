@@ -8,7 +8,6 @@ import kotlin.random.Random
 object NewSeasonInitializer {
 
     // Label keeps 60% of end-season funds; floor prevents a death spiral after a bad season.
-    private const val FUNDS_CARRY_RATE = 0.60f
     private const val FUNDS_FLOOR_CENTS = 10_000 * 100L  // $10,000
 
     fun advance(world: SimWorld): SimWorld {
@@ -41,7 +40,8 @@ object NewSeasonInitializer {
         }
 
         // --- Funds: partial carry, floor at $10,000 to prevent unrecoverable state ---
-        val newFunds = (world.label.funds * FUNDS_CARRY_RATE).toLong().coerceAtLeast(FUNDS_FLOOR_CENTS)
+        // Integer arithmetic avoids float precision loss on cent-denominated Long values.
+        val newFunds = (world.label.funds * 60L / 100L).coerceAtLeast(FUNDS_FLOOR_CENTS)
 
         // --- Label: capabilities and tasteVector persist; intelCache clears (rivals reshuffle) ---
         val newLabel = world.label.copy(
@@ -70,9 +70,12 @@ object NewSeasonInitializer {
         val newDeadlines = WorldInitializer.buildDeadlines(newArtists.keys, rng, newSeasonNumber)
 
         // --- Scouts: employees carry over; lastReportDay re-staggered so they don't burst together ---
-        val newScouts = world.scouts.entries.mapIndexed { index, (id, scout) ->
-            id to scout.copy(lastReportDay = -(index * (SCOUT_REPORT_INTERVAL / 2)))
-        }.toMap()
+        // Sort by ID before mapIndexed to ensure the stagger offset is deterministic regardless
+        // of map implementation iteration order.
+        val newScouts = world.scouts.entries.sortedBy { it.key }
+            .mapIndexed { index, (id, scout) ->
+                id to scout.copy(lastReportDay = -(index * (SCOUT_REPORT_INTERVAL / 2)))
+            }.toMap()
 
         // --- Market: soft-reset — each trend drifts 50% toward 0.5 (structural bias carries, extremes blunted) ---
         val newGenreTrends = world.market.genreTrends.mapValues { (_, trend) ->

@@ -2,8 +2,10 @@ package com.github.maskedkunisquat.musicmanager.logic.model
 
 import kotlinx.serialization.Serializable
 
+@Serializable
 enum class DeadlineType { ALBUM_RELEASE, TOUR_BOOKING, PRESS_CYCLE }
 
+@Serializable
 enum class DeadlineStatus { PENDING, MET, MISSED, EXTENDED }
 
 @Serializable

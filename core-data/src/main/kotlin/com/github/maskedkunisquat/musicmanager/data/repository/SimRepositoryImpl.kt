@@ -197,17 +197,45 @@ class SimRepositoryImpl(
         dao.observeUnresolvedSeasonEnd().map { it.isNotEmpty() }
 
     override suspend fun getSeasonSummary(): SeasonSummary {
-        val startTick = world.season.seasonStartTick
-        val entities = dao.getFromDay(startTick)
+        val prevSeasonNumber = world.season.seasonNumber - 1
+        val json = Json { ignoreUnknownKeys = true }
+        val allEntities = dao.getAll()
+        // Anchor on the recordedAt of the SeasonEnded event from the previous season so we only
+        // count events from the current season. `seasonStartTick` is always 0 after each new
+        // season and cannot be used to discriminate — dayOfGame ranges restart from 0 each season.
+        val seasonBoundary: Long = if (prevSeasonNumber < 1) 0L else {
+            allEntities
+                .filter { it.eventType == "season_ended" }
+                .mapNotNull { entity ->
+                    runCatching {
+                        val n = json.parseToJsonElement(entity.payload)
+                            .jsonObject["seasonNumber"]?.jsonPrimitive?.content?.toIntOrNull()
+                            ?: return@mapNotNull null
+                        if (n == prevSeasonNumber) entity.recordedAt else null
+                    }.getOrNull()
+                }
+                .maxOrNull() ?: 0L
+        }
+        val entities = if (seasonBoundary == 0L) allEntities
+                       else allEntities.filter { it.recordedAt > seasonBoundary }
         val facts = extractSeasonFacts(entities)
         return SeasonSummaryEvaluator.evaluate(world, facts)
     }
 
     override suspend fun startNewSeason() = tickMutex.withLock {
         val seasonEndEntity = dao.getUnresolvedSeasonEnd().firstOrNull() ?: return@withLock
-        world = NewSeasonInitializer.advance(world)
-        withContext(Dispatchers.IO) { saveWorld(world) }
-        dao.markResolved(seasonEndEntity.id, "season_advanced", System.currentTimeMillis())
+        val now = System.currentTimeMillis()
+        // Guard against double-advance: if the world was already saved for this season (e.g.,
+        // saveWorld succeeded but markResolved crashed), skip the advance but always markResolved.
+        val eventSeasonNumber = runCatching {
+            Json.parseToJsonElement(seasonEndEntity.payload)
+                .jsonObject["seasonNumber"]?.jsonPrimitive?.content?.toIntOrNull()
+        }.getOrNull()
+        if (eventSeasonNumber == null || world.season.seasonNumber < eventSeasonNumber) {
+            world = NewSeasonInitializer.advance(world)
+            withContext(Dispatchers.IO) { saveWorld(world) }
+        }
+        dao.markResolved(seasonEndEntity.id, "season_advanced", now)
     }
 
     override suspend fun resolveEvent(eventId: String, option: ResponseOption) = tickMutex.withLock {

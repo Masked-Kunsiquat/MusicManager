@@ -136,6 +136,10 @@ fun ResponseOption.toResponseEntity(originalEventId: String, dayOfGame: Int): Ev
                         is StateEffect.RenewalWalked -> {
                             put("type", "renewal_walked")
                             put("artistId", effect.artistId)
+                            // Explicit delta so EntityMapper.toRelationshipDeltas() need not
+                            // hard-code game rules. Backward-compat: old rows without this
+                            // field fall back to -0.2f.
+                            put("delta", String.format(Locale.US, "%.4f", -0.2f))
                         }
                         is StateEffect.WantSatisfied -> {
                             put("type", "want_satisfied")
@@ -167,6 +171,10 @@ fun ResponseOption.toResponseEntity(originalEventId: String, dayOfGame: Int): Ev
                             put("type", "meet_deadline")
                             put("deadlineId", effect.deadlineId)
                             put("artistId", effect.artistId)
+                            // Explicit delta so EntityMapper.toRelationshipDeltas() need not
+                            // hard-code game rules. Backward-compat: old rows without this
+                            // field fall back to +0.05f.
+                            put("delta", String.format(Locale.US, "%.4f", 0.05f))
                         }
                     }
                 })

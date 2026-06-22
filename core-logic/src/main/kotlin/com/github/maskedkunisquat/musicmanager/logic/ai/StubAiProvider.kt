@@ -959,17 +959,15 @@ class StubAiProvider : LabelAiProvider {
     private fun deadlineApproachingOptions(event: SimEvent.DeadlineApproaching, world: SimWorld): List<ResponseOption> {
         val d = event.deadlineId
         val a = event.artistId
-        val deadline = world.deadlines[d]
-        val alreadyExtended = deadline?.status == DeadlineStatus.EXTENDED
+        val alreadyExtended = world.deadlines[d]?.status == DeadlineStatus.EXTENDED
         return buildList {
             add(option("deadline:$d:meet", "Confirm — we're on track to deliver",
                 listOf(StateEffect.MeetDeadline(d, a))))
-            add(option(
-                "deadline:$d:extend",
-                if (alreadyExtended) "Request another extension — damage the relationship further"
-                else "Ask for more time — push the window back",
-                listOf(StateEffect.ExtendDeadline(d, a)),
-                cost = 3_000 * CENTS))
+            if (!alreadyExtended) {
+                add(option("deadline:$d:extend", "Ask for more time — push the window back",
+                    listOf(StateEffect.ExtendDeadline(d, a)),
+                    cost = 3_000 * CENTS))
+            }
             add(option("deadline:$d:slide", "Let it slide — deal with the fallout when it comes",
                 emptyList()))
         }

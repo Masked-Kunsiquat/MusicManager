@@ -317,6 +317,10 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): Pair<SimWorld, Li
         }
         is StateEffect.ExtendDeadline -> {
             val deadline = world.deadlines[effect.deadlineId] ?: return Pair(world, noEvents)
+            // Cannot extend a deadline that's already been met or missed — those are terminal states.
+            if (deadline.status == DeadlineStatus.MET || deadline.status == DeadlineStatus.MISSED) {
+                return Pair(world, noEvents)
+            }
             val artist = world.artists[effect.artistId] ?: return Pair(world, noEvents)
             return if (deadline.status == DeadlineStatus.EXTENDED) {
                 // Already extended once — loyalty cost only, no further extension.
@@ -343,7 +347,10 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): Pair<SimWorld, Li
         }
         is StateEffect.MeetDeadline -> {
             val deadline = world.deadlines[effect.deadlineId] ?: return Pair(world, noEvents)
-            if (deadline.status == DeadlineStatus.MET) return Pair(world, noEvents)
+            // MET is already done; MISSED is a terminal loss state that cannot be retroactively met.
+            if (deadline.status == DeadlineStatus.MET || deadline.status == DeadlineStatus.MISSED) {
+                return Pair(world, noEvents)
+            }
             val artist = world.artists[effect.artistId] ?: return Pair(world, noEvents)
             val newLoyalty = (artist.dimensions.loyalty + 0.05f).coerceIn(0f, 1f)
             val pressRep = world.label.reputation[ReputationCommunity.PRESS] ?: 0f

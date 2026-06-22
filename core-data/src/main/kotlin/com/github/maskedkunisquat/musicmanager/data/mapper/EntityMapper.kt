@@ -153,8 +153,16 @@ fun EventLogEntity.toRelationshipDeltas(): Map<String, Float> {
                     result[artistId] = (result[artistId] ?: 0f) + delta
                 }
                 "want_satisfied" -> result[artistId] = (result[artistId] ?: 0f) + StateEffect.WantSatisfied.RELATIONSHIP_BONUS
-                "renewal_walked" -> result[artistId] = (result[artistId] ?: 0f) - 0.2f
-                "meet_deadline" -> result[artistId] = (result[artistId] ?: 0f) + 0.05f
+                // Read explicit delta stored since Phase 5-A; fall back to the historical
+                // hard-coded values for rows written before that version.
+                "renewal_walked" -> {
+                    val delta = obj["delta"]?.jsonPrimitive?.content?.toFloatOrNull() ?: -0.2f
+                    result[artistId] = (result[artistId] ?: 0f) + delta
+                }
+                "meet_deadline" -> {
+                    val delta = obj["delta"]?.jsonPrimitive?.content?.toFloatOrNull() ?: 0.05f
+                    result[artistId] = (result[artistId] ?: 0f) + delta
+                }
             }
         }
     }
