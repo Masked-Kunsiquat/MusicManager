@@ -19,6 +19,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.SeasonFacts
 import com.github.maskedkunisquat.musicmanager.logic.model.SeasonSummary
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
+import com.github.maskedkunisquat.musicmanager.logic.sim.NewSeasonInitializer
 import com.github.maskedkunisquat.musicmanager.logic.sim.SeasonSummaryEvaluator
 import com.github.maskedkunisquat.musicmanager.logic.sim.SimEngine
 import com.github.maskedkunisquat.musicmanager.logic.sim.WorldInitializer
@@ -200,6 +201,13 @@ class SimRepositoryImpl(
         val entities = dao.getFromDay(startTick)
         val facts = extractSeasonFacts(entities)
         return SeasonSummaryEvaluator.evaluate(world, facts)
+    }
+
+    override suspend fun startNewSeason() = tickMutex.withLock {
+        val seasonEndEntity = dao.getUnresolvedSeasonEnd().firstOrNull() ?: return@withLock
+        world = NewSeasonInitializer.advance(world)
+        withContext(Dispatchers.IO) { saveWorld(world) }
+        dao.markResolved(seasonEndEntity.id, "season_advanced", System.currentTimeMillis())
     }
 
     override suspend fun resolveEvent(eventId: String, option: ResponseOption) = tickMutex.withLock {

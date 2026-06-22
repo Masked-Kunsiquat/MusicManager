@@ -129,7 +129,7 @@ object WorldInitializer {
     // Derives 0-2 wants from the artist's dimension profile. Pure function -- no RNG.
     // Rule: financial anxiety (low loyalty) surfaces first; career wants (confidence,
     // volatility) fill remaining slots up to a cap of 2.
-    private fun buildArtistWants(d: ArtistDimensions): List<Want> {
+    internal fun buildArtistWants(d: ArtistDimensions): List<Want> {
         val wants = mutableListOf<Want>()
         if (d.loyalty < 0.40f) {
             wants += Want(
@@ -171,7 +171,7 @@ object WorldInitializer {
         genreTrends = GENRES.associateWith { rng.nextFloat() }
     )
 
-    private fun buildProspect(id: String, rng: Random): ProspectState {
+    internal fun buildProspect(id: String, rng: Random): ProspectState {
         val name = "${ADJECTIVES.random(rng)} ${NOUNS.random(rng)}"
         val genre = GENRES.random(rng)
         val dims = ArtistDimensions(
@@ -190,7 +190,7 @@ object WorldInitializer {
             signabilityScore = signabilityScore, demo = demo)
     }
 
-    private fun buildUnsignableProspect(id: String, rng: Random): ProspectState {
+    internal fun buildUnsignableProspect(id: String, rng: Random): ProspectState {
         val name = "${ADJECTIVES.random(rng)} ${NOUNS.random(rng)}"
         val genre = GENRES.random(rng)
         val dims = ArtistDimensions(
@@ -209,7 +209,7 @@ object WorldInitializer {
             signabilityScore = signabilityScore, signability = SignabilityType.UNSIGNABLE, demo = demo)
     }
 
-    private fun buildRival(id: String, index: Int, rng: Random): RivalState {
+    internal fun buildRival(id: String, index: Int, rng: Random): RivalState {
         val focusCount = 2 + rng.nextInt(2)  // 2-3 focus genres per rival
         val focusGenres = (0 until focusCount).map { GENRES.random(rng) }.toSet()
         val genreWeights = GENRES.associateWith { genre ->

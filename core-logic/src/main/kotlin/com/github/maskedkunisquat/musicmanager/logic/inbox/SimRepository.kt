@@ -17,4 +17,6 @@ interface SimRepository {
     // Emits true when a SeasonEnded event is present with no selectedOptionId.
     fun observeUnresolvedSeasonEnd(): Flow<Boolean>
     suspend fun getSeasonSummary(): SeasonSummary
+    // Advances to the next season and marks the SeasonEnded event resolved.
+    suspend fun startNewSeason()
 }
