@@ -16,6 +16,7 @@ import com.github.maskedkunisquat.musicmanager.ui.email.EmailDetailScreen
 import com.github.maskedkunisquat.musicmanager.ui.home.HomeScreen
 import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxScreen
 import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxViewModel
+import com.github.maskedkunisquat.musicmanager.ui.labeloffice.LabelIdentityScreen
 import com.github.maskedkunisquat.musicmanager.ui.labeloffice.LabelOfficeScreen
 import com.github.maskedkunisquat.musicmanager.ui.press.PressScreen
 import com.github.maskedkunisquat.musicmanager.ui.recap.SeasonRecapScreen
@@ -32,6 +33,7 @@ object Route {
     const val CONTACTS = "contacts"
     const val RIVAL_INTEL = "rival_intel"
     const val SEASON_RECAP = "season_recap"
+    const val LABEL_IDENTITY = "label_identity"
     const val EMAIL_DETAIL = "email/{eventId}"
     fun emailDetail(eventId: String) = "email/$eventId"
 }
@@ -70,7 +72,14 @@ fun AppNavGraph(
             TapeDeckScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
         }
         composable(Route.LABEL_OFFICE) {
-            LabelOfficeScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
+            LabelOfficeScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+                onOpenIdentity = { navController.navigate(Route.LABEL_IDENTITY) }
+            )
+        }
+        composable(Route.LABEL_IDENTITY) {
+            LabelIdentityScreen(viewModel = viewModel, onBack = { navController.popBackStack() })
         }
         composable(Route.CHARTS) {
             ChartsScreen(viewModel = viewModel, onBack = { navController.popBackStack() })

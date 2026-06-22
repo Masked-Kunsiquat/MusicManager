@@ -794,7 +794,7 @@ background work is needed — season boundary detection happens inside the exist
 4. **Nav updates** — `AppNavGraph` route for `SeasonRecapScreen`. Route is
    top-level (not nested under inbox nav) so the back stack is clean.
 
-### 5-F — Label Identity screen (`:app`)
+### 5-F — Label Identity screen (`:app`) ✓ DONE
 
 1. **`LabelIdentityScreen`** — accessible from `LabelOfficeScreen` (new list
    entry). Retro style consistent with all other screens. Read-only. Content:

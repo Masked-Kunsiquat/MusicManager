@@ -8,6 +8,7 @@ import com.github.maskedkunisquat.musicmanager.logic.ai.ModelLoadState
 import com.github.maskedkunisquat.musicmanager.logic.inbox.TapeDeckItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.SimRepository
+import com.github.maskedkunisquat.musicmanager.logic.model.LabelIdentity
 import com.github.maskedkunisquat.musicmanager.logic.model.SeasonSummary
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
@@ -44,6 +45,12 @@ class InboxViewModel(
 
     private val _seasonSummary = MutableStateFlow<SeasonSummary?>(null)
     val seasonSummary: StateFlow<SeasonSummary?> = _seasonSummary.asStateFlow()
+
+    private val _labelIdentity = MutableStateFlow<LabelIdentity?>(null)
+    val labelIdentity: StateFlow<LabelIdentity?> = _labelIdentity.asStateFlow()
+
+    private val _prevSeasonPrimaryGenre = MutableStateFlow<String?>(null)
+    val prevSeasonPrimaryGenre: StateFlow<String?> = _prevSeasonPrimaryGenre.asStateFlow()
 
     // Keyed by event ID — populated asynchronously so real inference doesn't block composition.
     private val _options = MutableStateFlow<Map<String, List<ResponseOption>>>(emptyMap())
@@ -86,6 +93,13 @@ class InboxViewModel(
         if (_seasonSummary.value != null) return
         viewModelScope.launch {
             _seasonSummary.value = repository.getSeasonSummary()
+        }
+    }
+
+    fun loadLabelIdentity() {
+        viewModelScope.launch {
+            _labelIdentity.value = runCatching { repository.getLabelIdentity() }.getOrNull()
+            _prevSeasonPrimaryGenre.value = runCatching { repository.getPreviousSeasonPrimaryGenre() }.getOrNull()
         }
     }
 

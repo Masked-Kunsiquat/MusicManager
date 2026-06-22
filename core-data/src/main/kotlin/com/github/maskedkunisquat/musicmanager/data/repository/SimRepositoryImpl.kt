@@ -65,6 +65,21 @@ class SimRepositoryImpl(
         return aiProvider.generateEmail(item.event, world).options
     }
 
+    // Returns the recordedAt timestamp of the SeasonEnded event for the given season number,
+    // or null if no such event exists in the log.
+    private fun seasonEndTimestamp(allEntities: List<EventLogEntity>, seasonNumber: Int, json: Json): Long? =
+        allEntities
+            .filter { it.eventType == "season_ended" }
+            .mapNotNull { entity ->
+                runCatching {
+                    val n = json.parseToJsonElement(entity.payload)
+                        .jsonObject["seasonNumber"]?.jsonPrimitive?.content?.toIntOrNull()
+                        ?: return@mapNotNull null
+                    if (n == seasonNumber) entity.recordedAt else null
+                }.getOrNull()
+            }
+            .maxOrNull()
+
     // Returns event log entities scoped to the current season only.
     // Anchors on the recordedAt of the previous SeasonEnded entity so that restarted seasons
     // (where seasonStartTick resets to 0) don't bleed prior-season events into current queries.
@@ -72,21 +87,23 @@ class SimRepositoryImpl(
         val json = Json { ignoreUnknownKeys = true }
         val allEntities = dao.getAll()
         val prevSeasonNumber = world.season.seasonNumber - 1
-        val seasonBoundary: Long = if (prevSeasonNumber < 1) 0L else {
-            allEntities
-                .filter { it.eventType == "season_ended" }
-                .mapNotNull { entity ->
-                    runCatching {
-                        val n = json.parseToJsonElement(entity.payload)
-                            .jsonObject["seasonNumber"]?.jsonPrimitive?.content?.toIntOrNull()
-                            ?: return@mapNotNull null
-                        if (n == prevSeasonNumber) entity.recordedAt else null
-                    }.getOrNull()
-                }
-                .maxOrNull() ?: 0L
-        }
+        val seasonBoundary = if (prevSeasonNumber < 1) 0L else
+            seasonEndTimestamp(allEntities, prevSeasonNumber, json) ?: 0L
         return if (seasonBoundary == 0L) allEntities
                else allEntities.filter { it.recordedAt > seasonBoundary }
+    }
+
+    // Returns event log entities scoped to the previous season (season N-1).
+    // Returns empty list when currently in season 1 or no SeasonEnded event for N-1 is found.
+    private suspend fun previousSeasonEntities(): List<EventLogEntity> {
+        val prevSeasonNumber = world.season.seasonNumber - 1
+        if (prevSeasonNumber < 1) return emptyList()
+        val json = Json { ignoreUnknownKeys = true }
+        val allEntities = dao.getAll()
+        val end = seasonEndTimestamp(allEntities, prevSeasonNumber, json) ?: return emptyList()
+        val start = if (prevSeasonNumber <= 1) 0L else
+            seasonEndTimestamp(allEntities, prevSeasonNumber - 1, json) ?: 0L
+        return allEntities.filter { it.recordedAt > start && it.recordedAt <= end }
     }
 
     // All world mutation goes through this; callers must already hold tickMutex.
@@ -238,6 +255,13 @@ class SimRepositoryImpl(
         val entities = currentSeasonEntities()
         val actions = extractGenreActions(entities)
         return LabelIdentityEvaluator.evaluate(actions, world.artists.values)
+    }
+
+    override suspend fun getPreviousSeasonPrimaryGenre(): String? {
+        val entities = previousSeasonEntities()
+        if (entities.isEmpty()) return null
+        val actions = extractGenreActions(entities)
+        return LabelIdentityEvaluator.evaluate(actions, world.artists.values).primaryGenre
     }
 
     // Extracts GenreAction list from current-season response_applied entities.
