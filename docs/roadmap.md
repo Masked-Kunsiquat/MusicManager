@@ -721,7 +721,7 @@ background work is needed — season boundary detection happens inside the exist
    different prospect pool; `genreTrends` moved toward 0.5f but not fully reset;
    `capabilities` preserved.
 
-### 5-D — Label Identity system (`:core-logic`)
+### 5-D — Label Identity system (`:core-logic`) ✓ DONE
 
 1. **`LabelIdentity`** — pure data class (not stored; derived on demand). Fields:
    `genreWeights: Map<String, Float>` (0–1, genre → label affinity for current

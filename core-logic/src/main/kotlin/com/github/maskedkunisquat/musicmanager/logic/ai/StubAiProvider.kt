@@ -6,6 +6,8 @@ import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.CreativeControl
 import com.github.maskedkunisquat.musicmanager.logic.model.DeadlineStatus
 import com.github.maskedkunisquat.musicmanager.logic.model.DeadlineType
+import com.github.maskedkunisquat.musicmanager.logic.model.LabelAesthetic
+import com.github.maskedkunisquat.musicmanager.logic.model.LabelIdentity
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
@@ -21,6 +23,28 @@ import kotlin.math.abs
 // do NOT duplicate costs as LabelFundsChange effects (would double-charge).
 // Reserve LabelFundsChange in effects for income/revenue (positive deltas) only.
 class StubAiProvider : LabelAiProvider {
+
+    private var labelIdentity: LabelIdentity? = null
+
+    override fun onIdentityUpdated(identity: LabelIdentity?) {
+        labelIdentity = identity
+    }
+
+    // Returns an aesthetic-flavored sentence when the label has a strong genre focus (focusScore > 0.7).
+    // Returns empty string when identity is null or unfocused — no change to existing prose.
+    private fun aestheticSuffix(needType: NeedType): String {
+        val identity = labelIdentity ?: return ""
+        if (identity.focusScore <= 0.7f) return ""
+        return when (needType) {
+            NeedType.CREATIVE_FULFILLMENT -> " Your ${identity.aesthetic.label()} roster needs artists who feel creatively alive."
+            NeedType.FINANCIAL_SECURITY   -> " The ${identity.aesthetic.label()} direction you're building has to work financially for everyone in it."
+            NeedType.RECOGNITION          -> " A ${identity.aesthetic.label()} label without visibility for its artists isn't viable."
+            NeedType.BELONGING            -> " The ${identity.aesthetic.label()} identity you're building only works if artists feel part of it."
+            NeedType.AUTONOMY             -> " Protecting creative autonomy is central to what a ${identity.aesthetic.label()} label stands for."
+        }
+    }
+
+    private fun LabelAesthetic.label(): String = name.lowercase()
 
     override suspend fun generateEmail(event: SimEvent, world: SimWorld): GeneratedEmail {
         val artist = world.artists[event.artistId]
@@ -99,6 +123,7 @@ class StubAiProvider : LabelAiProvider {
     ): Pair<String, String> {
         val h = hedge(confidence)
         val u = urgencyPrefix(currentValue, volatility)
+        val a = aestheticSuffix(needType)
         val s = signing(name, loyalty)
         val subject = needUrgentSubject(needType, artistId)
         return when (needType) {
@@ -107,34 +132,34 @@ class StubAiProvider : LabelAiProvider {
                 "${h}${u}Hey — I don't want to make this weird but I need to be honest. I've been going " +
                 "through the motions lately and it's starting to show in the demos. I need to make " +
                 "something I actually care about. Can we block off some proper creative time — no " +
-                "brief, no deadline, just space to work? I think it'll pay off.$s"
+                "brief, no deadline, just space to work? I think it'll pay off.$a$s"
             )
             NeedType.FINANCIAL_SECURITY -> Pair(
                 subject,
                 "${h}${u}My manager's been on me to bring this up and I keep putting it off because it's " +
                 "awkward, but here we are. The current setup isn't sustainable for me. Between releases " +
                 "I'm covering basics out of my own pocket and it's stressing me out in ways that " +
-                "affect the work. Can we look at the numbers together?$s"
+                "affect the work. Can we look at the numbers together?$a$s"
             )
             NeedType.RECOGNITION -> Pair(
                 subject,
                 "${h}${u}It's starting to feel like we're doing good work in a room with no windows. " +
                 "Other artists — on smaller labels, with less — are getting write-ups, festival slots, " +
-                "interviews. What's the strategy here? I just need to understand the plan.$s"
+                "interviews. What's the strategy here? I just need to understand the plan.$a$s"
             )
             NeedType.BELONGING -> Pair(
                 subject,
                 "${h}${u}Is everything okay between us? I might be overthinking it but there's been a " +
                 "distance lately that I can't quite name. I see the label posting about other artists " +
                 "and the energy in the room when we meet feels different. I'm not going anywhere — " +
-                "I just want to make sure we're still on the same page.$s"
+                "I just want to make sure we're still on the same page.$a$s"
             )
             NeedType.AUTONOMY -> Pair(
                 subject,
                 "${h}${u}The last three decisions on this album have gone the label's way and I've been " +
                 "okay with that — but this one feels different. I have a specific vision for the next " +
                 "single and I need it to be mine. Not a fight, not a power move — I just need one " +
-                "real win creatively. Can we talk?$s"
+                "real win creatively. Can we talk?$a$s"
             )
         }
     }
