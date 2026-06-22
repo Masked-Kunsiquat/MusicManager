@@ -229,6 +229,20 @@ class RenewalSystemTest {
         assertEquals(3, updated.rivalPoachCounters[rivalId])
     }
 
+    @Test
+    fun `RenewalWalked decrements relationshipBalance by 0_2`() {
+        val world = baseWorld(baseArtist(loyalty = 0.6f, balance = 0.3f)).copy(activeRenewals = mapOf(artistId to 1))
+        val (updated, _) = applyResponse(world, option(listOf(StateEffect.RenewalWalked(artistId))))
+        assertEquals(0.1f, updated.artists[artistId]!!.relationshipBalance, 0.001f)
+    }
+
+    @Test
+    fun `RenewalWalked relationshipBalance can go negative`() {
+        val world = baseWorld(baseArtist(loyalty = 0.6f, balance = 0.0f)).copy(activeRenewals = mapOf(artistId to 1))
+        val (updated, _) = applyResponse(world, option(listOf(StateEffect.RenewalWalked(artistId))))
+        assertEquals(-0.2f, updated.artists[artistId]!!.relationshipBalance, 0.001f)
+    }
+
     // ===== Full round-trip: ContractExpiring → OpenRenewal → AdvanceRenewal → RenewContract =====
 
     @Test

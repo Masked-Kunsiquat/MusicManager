@@ -325,7 +325,8 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): Pair<SimWorld, Li
                 }
             Pair(world.copy(
                 artists = world.artists + (effect.artistId to artist.copy(
-                    dimensions = artist.dimensions.copy(loyalty = newLoyalty)
+                    dimensions = artist.dimensions.copy(loyalty = newLoyalty),
+                    relationshipBalance = artist.relationshipBalance - 0.2f
                 )),
                 activeRenewals = world.activeRenewals - effect.artistId,
                 rivalPoachCounters = acceleratedPoachCounters

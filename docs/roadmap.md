@@ -582,17 +582,244 @@ two inbox sessions feel mechanically identical.
 
 ## Phase 5 — Season Structure (v1.0)
 
-- Season calendar with real deadlines; "buy time" response options cost
-  relationship capital
-- End-of-season recap (what worked, reputation deltas)
-- New-season world gen: fresh seed, reputation/roster/relationships carry
-  over, finances partially reset
-- Label Identity app: genre positioning over time, affects which options
-  scouts/contacts surface
-- Passive ticking: world progresses while the app is closed; inbox catches
-  the player up on return
+Work is ordered by dependency. Calendar and deadline domain mechanics must land
+before season-end detection (which consumes the tick count); season-end summary
+before new-season gen (which reads the final state); domain identity model before
+its screen; all domain mechanics before season-end UI.
+
+Passive ticking (world progresses while the app is closed; inbox catches the
+player up on return) is already delivered in Phase 1 via `TickWorker`. No new
+background work is needed — season boundary detection happens inside the existing
+`tick()` path.
+
+### 5-A — Season calendar + deadline system (`:core-logic`)
+
+1. **`SeasonState`** — add `season: SeasonState` to `SimWorld` (`@Serializable`).
+   Fields: `seasonNumber: Int = 1`, `seasonStartTick: Int = 0`,
+   `seasonEndTick: Int = 180` (180 ticks ≈ 20 real days, matching existing
+   contract length). `SimEngine.tick()` checks `currentDay >= season.seasonEndTick`
+   and emits `SeasonEnded` when crossed, guarded by `SimWorld.seasonEndedEmitted:
+   Boolean = false` (already on `SimWorld` — pre-implemented before 5-A; reset to
+   `false` by `NewSeasonInitializer`). The flag prevents re-emission on every
+   catchup tick after day 180.
+
+2. **`Deadline`** — add `deadlines: Map<String, Deadline>` to `SimWorld`
+   (`@Serializable`). `Deadline(id: String, artistId: String, type: DeadlineType,
+   dueTick: Int, status: DeadlineStatus)`. `DeadlineType`: `ALBUM_RELEASE`,
+   `TOUR_BOOKING`, `PRESS_CYCLE`. `DeadlineStatus`: `PENDING`, `MET`, `MISSED`,
+   `EXTENDED`. Seeded 1–2 deadlines per signed artist at season start in
+   `WorldInitializer` (season 1) and `NewSeasonInitializer` (season 2+).
+   Deadline `id` is deterministic:
+   `"deadline:${artistId}:${type.name}:${season.seasonNumber}"`.
+
+3. **New `SimEvent` subtypes**:
+   - `DeadlineApproaching(deadlineId, artistId, type, ticksRemaining, dayOfGame)` —
+     emitted at 20, 10, and 5 ticks before `dueTick`. Dedup key:
+     `"deadline_approaching:${deadlineId}:${ticksRemaining}"` — one unresolved
+     event per threshold per deadline.
+   - `DeadlineMissed(deadlineId, artistId, type, dayOfGame)` — emitted the tick
+     after `dueTick` when `status == PENDING`. Status immediately set to `MISSED`
+     in the same tick to prevent re-emission.
+   - `SeasonEnded(seasonNumber, dayOfGame)` — emitted once when
+     `currentDay >= seasonEndTick`. Does not re-emit if `seasonNumber` already
+     matches the stored guard.
+
+4. **New `StateEffect` additions**:
+   - `ExtendDeadline(deadlineId, artistId)` — "buy time" option; `costFunds` is
+     set on the `ResponseOption` (not here — same pattern as existing options).
+     Applies `RelationshipChange(-0.10f)` to the artist. Pushes `dueTick`
+     forward 10 ticks. Guarded in `ResponseApplicator`: if
+     `status == EXTENDED` already, applies `RelationshipChange(-0.05f)` instead
+     and does not extend further (once-per-deadline limit).
+   - `MeetDeadline(deadlineId, artistId)` — sets `status = MET`; applies
+     `RelationshipChange(+0.05f)` and `ReputationChange(+0.02f, PRESS)`.
+
+5. **`EventGenerator` arms** — `deadlineEvents()`: for each `PENDING` deadline,
+   emit `DeadlineApproaching` when `dueTick - currentDay in setOf(20, 10, 5)`.
+   Emit `DeadlineMissed` when `currentDay > dueTick`. Season-end check is a
+   separate guard in `tick()` after `deadlineEvents()` runs.
+
+6. **`StubAiProvider` arms** — `DeadlineApproaching` prose varies by
+   `ticksRemaining` tier: 20 = casual mention, 10 = mild urgency, 5 = direct
+   pressure. Options: `MeetDeadline` (costs $0, relationship neutral),
+   `ExtendDeadline` (costs $3k, -0.1f relationship), a no-op "let it slide"
+   that guarantees `DeadlineMissed` next tick. `DeadlineMissed` prose is the
+   artist or contact reacting to the miss; options offer damage control
+   (`ReputationChange` recovery, small loyalty patch).
+
+7. **Tests** — `SeasonCalendarTest`: `DeadlineApproaching` emits at 20 / 10 / 5
+   ticks and not at 19 / 11 / 6; `DeadlineMissed` fires the tick after due and
+   not before; `ExtendDeadline` pushes `dueTick` by 10 and is blocked on second
+   application; `MeetDeadline` sets status and applies both effects; `SeasonEnded`
+   fires once and does not repeat within the same season.
+
+### 5-B — Season summary + end-of-season detection (`:core-logic`)
+
+1. **`SeasonSummary`** — pure data class (not stored; always recomputable).
+   Fields: `seasonNumber: Int`, `artistsRetained: Int`, `artistsLost: Int`,
+   `deadlinesMet: Int`, `deadlinesMissed: Int`, `fundsNet: Float` (end funds
+   minus start funds), `reputationDeltas: Map<ReputationDimension, Float>`
+   (end rep minus start rep per dimension).
+
+2. **`SeasonSummaryEvaluator`** — pure computation class in `:core-logic`. Folds
+   over the event log for the current season (events since `seasonStartTick`) to
+   count deadline outcomes via `DeadlineMissed` / `MeetDeadline` effect presence,
+   and artist departures via `RivalPoach` / `RenewalWalked` events. Reads the
+   final `SimWorld` snapshot for funds and rep deltas against `season.seasonStartTick`
+   values. No stored fields — result is always recomputable from the event log.
+
+3. **`SimRepository.getSeasonSummary(): SeasonSummary`** — calls
+   `SeasonSummaryEvaluator` with current world + DAO event fold. Exposed to
+   `:app`. Called once when `SeasonEnded` is detected.
+
+   **`SeasonEnded` is NOT an inbox item.** Follows the `LeadSurfaced` pattern:
+   `EntityMapper.toInboxItemOrNull()` returns `null`; a dedicated DAO query
+   `observeUnresolvedSeasonEnd()` (`eventType = 'season_ended' AND
+   selectedOptionId IS NULL`) feeds the `InboxViewModel`. Season-end is a mode
+   transition, not a render case inside the inbox list. Marked resolved via
+   `selectedOptionId` only after `startNewSeason()` completes.
+
+4. **Tests** — `SeasonSummaryTest`: artist loss count correct when `RivalPoach`
+   and `RenewalWalked` events are present; deadline counts correct for mixed
+   MET/MISSED sequences; funds net sign correct when funds decreased; empty
+   season (no events) produces all-zero summary without crashing.
+
+### 5-C — New-season world gen + carry-over (`:core-logic`)
+
+1. **`NewSeasonInitializer`** — takes the final `SimWorld` of season N, returns
+   the initial `SimWorld` of season N+1. Called from `SimRepository.startNewSeason()`
+   when the player confirms on `SeasonRecapScreen`.
+
+2. **Carry-over rules** (all intentional — document each with a comment in
+   `NewSeasonInitializer`):
+   - **Reputation**: all `ReputationDimension` values carry unchanged. Reputation
+     is the single durable cross-season asset.
+   - **Roster**: all `artists` carry over. Contract expiry ticks are rebased to
+     the new `seasonStartTick` (a 60-tick remaining contract in season 1 becomes
+     a 60-tick contract from tick 0 of season 2). `relationshipBalance` halved
+     (`* 0.5f`) — memory fades, not wipes. `activeWants` cleared; new wants
+     re-seeded from dimensions by `buildArtistWants()`. `lastInteractionDay`
+     reset to 0. `wantLastSurfacedAt` cleared.
+   - **Label**: `labelFunds` partially resets — label keeps 60% of end-season
+     funds (floor: $10 000). `capabilities` carry over. `tasteVector` carries
+     over unchanged. `intelCache` cleared (rivals reshuffle between seasons).
+     `activeRenewals` cleared.
+   - **World counters/state**: `currentDay` resets to 0. `seasonNumber`
+     increments. New seed: `world.seed xor seasonNumber` for deterministic but
+     varied generation. Prospect pool refreshed (6–10 new prospects from new
+     seed). `marketState.genreTrends` soft-reset: each genre drifts 50% toward
+     0.5f (structural bias carries, extremes blunted). Scout counters
+     (`rivalProspectCounters`, `rivalPoachCounters`) cleared. `deadlines`
+     cleared. `surfacedLeads`, `passedLeads`, `activeNegotiations` cleared.
+   - **Event log**: NOT cleared. New season events append to the existing log.
+     `SeasonEnded` events partition the log; `seasonNumber` embedded in each
+     event gives lifetime history for Phase 6+.
+
+3. **Tests** — `NewSeasonInitializerTest`: roster carries over; `relationshipBalance`
+   halved; funds set to 60% of input (floor respected); `currentDay` is 0;
+   `seasonNumber` increments; same base seed with different `seasonNumber` produces
+   different prospect pool; `genreTrends` moved toward 0.5f but not fully reset;
+   `capabilities` preserved.
+
+### 5-D — Label Identity system (`:core-logic`)
+
+1. **`LabelIdentity`** — pure data class (not stored; derived on demand). Fields:
+   `genreWeights: Map<String, Float>` (0–1, genre → label affinity for current
+   season), `primaryGenre: String?` (top entry by weight, null if no events yet),
+   `focusScore: Float` (0 = scattered, 1 = single-genre; normalized inverse
+   entropy of `genreWeights`), `aesthetic: LabelAesthetic` enum
+   (`UNDERGROUND`, `MAINSTREAM`, `EXPERIMENTAL`, `ECLECTIC`).
+
+2. **`LabelIdentityEvaluator`** — pure computation in `:core-logic`. Derives
+   `genreWeights` by folding season events: `PursueLead` effect → genre weight
+   +0.05f; `PassLead` → -0.03f; `SignArtist` → +0.10f. Clamps to [0, 1] after
+   each update. `focusScore` computed from weight distribution entropy (even
+   distribution → 0; single genre dominating → approaching 1). `aesthetic`
+   derived from roster composition: majority volatility ≥ 0.65f → `EXPERIMENTAL`;
+   majority `commercialAppetite` ≥ 0.65f → `MAINSTREAM`; single genre > 70% →
+   `UNDERGROUND`; else `ECLECTIC`.
+
+3. **Identity is never stored** — always recomputed from the event log.
+   `SimRepository.getLabelIdentity(): LabelIdentity` calls the evaluator on
+   demand. This keeps the data layer append-only and the identity up-to-date
+   with any event-log change.
+
+4. **Identity influences on generation** — add `labelIdentity: LabelIdentity?`
+   parameter to `EventGenerator` (nullable; defaults to no weighting for
+   backwards compat):
+   - `scoutEvents()`: when `focusScore > 0.6f`, weight `ScoutReport` prospects
+     toward `primaryGenre` (70% vs. 40% baseline).
+   - `intelDropEvents()`: when `focusScore > 0.6f`, weight `IntelDrop` genre
+     toward `primaryGenre` (overrides the existing roster-weighted 70% with an
+     identity-weighted variant).
+   - `StubAiProvider.prose()`: when `focusScore > 0.7f`, `NeedUrgent` prose
+     references the label's aesthetic in one template variant per need type
+     ("Your [aesthetic] roster is counting on this."). Gated on non-null
+     identity param — no change to existing output when null.
+
+5. **Tests** — `LabelIdentityTest`: `genreWeights` update correctly on
+   pursue/pass/sign sequences; `focusScore` near 0 for even 4-genre distribution,
+   near 1 for single-genre label; `aesthetic` assigns `EXPERIMENTAL` correctly
+   for high-volatility roster; scout weighting skews toward `primaryGenre` when
+   `focusScore > 0.6f`; null identity produces unchanged event output.
+
+### 5-E — Season-end UI + new-season flow (`:app`)
+
+1. **`SeasonRecapScreen`** — full-screen interstitial triggered when
+   `SeasonEnded` reaches the top of the inbox stream. Retro style: monospace,
+   chunky 1dp borders, no Material3 cards or rounded corners. Content:
+   - Season number header: `"== SEASON [N] CLOSED =="`.
+   - Roster line: `"Roster: [retained] signed / [lost] departed"`. Departed
+     artist names listed individually (not just a count).
+   - Deadlines line: `"Deadlines: [met] met / [missed] missed"`.
+   - Reputation block: one line per dimension with sign-prefixed delta
+     (`"PRESS +0.12"`, `"VENUE -0.04"`). Omit dimensions with 0 change.
+   - Funds line: `"Funds: +$14k"` or `"Funds: -$3k"` with sign.
+   - `"[ START SEASON [N+1] ]"` confirm button — calls
+     `SimRepository.startNewSeason()` which runs `NewSeasonInitializer` and
+     navigates to `HomeScreen`.
+   No back stack entry: player cannot return to the recap after confirming.
+
+2. **`HomeScreen` season indicator** — one status line in the device chrome:
+   `"SEASON [N] — DAY [D]"`. Derived from `SimWorld.season.seasonNumber` and
+   `currentDay`. Replaces or supplements any existing day indicator.
+
+3. **`InboxViewModel` season detection** — observes inbox events; when a
+   `SeasonEnded` event is present and unresolved, sets a `showRecap: Boolean`
+   state flag. `InboxScreen` (or `EmailDetailScreen`) observes this flag and
+   navigates to `SeasonRecapScreen`. `SeasonEnded` is resolved (selectedOptionId
+   set) only after `startNewSeason()` completes — guards against the recap
+   appearing again on re-entry.
+
+4. **Nav updates** — `AppNavGraph` route for `SeasonRecapScreen`. Route is
+   top-level (not nested under inbox nav) so the back stack is clean.
+
+### 5-F — Label Identity screen (`:app`)
+
+1. **`LabelIdentityScreen`** — accessible from `LabelOfficeScreen` (new list
+   entry). Retro style consistent with all other screens. Read-only. Content:
+   - Genre affinity ranked list: top 3 genres, each row shows name, ASCII
+     weight bar (`████░`), and numeric weight to 2 decimal places.
+     Example: `"1. indie-folk ████░ 0.78"`.
+   - Focus descriptor: `"FOCUSED"` (> 0.70), `"DEVELOPING"` (0.40–0.70),
+     `"SCATTERED"` (< 0.40).
+   - Aesthetic label: one of `UNDERGROUND / MAINSTREAM / EXPERIMENTAL / ECLECTIC`.
+   - Season-over-season note: `"Last season primary: [genre]"` shown when
+     `seasonNumber > 1` and a prior `SeasonEnded` event exists in the log.
+     Derives the prior season's top genre from a second evaluator fold scoped
+     to `seasonStartTick` of the previous season.
+   - If no season events yet (first few ticks), show: `"No identity formed yet."`.
+
+2. **`LabelOfficeScreen` update** — add `"IDENTITY >"` nav entry below the
+   capabilities block, pointing to `LabelIdentityScreen`.
 
 **Done when:** finishing a season creates immediate desire to start another.
+Specifically: at least one deadline was missed and the consequence is legible
+(relationship damage visible in `ContactsScreen`, reputation delta in the recap);
+the recap shows deltas the player can trace back to individual decisions; the
+new season starts with a different feel (market slightly shifted, prospects
+refreshed, but reputation intact and label identity meaningful); label identity
+visibly changes which scout reports surface within a season.
 
 ## v-infinity parking lot
 

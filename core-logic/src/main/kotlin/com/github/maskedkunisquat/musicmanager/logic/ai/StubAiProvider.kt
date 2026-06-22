@@ -72,7 +72,7 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.WantSurfaced ->
             wantSurfacedProse(event.wantType, name, loyalty, confidence)
         is SimEvent.MarketShift -> marketShiftProse(event)
-        is SimEvent.IntelDrop -> intelDropProse(event)
+        is SimEvent.IntelDrop -> intelDropProse(event, world)
         is SimEvent.ScoutReport -> scoutReportProse(event, world)
         is SimEvent.NegotiationRound -> negotiationRoundProse(event, world)
         is SimEvent.RenewalOpened -> renewalOpenedProse(event, world)
@@ -435,11 +435,37 @@ class StubAiProvider : LabelAiProvider {
         }
     }
 
-    private fun intelDropProse(event: SimEvent.IntelDrop): Pair<String, String> = Pair(
-        "intel: ${event.genre}",
-        "Flagged this from the trades — ${event.headline.trimEnd('.')}. " +
-        "Passing it along in case it shifts how you're thinking about ${event.genre} this cycle."
-    )
+    private fun intelDropProse(event: SimEvent.IntelDrop, world: SimWorld): Pair<String, String> {
+        val trend = world.market.genreTrends[event.genre] ?: 0.5f
+        val (subject, body) = when {
+            trend > 0.70f -> Pair(
+                "${event.genre} — you're seeing this too, right?",
+                "Everything in ${event.genre} is moving right now and I can't tell if it's a real moment or noise. " +
+                "Either way the window won't stay open long — if you have positioning here, use it."
+            )
+            trend > 0.55f -> Pair(
+                "${event.genre} — worth watching",
+                "${event.genre} is picking up real traction. Not a headline moment yet but distributors " +
+                "I trust are paying attention. Just flagging it before it gets obvious."
+            )
+            trend > 0.45f -> Pair(
+                "quiet on the ${event.genre} front",
+                "${event.genre} isn't going anywhere but it's not moving either. The chatter is cautious — " +
+                "a few interesting acts but nothing catching fire. Probably fine to hold your current position."
+            )
+            trend > 0.30f -> Pair(
+                "${event.genre} — losing ground",
+                "Hearing some concern about ${event.genre} from people who should know. Nothing dramatic yet " +
+                "but the room is cooler than it was. Worth factoring into whatever you've got brewing."
+            )
+            else -> Pair(
+                "${event.genre} — not looking good",
+                "Passing this along because I think you need to hear it directly: ${event.genre} is in a rough stretch. " +
+                "Labels are quietly pulling back and the live numbers aren't flattering. No panic, but eyes open."
+            )
+        }
+        return Pair(subject, "$body\n\nPassing it along.")
+    }
 
     private fun scoutReportProse(event: SimEvent.ScoutReport, world: SimWorld): Pair<String, String> {
         val prospect = world.prospects[event.prospectId]

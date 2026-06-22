@@ -32,5 +32,8 @@ data class SimWorld(
     // prospectId -> day lead was watched; re-surfaces after 5 ticks with rawScore drift.
     val watchedLeads: Map<String, Int> = emptyMap(),
     // Prospects currently visible in the tape deck (not yet resolved by the player).
-    val surfacedLeads: Set<String> = emptySet()
+    val surfacedLeads: Set<String> = emptySet(),
+    // Guards SeasonEnded from re-emitting on every tick after seasonEndTick is crossed.
+    // Reset to false by NewSeasonInitializer when a new season begins.
+    val seasonEndedEmitted: Boolean = false
 )
