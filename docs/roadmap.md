@@ -354,14 +354,14 @@ earlier would have closed the window; contract renewal produces meaningfully
 different offers based on relationship history; the white-whale prospect
 appears in scout reports repeatedly and always refuses.
 
-## Phase 4 — Depth Pass (v0.4)
+## Phase 4 ✅ — Depth Pass (v0.4)
 
 Polish existing systems before adding scope. Work is ordered by dependency:
 want mechanic before broadcast (which consumes it); domain mechanics before
 their app screens; audit pass after all mechanics are stable; hash chain last
 (pure infrastructure, no gameplay dependency).
 
-### 4-A — Want activation + tech debt cleanup (`:core-logic`) ✅ (partial)
+### 4-A ✅ — Want activation + tech debt cleanup (`:core-logic`)
 
 **Delivered:**
 
@@ -485,7 +485,7 @@ Roster relationship health as a surface — recency and tone, not a number.
 5. **Tests** — `ContactsDescriptorTest`: recency/tone labels emit correctly
    at boundary values; `lastInteractionDay` updated on resolve.
 
-### 4-E — Rival Intel screen (`:core-logic` + `:app`)
+### 4-E ✅ — Rival Intel screen (`:core-logic` + `:app`)
 
 Reputation-gated competitive intelligence — intentionally incomplete and
 occasionally wrong.
@@ -517,7 +517,7 @@ occasionally wrong.
    boundaries, confidence decays over ticks, gate hides screen below
    reputation threshold, `UpdateRivalIntel` populates cache.
 
-### 4-F — Email audit pass (`:core-logic`)
+### 4-F ✅ — Email audit pass (`:core-logic`)
 
 No new types or mechanics. Pure content and variety pass across all
 `StubAiProvider` arms. Also pick up the one item skipped in 4-A: verify
