@@ -4,12 +4,15 @@ import com.github.maskedkunisquat.musicmanager.logic.model.ArtistDimensions
 import com.github.maskedkunisquat.musicmanager.logic.model.ArtistState
 import com.github.maskedkunisquat.musicmanager.logic.model.Contract
 import com.github.maskedkunisquat.musicmanager.logic.model.CreativeControl
+import com.github.maskedkunisquat.musicmanager.logic.model.Deadline
+import com.github.maskedkunisquat.musicmanager.logic.model.DeadlineType
 import com.github.maskedkunisquat.musicmanager.logic.model.DemoState
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelState
 import com.github.maskedkunisquat.musicmanager.logic.model.MarketState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ProspectState
+import com.github.maskedkunisquat.musicmanager.logic.model.SeasonState
 import com.github.maskedkunisquat.musicmanager.logic.model.Want
 import com.github.maskedkunisquat.musicmanager.logic.model.WantType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
@@ -72,16 +75,27 @@ object WorldInitializer {
             id to buildRival(id, i, rng)
         }
 
+        val deadlines = buildDeadlines(artists.keys, rng, seasonNumber = 1)
+        val label = buildLabel(artists.keys.toSet(), rng)
+
         return SimWorld(
             seed = seed,
             currentDay = 0,
             artists = artists,
-            label = buildLabel(artists.keys.toSet(), rng),
+            label = label,
             market = buildMarket(rng),
             contracts = contracts,
             prospects = prospects,
             scouts = scouts,
-            rivals = rivals
+            rivals = rivals,
+            season = SeasonState(
+                seasonNumber = 1,
+                seasonStartTick = 0,
+                seasonEndTick = 180,
+                startFunds = label.funds,
+                startReputation = label.reputation.mapKeys { it.key.name }
+            ),
+            deadlines = deadlines
         )
     }
 
@@ -115,7 +129,7 @@ object WorldInitializer {
     // Derives 0-2 wants from the artist's dimension profile. Pure function -- no RNG.
     // Rule: financial anxiety (low loyalty) surfaces first; career wants (confidence,
     // volatility) fill remaining slots up to a cap of 2.
-    private fun buildArtistWants(d: ArtistDimensions): List<Want> {
+    internal fun buildArtistWants(d: ArtistDimensions): List<Want> {
         val wants = mutableListOf<Want>()
         if (d.loyalty < 0.40f) {
             wants += Want(
@@ -157,7 +171,7 @@ object WorldInitializer {
         genreTrends = GENRES.associateWith { rng.nextFloat() }
     )
 
-    private fun buildProspect(id: String, rng: Random): ProspectState {
+    internal fun buildProspect(id: String, rng: Random): ProspectState {
         val name = "${ADJECTIVES.random(rng)} ${NOUNS.random(rng)}"
         val genre = GENRES.random(rng)
         val dims = ArtistDimensions(
@@ -176,7 +190,7 @@ object WorldInitializer {
             signabilityScore = signabilityScore, demo = demo)
     }
 
-    private fun buildUnsignableProspect(id: String, rng: Random): ProspectState {
+    internal fun buildUnsignableProspect(id: String, rng: Random): ProspectState {
         val name = "${ADJECTIVES.random(rng)} ${NOUNS.random(rng)}"
         val genre = GENRES.random(rng)
         val dims = ArtistDimensions(
@@ -195,7 +209,7 @@ object WorldInitializer {
             signabilityScore = signabilityScore, signability = SignabilityType.UNSIGNABLE, demo = demo)
     }
 
-    private fun buildRival(id: String, index: Int, rng: Random): RivalState {
+    internal fun buildRival(id: String, index: Int, rng: Random): RivalState {
         val focusCount = 2 + rng.nextInt(2)  // 2-3 focus genres per rival
         val focusGenres = (0 until focusCount).map { GENRES.random(rng) }.toSet()
         val genreWeights = GENRES.associateWith { genre ->
@@ -207,6 +221,23 @@ object WorldInitializer {
             name = RIVAL_NAMES[index % RIVAL_NAMES.size],
             genreWeights = genreWeights
         )
+    }
+
+    internal fun buildDeadlines(artistIds: Set<String>, rng: Random, seasonNumber: Int): Map<String, Deadline> {
+        val result = mutableMapOf<String, Deadline>()
+        val allTypes = DeadlineType.entries
+        for (artistId in artistIds.toList().sorted()) {
+            val count = 1 + rng.nextInt(2)  // 1-2 deadlines per artist
+            val shuffledTypes = allTypes.shuffled(rng)
+            for (i in 0 until count) {
+                val type = shuffledTypes[i]
+                val id = "deadline:${artistId}:${type.name}:$seasonNumber"
+                // 60-160 ticks: spread across season, biased away from the very start and end.
+                val dueTick = 60 + rng.nextInt(101)
+                result[id] = Deadline(id = id, artistId = artistId, type = type, dueTick = dueTick)
+            }
+        }
+        return result
     }
 
     private fun buildScout(id: String, index: Int, rng: Random): ScoutState {

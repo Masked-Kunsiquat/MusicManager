@@ -592,7 +592,7 @@ player up on return) is already delivered in Phase 1 via `TickWorker`. No new
 background work is needed — season boundary detection happens inside the existing
 `tick()` path.
 
-### 5-A — Season calendar + deadline system (`:core-logic`)
+### 5-A — Season calendar + deadline system (`:core-logic`) ✓ DONE
 
 1. **`SeasonState`** — add `season: SeasonState` to `SimWorld` (`@Serializable`).
    Fields: `seasonNumber: Int = 1`, `seasonStartTick: Int = 0`,
@@ -653,7 +653,7 @@ background work is needed — season boundary detection happens inside the exist
    application; `MeetDeadline` sets status and applies both effects; `SeasonEnded`
    fires once and does not repeat within the same season.
 
-### 5-B — Season summary + end-of-season detection (`:core-logic`)
+### 5-B — Season summary + end-of-season detection (`:core-logic`) ✓ DONE
 
 1. **`SeasonSummary`** — pure data class (not stored; always recomputable).
    Fields: `seasonNumber: Int`, `artistsRetained: Int`, `artistsLost: Int`,
@@ -684,7 +684,7 @@ background work is needed — season boundary detection happens inside the exist
    MET/MISSED sequences; funds net sign correct when funds decreased; empty
    season (no events) produces all-zero summary without crashing.
 
-### 5-C — New-season world gen + carry-over (`:core-logic`)
+### 5-C — New-season world gen + carry-over (`:core-logic`) ✓ DONE
 
 1. **`NewSeasonInitializer`** — takes the final `SimWorld` of season N, returns
    the initial `SimWorld` of season N+1. Called from `SimRepository.startNewSeason()`

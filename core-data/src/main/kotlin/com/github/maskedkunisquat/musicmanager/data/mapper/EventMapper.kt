@@ -15,6 +15,10 @@ import kotlinx.serialization.json.put
 import java.util.Locale
 import java.util.UUID
 
+const val EVENT_TYPE_DEADLINE_APPROACHING = "deadline_approaching"
+const val EVENT_TYPE_DEADLINE_MISSED = "deadline_missed"
+const val EVENT_TYPE_SEASON_ENDED = "season_ended"
+
 const val EVENT_TYPE_INTEL_DROP = "intel_drop"
 const val EVENT_TYPE_RIVAL_SIGNING = "rival_signing"
 const val EVENT_TYPE_RIVAL_POACH = "rival_poach"
@@ -35,6 +39,9 @@ fun SimEvent.eventSignature(): String = when (this) {
     is SimEvent.RivalSigning -> "rival_signing:$rivalId:$prospectName"
     is SimEvent.LeadSurfaced -> "lead_surfaced:$prospectId"
     is SimEvent.RivalPoach -> "rival_poach:$rivalId:$artistId"
+    is SimEvent.DeadlineApproaching -> "deadline_approaching:$deadlineId:$ticksRemaining"
+    is SimEvent.DeadlineMissed -> "deadline_missed:$deadlineId"
+    is SimEvent.SeasonEnded -> "season_ended:$seasonNumber"
 }
 
 fun SimEvent.toEntity(email: GeneratedEmail): EventLogEntity = EventLogEntity(
@@ -129,6 +136,10 @@ fun ResponseOption.toResponseEntity(originalEventId: String, dayOfGame: Int): Ev
                         is StateEffect.RenewalWalked -> {
                             put("type", "renewal_walked")
                             put("artistId", effect.artistId)
+                            // Explicit delta so EntityMapper.toRelationshipDeltas() need not
+                            // hard-code game rules. Backward-compat: old rows without this
+                            // field fall back to -0.2f.
+                            put("delta", String.format(Locale.US, "%.4f", -0.2f))
                         }
                         is StateEffect.WantSatisfied -> {
                             put("type", "want_satisfied")
@@ -150,6 +161,20 @@ fun ResponseOption.toResponseEntity(originalEventId: String, dayOfGame: Int): Ev
                         is StateEffect.UpdateRivalIntel -> {
                             put("type", "update_rival_intel")
                             put("rivalId", effect.rivalId)
+                        }
+                        is StateEffect.ExtendDeadline -> {
+                            put("type", "extend_deadline")
+                            put("deadlineId", effect.deadlineId)
+                            put("artistId", effect.artistId)
+                        }
+                        is StateEffect.MeetDeadline -> {
+                            put("type", "meet_deadline")
+                            put("deadlineId", effect.deadlineId)
+                            put("artistId", effect.artistId)
+                            // Explicit delta so EntityMapper.toRelationshipDeltas() need not
+                            // hard-code game rules. Backward-compat: old rows without this
+                            // field fall back to +0.05f.
+                            put("delta", String.format(Locale.US, "%.4f", 0.05f))
                         }
                     }
                 })
@@ -185,6 +210,9 @@ private fun SimEvent.eventTypeKey(): String = when (this) {
     is SimEvent.RivalSigning -> "rival_signing"
     is SimEvent.LeadSurfaced -> "lead_surfaced"
     is SimEvent.RivalPoach -> "rival_poach"
+    is SimEvent.DeadlineApproaching -> EVENT_TYPE_DEADLINE_APPROACHING
+    is SimEvent.DeadlineMissed -> EVENT_TYPE_DEADLINE_MISSED
+    is SimEvent.SeasonEnded -> EVENT_TYPE_SEASON_ENDED
 }
 
 private fun SimEvent.toPayloadJson(): String = when (this) {
@@ -248,5 +276,19 @@ private fun SimEvent.toPayloadJson(): String = when (this) {
         put("rivalName", rivalName)
         put("artistId", artistId)
         put("artistName", artistName)
+    }
+    is SimEvent.DeadlineApproaching -> buildJsonObject {
+        put("deadlineId", deadlineId)
+        put("artistId", artistId)
+        put("type", type.name)
+        put("ticksRemaining", ticksRemaining)
+    }
+    is SimEvent.DeadlineMissed -> buildJsonObject {
+        put("deadlineId", deadlineId)
+        put("artistId", artistId)
+        put("type", type.name)
+    }
+    is SimEvent.SeasonEnded -> buildJsonObject {
+        put("seasonNumber", seasonNumber)
     }
 }.toString()

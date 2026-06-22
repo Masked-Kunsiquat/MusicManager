@@ -7,6 +7,7 @@ import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.TapeDeckItem
 import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
+import com.github.maskedkunisquat.musicmanager.logic.model.DeadlineType
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.WantType
@@ -22,6 +23,7 @@ import kotlinx.serialization.json.long
 
 fun EventLogEntity.toInboxItemOrNull(): InboxItem? {
     if (eventType == "lead_surfaced") return null  // TapeDeck only -- not an inbox email
+    if (eventType == "season_ended") return null   // Season-end modal -- surfaced via observeUnresolvedSeasonEnd()
     val event = toSimEventOrNull() ?: return null
     val options = optionsJson?.let { json ->
         runCatching {
@@ -109,6 +111,23 @@ fun EventLogEntity.toSimEventOrNull(): SimEvent? = try {
             artistName = json["artistName"]!!.jsonPrimitive.content,
             dayOfGame = dayOfGame
         )
+        "deadline_approaching" -> SimEvent.DeadlineApproaching(
+            deadlineId = json["deadlineId"]!!.jsonPrimitive.content,
+            artistId = json["artistId"]!!.jsonPrimitive.content,
+            type = DeadlineType.valueOf(json["type"]!!.jsonPrimitive.content),
+            ticksRemaining = json["ticksRemaining"]!!.jsonPrimitive.int,
+            dayOfGame = dayOfGame
+        )
+        "deadline_missed" -> SimEvent.DeadlineMissed(
+            deadlineId = json["deadlineId"]!!.jsonPrimitive.content,
+            artistId = json["artistId"]!!.jsonPrimitive.content,
+            type = DeadlineType.valueOf(json["type"]!!.jsonPrimitive.content),
+            dayOfGame = dayOfGame
+        )
+        "season_ended" -> SimEvent.SeasonEnded(
+            seasonNumber = json["seasonNumber"]!!.jsonPrimitive.int,
+            dayOfGame = dayOfGame
+        )
         else -> null
     }
 } catch (_: Exception) {
@@ -134,6 +153,16 @@ fun EventLogEntity.toRelationshipDeltas(): Map<String, Float> {
                     result[artistId] = (result[artistId] ?: 0f) + delta
                 }
                 "want_satisfied" -> result[artistId] = (result[artistId] ?: 0f) + StateEffect.WantSatisfied.RELATIONSHIP_BONUS
+                // Read explicit delta stored since Phase 5-A; fall back to the historical
+                // hard-coded values for rows written before that version.
+                "renewal_walked" -> {
+                    val delta = obj["delta"]?.jsonPrimitive?.content?.toFloatOrNull() ?: -0.2f
+                    result[artistId] = (result[artistId] ?: 0f) + delta
+                }
+                "meet_deadline" -> {
+                    val delta = obj["delta"]?.jsonPrimitive?.content?.toFloatOrNull() ?: 0.05f
+                    result[artistId] = (result[artistId] ?: 0f) + delta
+                }
             }
         }
     }

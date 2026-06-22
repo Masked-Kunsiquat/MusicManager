@@ -4,6 +4,8 @@ import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.model.ArtistState
 import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.CreativeControl
+import com.github.maskedkunisquat.musicmanager.logic.model.DeadlineStatus
+import com.github.maskedkunisquat.musicmanager.logic.model.DeadlineType
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
@@ -81,6 +83,9 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.RivalSigning -> rivalSigningProse(event)
         is SimEvent.LeadSurfaced -> Pair("", "")  // TapeDeck only -- no email rendered
         is SimEvent.RivalPoach -> rivalPoachProse(event)
+        is SimEvent.DeadlineApproaching -> deadlineApproachingProse(event, world)
+        is SimEvent.DeadlineMissed -> deadlineMissedProse(event, world)
+        is SimEvent.SeasonEnded -> Pair("", "")  // not an inbox item -- surfaced via observeUnresolvedSeasonEnd()
     }
 
     private fun needUrgentProse(
@@ -235,6 +240,9 @@ class StubAiProvider : LabelAiProvider {
             is SimEvent.RivalSigning -> rivalSigningOptions(event)
             is SimEvent.LeadSurfaced -> leadSurfacedOptions(event)
             is SimEvent.RivalPoach -> rivalPoachOptions(event)
+            is SimEvent.DeadlineApproaching -> deadlineApproachingOptions(event, world)
+            is SimEvent.DeadlineMissed -> deadlineMissedOptions(event, world)
+            is SimEvent.SeasonEnded -> emptyList()
         }
         return prioritize(raw, artist)
     }
@@ -915,6 +923,87 @@ class StubAiProvider : LabelAiProvider {
             "Dig into what ${event.rivalName} is building",
             listOf(StateEffect.UpdateRivalIntel(event.rivalId)))
     )
+
+    // --- Deadline events ---
+
+    private fun deadlineTypeName(type: DeadlineType): String = when (type) {
+        DeadlineType.ALBUM_RELEASE -> "album release"
+        DeadlineType.TOUR_BOOKING  -> "tour booking"
+        DeadlineType.PRESS_CYCLE   -> "press cycle"
+    }
+
+    private fun deadlineApproachingProse(event: SimEvent.DeadlineApproaching, world: SimWorld): Pair<String, String> {
+        val name = world.artists[event.artistId]?.name ?: "your artist"
+        val deadline = deadlineTypeName(event.type)
+        val s = signing(name, world.artists[event.artistId]?.dimensions?.loyalty ?: 0.5f)
+        return when {
+            event.ticksRemaining <= 5 -> Pair(
+                "$deadline — decision needed now",
+                "We're at ${event.ticksRemaining} ticks on the $deadline window. I need an answer — " +
+                "this can't keep floating. What are we doing?$s"
+            )
+            event.ticksRemaining <= 10 -> Pair(
+                "$deadline — coming up fast",
+                "Flagging the $deadline timeline — ${event.ticksRemaining} ticks out. " +
+                "We should be locked by now or have a plan to get there. " +
+                "What's the status?$s"
+            )
+            else -> Pair(
+                "heads up — $deadline window",
+                "Just a heads up that the $deadline is about ${event.ticksRemaining} ticks away. " +
+                "Nothing urgent yet, but wanted to make sure it's on your radar.$s"
+            )
+        }
+    }
+
+    private fun deadlineApproachingOptions(event: SimEvent.DeadlineApproaching, world: SimWorld): List<ResponseOption> {
+        val d = event.deadlineId
+        val a = event.artistId
+        val alreadyExtended = world.deadlines[d]?.status == DeadlineStatus.EXTENDED
+        return buildList {
+            add(option("deadline:$d:meet", "Confirm — we're on track to deliver",
+                listOf(StateEffect.MeetDeadline(d, a))))
+            if (!alreadyExtended) {
+                add(option("deadline:$d:extend", "Ask for more time — push the window back",
+                    listOf(StateEffect.ExtendDeadline(d, a)),
+                    cost = 3_000 * CENTS))
+            }
+            add(option("deadline:$d:slide", "Let it slide — deal with the fallout when it comes",
+                emptyList()))
+        }
+    }
+
+    private fun deadlineMissedProse(event: SimEvent.DeadlineMissed, world: SimWorld): Pair<String, String> {
+        val name = world.artists[event.artistId]?.name ?: "your artist"
+        val loyalty = world.artists[event.artistId]?.dimensions?.loyalty ?: 0.5f
+        val deadline = deadlineTypeName(event.type)
+        val s = signing(name, loyalty)
+        val tone = when {
+            loyalty < 0.35f ->
+                "That window closed and I didn't hear anything from your end. " +
+                "I'm not going to pretend that's okay. This isn't the first time I've felt like an afterthought."
+            loyalty < 0.60f ->
+                "The $deadline came and went. I'm not panicking but I need to understand what happened. " +
+                "Can we get on a call this week?"
+            else ->
+                "Hey — the $deadline window passed. I figured something came up on your end. " +
+                "Let me know what you're thinking and we'll figure out next steps."
+        }
+        return Pair("re: missed $deadline", "$tone$s")
+    }
+
+    private fun deadlineMissedOptions(event: SimEvent.DeadlineMissed, world: SimWorld): List<ResponseOption> {
+        val d = event.deadlineId
+        val a = event.artistId
+        return listOf(
+            option("deadline:$d:apologize", "Reach out directly — own the miss and reset",
+                listOf(RC(a, +0.05f), StateEffect.ReputationChange(ReputationCommunity.PRESS, -0.02f))),
+            option("deadline:$d:reschedule", "Propose a new timeline — treat it as a delay, not a miss",
+                listOf(StateEffect.ReputationChange(ReputationCommunity.PRESS, -0.03f))),
+            option("deadline:$d:absorb", "Absorb it — move on without addressing it directly",
+                listOf(RC(a, -0.08f), StateEffect.ReputationChange(ReputationCommunity.PRESS, -0.05f)))
+        )
+    }
 
     private fun NC(artistId: String, needType: NeedType, delta: Float) =
         StateEffect.NeedChange(artistId, needType, delta)

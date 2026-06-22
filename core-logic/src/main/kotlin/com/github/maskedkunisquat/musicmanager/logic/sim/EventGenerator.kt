@@ -3,6 +3,7 @@ package com.github.maskedkunisquat.musicmanager.logic.sim
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.model.ArtistState
 import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
+import com.github.maskedkunisquat.musicmanager.logic.model.DeadlineStatus
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.MarketState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
@@ -59,6 +60,7 @@ internal fun generateEvents(
         addAll(contractEvents(artist, world))
         addAll(wantEvents(artist, world.currentDay))
     }
+    addAll(deadlineEvents(world))
     addAll(marketShiftEvents(world, previousMarket))
     addAll(intelDropEvents(world, rng))
     addAll(labelNeedEvents(world))
@@ -189,6 +191,32 @@ private fun leadSurfacedEvents(world: SimWorld): List<SimEvent> {
     // Watched leads come first: they represent prior player interest so they take priority over new prospects.
     return (fromWatch + fresh).take(cap).map { p ->
         SimEvent.LeadSurfaced(prospectId = p.id, dayOfGame = day)
+    }
+}
+
+private val DEADLINE_APPROACHING_THRESHOLDS = setOf(20, 10, 5)
+
+private fun deadlineEvents(world: SimWorld): List<SimEvent> = buildList {
+    for ((_, deadline) in world.deadlines) {
+        if (deadline.status != DeadlineStatus.PENDING && deadline.status != DeadlineStatus.EXTENDED) continue
+        val ticksRemaining = deadline.dueTick - world.currentDay
+        if (ticksRemaining in DEADLINE_APPROACHING_THRESHOLDS) {
+            add(SimEvent.DeadlineApproaching(
+                deadlineId = deadline.id,
+                artistId = deadline.artistId,
+                type = deadline.type,
+                ticksRemaining = ticksRemaining,
+                dayOfGame = world.currentDay
+            ))
+        } else if (world.currentDay > deadline.dueTick) {
+            // SimEngine will set status = MISSED immediately so this fires only once.
+            add(SimEvent.DeadlineMissed(
+                deadlineId = deadline.id,
+                artistId = deadline.artistId,
+                type = deadline.type,
+                dayOfGame = world.currentDay
+            ))
+        }
     }
 }
 

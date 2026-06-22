@@ -4,6 +4,7 @@ import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.model.ArtistState
 import com.github.maskedkunisquat.musicmanager.logic.model.Contract
 import com.github.maskedkunisquat.musicmanager.logic.model.CreativeControl
+import com.github.maskedkunisquat.musicmanager.logic.model.DeadlineStatus
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
@@ -42,6 +43,8 @@ fun applyResponse(world: SimWorld, option: ResponseOption): Pair<SimWorld, List<
             is StateEffect.RenewContract      -> effect.artistId
             is StateEffect.RenewalWalked      -> effect.artistId
             is StateEffect.WantSatisfied      -> effect.artistId
+            is StateEffect.ExtendDeadline     -> effect.artistId
+            is StateEffect.MeetDeadline       -> effect.artistId
             else -> null
         }
     }.toSet()
@@ -310,6 +313,57 @@ private fun applyEffect(world: SimWorld, effect: StateEffect): Pair<SimWorld, Li
                 )),
                 watchedLeads = world.watchedLeads + (effect.prospectId to world.currentDay),
                 surfacedLeads = world.surfacedLeads - effect.prospectId
+            ), noEvents)
+        }
+        is StateEffect.ExtendDeadline -> {
+            val deadline = world.deadlines[effect.deadlineId] ?: return Pair(world, noEvents)
+            // Cannot extend a deadline that's already been met or missed — those are terminal states.
+            if (deadline.status == DeadlineStatus.MET || deadline.status == DeadlineStatus.MISSED) {
+                return Pair(world, noEvents)
+            }
+            val artist = world.artists[effect.artistId] ?: return Pair(world, noEvents)
+            return if (deadline.status == DeadlineStatus.EXTENDED) {
+                // Already extended once — loyalty cost only, no further extension.
+                val newLoyalty = (artist.dimensions.loyalty - 0.05f).coerceIn(0f, 1f)
+                Pair(world.copy(
+                    artists = world.artists + (effect.artistId to artist.copy(
+                        dimensions = artist.dimensions.copy(loyalty = newLoyalty),
+                        relationshipBalance = artist.relationshipBalance - 0.05f
+                    ))
+                ), noEvents)
+            } else {
+                val newLoyalty = (artist.dimensions.loyalty - 0.10f).coerceIn(0f, 1f)
+                Pair(world.copy(
+                    deadlines = world.deadlines + (effect.deadlineId to deadline.copy(
+                        dueTick = deadline.dueTick + 10,
+                        status = DeadlineStatus.EXTENDED
+                    )),
+                    artists = world.artists + (effect.artistId to artist.copy(
+                        dimensions = artist.dimensions.copy(loyalty = newLoyalty),
+                        relationshipBalance = artist.relationshipBalance - 0.10f
+                    ))
+                ), noEvents)
+            }
+        }
+        is StateEffect.MeetDeadline -> {
+            val deadline = world.deadlines[effect.deadlineId] ?: return Pair(world, noEvents)
+            // MET is already done; MISSED is a terminal loss state that cannot be retroactively met.
+            if (deadline.status == DeadlineStatus.MET || deadline.status == DeadlineStatus.MISSED) {
+                return Pair(world, noEvents)
+            }
+            val artist = world.artists[effect.artistId] ?: return Pair(world, noEvents)
+            val newLoyalty = (artist.dimensions.loyalty + 0.05f).coerceIn(0f, 1f)
+            val pressRep = world.label.reputation[ReputationCommunity.PRESS] ?: 0f
+            Pair(world.copy(
+                deadlines = world.deadlines + (effect.deadlineId to deadline.copy(status = DeadlineStatus.MET)),
+                artists = world.artists + (effect.artistId to artist.copy(
+                    dimensions = artist.dimensions.copy(loyalty = newLoyalty),
+                    relationshipBalance = artist.relationshipBalance + 0.05f
+                )),
+                label = world.label.copy(
+                    reputation = world.label.reputation +
+                        (ReputationCommunity.PRESS to (pressRep + 0.02f).coerceIn(0f, 1f))
+                )
             ), noEvents)
         }
         is StateEffect.RenewalWalked -> {
