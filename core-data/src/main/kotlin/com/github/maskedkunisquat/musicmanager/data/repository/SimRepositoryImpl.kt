@@ -1,6 +1,7 @@
 package com.github.maskedkunisquat.musicmanager.data.repository
 
 import com.github.maskedkunisquat.musicmanager.data.dao.EventLogDao
+import com.github.maskedkunisquat.musicmanager.data.entity.EventLogEntity
 import com.github.maskedkunisquat.musicmanager.data.mapper.eventSignature
 import com.github.maskedkunisquat.musicmanager.data.mapper.toInboxItemOrNull
 import com.github.maskedkunisquat.musicmanager.data.mapper.toRelationshipDeltas
@@ -14,8 +15,11 @@ import com.github.maskedkunisquat.musicmanager.logic.ai.LabelAiProvider
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.TapeDeckItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.SimRepository
+import com.github.maskedkunisquat.musicmanager.logic.model.SeasonFacts
+import com.github.maskedkunisquat.musicmanager.logic.model.SeasonSummary
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
+import com.github.maskedkunisquat.musicmanager.logic.sim.SeasonSummaryEvaluator
 import com.github.maskedkunisquat.musicmanager.logic.sim.SimEngine
 import com.github.maskedkunisquat.musicmanager.logic.sim.WorldInitializer
 import com.github.maskedkunisquat.musicmanager.logic.sim.applyResponse
@@ -25,6 +29,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 class SimRepositoryImpl(
     private val dao: EventLogDao,
@@ -99,6 +107,47 @@ class SimRepositoryImpl(
         }
     }
 
+    // Extracts SeasonFacts from a set of EventLogEntity rows for SeasonSummaryEvaluator.
+    // Parses rival_poach events and response_applied payloads — all JSON parsing stays in core-data.
+    private fun extractSeasonFacts(entities: List<EventLogEntity>): SeasonFacts {
+        val poachIds = mutableSetOf<String>()
+        val walkedIds = mutableSetOf<String>()
+        var met = 0
+        var missed = 0
+        val json = Json { ignoreUnknownKeys = true }
+        for (entity in entities) {
+            when (entity.eventType) {
+                "rival_poach" -> {
+                    runCatching {
+                        val obj = json.parseToJsonElement(entity.payload).jsonObject
+                        obj["artistId"]?.jsonPrimitive?.content?.let { poachIds.add(it) }
+                    }
+                }
+                "deadline_missed" -> missed++
+                "response_applied" -> {
+                    runCatching {
+                        val effects = json.parseToJsonElement(entity.payload)
+                            .jsonObject["effects"]?.jsonArray ?: return@runCatching
+                        for (e in effects) {
+                            val obj = e.jsonObject
+                            when (obj["type"]?.jsonPrimitive?.content) {
+                                "renewal_walked" ->
+                                    obj["artistId"]?.jsonPrimitive?.content?.let { walkedIds.add(it) }
+                                "meet_deadline" -> met++
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return SeasonFacts(
+            rivalPoachArtistIds = poachIds,
+            renewalWalkedArtistIds = walkedIds,
+            deadlinesMet = met,
+            deadlinesMissed = missed
+        )
+    }
+
     // Back-fills ArtistState.lastInteractionDay for saves predating 4-D (where it defaulted to 0).
     private suspend fun reconcileLastInteractionDaysUnderLock() {
         val latestDay = mutableMapOf<String, Int>()
@@ -141,6 +190,16 @@ class SimRepositoryImpl(
 
     override suspend fun markViewed(eventId: String) {
         dao.markViewed(eventId, System.currentTimeMillis())
+    }
+
+    override fun observeUnresolvedSeasonEnd(): Flow<Boolean> =
+        dao.observeUnresolvedSeasonEnd().map { it.isNotEmpty() }
+
+    override suspend fun getSeasonSummary(): SeasonSummary {
+        val startTick = world.season.seasonStartTick
+        val entities = dao.getFromDay(startTick)
+        val facts = extractSeasonFacts(entities)
+        return SeasonSummaryEvaluator.evaluate(world, facts)
     }
 
     override suspend fun resolveEvent(eventId: String, option: ResponseOption) = tickMutex.withLock {

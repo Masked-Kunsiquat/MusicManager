@@ -76,18 +76,25 @@ object WorldInitializer {
         }
 
         val deadlines = buildDeadlines(artists.keys, rng, seasonNumber = 1)
+        val label = buildLabel(artists.keys.toSet(), rng)
 
         return SimWorld(
             seed = seed,
             currentDay = 0,
             artists = artists,
-            label = buildLabel(artists.keys.toSet(), rng),
+            label = label,
             market = buildMarket(rng),
             contracts = contracts,
             prospects = prospects,
             scouts = scouts,
             rivals = rivals,
-            season = SeasonState(seasonNumber = 1, seasonStartTick = 0, seasonEndTick = 180),
+            season = SeasonState(
+                seasonNumber = 1,
+                seasonStartTick = 0,
+                seasonEndTick = 180,
+                startFunds = label.funds,
+                startReputation = label.reputation.mapKeys { it.key.name }
+            ),
             deadlines = deadlines
         )
     }
