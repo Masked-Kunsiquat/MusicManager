@@ -85,12 +85,8 @@ private fun LabelOfficeContent(world: SimWorld, onBack: () -> Unit, onOpenIdenti
 
             SectionHeader("CAPABILITIES")
             CapabilityType.entries.forEach { cap ->
-                CapabilityRow(
-                    type = cap,
-                    unlocked = cap in world.label.capabilities,
-                    gateText = gateText(cap, world)
-                )
-                Spacer(modifier = Modifier.height(6.dp))
+                CapabilityRow(type = cap, world = world)
+                Spacer(modifier = Modifier.height(12.dp))
             }
             Spacer(modifier = Modifier.height(20.dp))
             RetroButton(
@@ -134,16 +130,50 @@ private fun StatusLine(label: String, value: String, critical: Boolean = false) 
 }
 
 @Composable
-private fun CapabilityRow(type: CapabilityType, unlocked: Boolean, gateText: String) {
-    val prefix = if (unlocked) "■" else "□"
-    val label = capabilityLabel(type)
-    val suffix = if (!unlocked) " — $gateText" else ""
-    Text(
-        text = "$prefix $label$suffix",
-        style = MaterialTheme.typography.bodyMedium,
-        color = if (unlocked) MaterialTheme.colorScheme.onSurface
-                else MaterialTheme.colorScheme.onSurfaceVariant
-    )
+private fun CapabilityRow(type: CapabilityType, world: SimWorld) {
+    val unlocked = type in world.label.capabilities
+    val gateInfo = if (!unlocked) gateInfo(type, world) else null
+    val ready = gateInfo?.second ?: false
+
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.Top
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = capabilityLabel(type),
+                style = MaterialTheme.typography.titleSmall,
+                color = if (unlocked) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = capabilityDescription(type),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (!unlocked && gateInfo != null) {
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = gateInfo.first,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (ready) MaterialTheme.colorScheme.primary
+                            else MaterialTheme.colorScheme.outline
+                )
+            }
+        }
+        androidx.compose.foundation.layout.Spacer(modifier = Modifier.padding(start = 8.dp))
+        Text(
+            text = if (unlocked) "ACTIVE" else if (ready) "READY" else "LOCKED",
+            style = MaterialTheme.typography.labelSmall,
+            color = when {
+                unlocked -> MaterialTheme.colorScheme.primary
+                ready    -> MaterialTheme.colorScheme.secondary
+                else     -> MaterialTheme.colorScheme.outline
+            }
+        )
+    }
 }
 
 private fun cashFlowLabel(score: Float): String = when {
@@ -168,22 +198,42 @@ private fun rosterLabel(world: SimWorld): String {
 }
 
 private fun capabilityLabel(type: CapabilityType): String = when (type) {
-    CapabilityType.PUBLICIST -> "Publicist"
+    CapabilityType.PUBLICIST        -> "Publicist"
     CapabilityType.IN_HOUSE_BOOKING -> "In-House Booking"
     CapabilityType.VIDEO_PRODUCTION -> "Video Production"
 }
 
-private fun gateText(type: CapabilityType, world: SimWorld): String = when (type) {
+private fun capabilityDescription(type: CapabilityType): String = when (type) {
+    CapabilityType.PUBLICIST ->
+        "Press pitches on intel + market events. Extra options when artists need recognition or face a press-cycle deadline."
+    CapabilityType.IN_HOUSE_BOOKING ->
+        "Lock in dates when trends peak. Extra options for recognition needs and tour-booking deadlines."
+    CapabilityType.VIDEO_PRODUCTION ->
+        "In-house visuals on demand. Extra option when artists need creative fulfilment."
+}
+
+// Returns (display text, isReady) — used for lock status and gate progress.
+private fun gateInfo(type: CapabilityType, world: SimWorld): Pair<String, Boolean> = when (type) {
     CapabilityType.PUBLICIST -> {
         val rep = world.label.reputation[ReputationCommunity.PRESS] ?: 0f
-        if (rep >= 0.4f) "ready to unlock via inbox" else "press rep needed"
+        val ready = rep >= 0.4f
+        val text = if (ready) "ready to unlock — watch for inbox offer"
+                   else "press rep: ${"%.2f".format(rep)} / 0.40 needed"
+        text to ready
     }
     CapabilityType.IN_HOUSE_BOOKING -> {
         val rep = world.label.reputation[ReputationCommunity.VENUE_BOOKERS] ?: 0f
-        if (rep >= 0.4f) "ready to unlock via inbox" else "venue rep needed"
+        val ready = rep >= 0.4f
+        val text = if (ready) "ready to unlock — watch for inbox offer"
+                   else "venue rep: ${"%.2f".format(rep)} / 0.40 needed"
+        text to ready
     }
     CapabilityType.VIDEO_PRODUCTION -> {
-        if (world.label.funds >= 5_000_000L) "ready to unlock via inbox" else "\$50k needed"
+        val ready = world.label.funds >= 5_000_000L
+        val dollars = world.label.funds / 100L
+        val text = if (ready) "ready to unlock — watch for inbox offer"
+                   else "funds: \$${"%.0f".format(dollars.toFloat() / 1000)}k / \$50k needed"
+        text to ready
     }
 }
 

@@ -356,16 +356,21 @@ class StubAiProvider : LabelAiProvider {
     private fun needUrgentOptions(event: SimEvent.NeedUrgent, world: SimWorld): List<ResponseOption> {
         val a = event.artistId
         return when (event.needType) {
-            NeedType.CREATIVE_FULFILLMENT -> listOf(
-                option("$a:creative_studio", "Schedule an unstructured studio session this week",
-                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.35f), RC(a, +0.05f))),
-                option("$a:creative_ep", "Green-light the experimental EP pitch",
+            NeedType.CREATIVE_FULFILLMENT -> buildList {
+                add(option("$a:creative_studio", "Schedule an unstructured studio session this week",
+                    listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.35f), RC(a, +0.05f))))
+                add(option("$a:creative_ep", "Green-light the experimental EP pitch",
                     listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.55f), NC(a, NeedType.AUTONOMY, +0.15f), RC(a, +0.10f)),
-                    cost = 800 * CENTS),
-                option("$a:creative_retreat", "Book a writing retreat for next month",
+                    cost = 800 * CENTS))
+                add(option("$a:creative_retreat", "Book a writing retreat for next month",
                     listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.25f)),
-                    cost = 200 * CENTS)
-            )
+                    cost = 200 * CENTS))
+                if (CapabilityType.VIDEO_PRODUCTION in world.label.capabilities) {
+                    add(option("$a:creative_video", "Commission an in-house music video for their next release",
+                        listOf(NC(a, NeedType.CREATIVE_FULFILLMENT, +0.30f), NC(a, NeedType.RECOGNITION, +0.15f), RC(a, +0.08f)),
+                        cost = 600 * CENTS))
+                }
+            }
             NeedType.FINANCIAL_SECURITY -> listOf(
                 option("$a:finance_advance", "Offer a \$5,000 advance against future royalties",
                     listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.50f), RC(a, +0.10f)),
@@ -377,16 +382,26 @@ class StubAiProvider : LabelAiProvider {
                 option("$a:finance_meeting", "Schedule a finances review to discuss options",
                     listOf(NC(a, NeedType.FINANCIAL_SECURITY, +0.05f)))
             )
-            NeedType.RECOGNITION -> listOf(
-                option("$a:recog_press", "Push for a feature in key genre press outlets",
+            NeedType.RECOGNITION -> buildList {
+                add(option("$a:recog_press", "Push for a feature in key genre press outlets",
                     listOf(NC(a, NeedType.RECOGNITION, +0.40f), RC(a, +0.05f)),
-                    cost = 300 * CENTS),
-                option("$a:recog_festival", "Submit for festival consideration this season",
-                    listOf(NC(a, NeedType.RECOGNITION, +0.30f))),
-                option("$a:recog_showcase", "Arrange an in-store showcase event",
+                    cost = 300 * CENTS))
+                add(option("$a:recog_festival", "Submit for festival consideration this season",
+                    listOf(NC(a, NeedType.RECOGNITION, +0.30f))))
+                add(option("$a:recog_showcase", "Arrange an in-store showcase event",
                     listOf(NC(a, NeedType.RECOGNITION, +0.20f)),
-                    cost = 150 * CENTS)
-            )
+                    cost = 150 * CENTS))
+                if (CapabilityType.PUBLICIST in world.label.capabilities) {
+                    add(option("$a:recog_publicist", "Have the publicist push for features and press coverage",
+                        listOf(NC(a, NeedType.RECOGNITION, +0.35f), StateEffect.ReputationChange(ReputationCommunity.PRESS, +0.03f)),
+                        cost = 250 * CENTS))
+                }
+                if (CapabilityType.IN_HOUSE_BOOKING in world.label.capabilities) {
+                    add(option("$a:recog_booking", "Book a run of headline dates through the in-house team",
+                        listOf(NC(a, NeedType.RECOGNITION, +0.25f), NC(a, NeedType.FINANCIAL_SECURITY, +0.10f)),
+                        cost = 400 * CENTS))
+                }
+            }
             NeedType.BELONGING -> {
                 val partnerId = world.artists.keys.firstOrNull { it != a } ?: ""
                 val hasPartner = partnerId.isNotEmpty()
@@ -1084,6 +1099,16 @@ class StubAiProvider : LabelAiProvider {
         return buildList {
             add(option("deadline:$d:meet", "Confirm — we're on track to deliver",
                 listOf(StateEffect.MeetDeadline(d, a))))
+            if (event.type == DeadlineType.PRESS_CYCLE && CapabilityType.PUBLICIST in world.label.capabilities) {
+                add(option("deadline:$d:publicist",
+                    "Have the publicist take point on the press cycle",
+                    listOf(StateEffect.MeetDeadline(d, a), StateEffect.ReputationChange(ReputationCommunity.PRESS, +0.02f))))
+            }
+            if (event.type == DeadlineType.TOUR_BOOKING && CapabilityType.IN_HOUSE_BOOKING in world.label.capabilities) {
+                add(option("deadline:$d:booking_team",
+                    "Have the in-house booking team lock in the dates directly",
+                    listOf(StateEffect.MeetDeadline(d, a), NC(a, NeedType.FINANCIAL_SECURITY, +0.05f))))
+            }
             if (!alreadyExtended) {
                 add(option("deadline:$d:extend", "Ask for more time — push the window back",
                     listOf(StateEffect.ExtendDeadline(d, a)),
