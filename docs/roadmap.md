@@ -721,7 +721,7 @@ background work is needed — season boundary detection happens inside the exist
    different prospect pool; `genreTrends` moved toward 0.5f but not fully reset;
    `capabilities` preserved.
 
-### 5-D — Label Identity system (`:core-logic`)
+### 5-D — Label Identity system (`:core-logic`) ✓ DONE
 
 1. **`LabelIdentity`** — pure data class (not stored; derived on demand). Fields:
    `genreWeights: Map<String, Float>` (0–1, genre → label affinity for current
@@ -763,7 +763,7 @@ background work is needed — season boundary detection happens inside the exist
    for high-volatility roster; scout weighting skews toward `primaryGenre` when
    `focusScore > 0.6f`; null identity produces unchanged event output.
 
-### 5-E — Season-end UI + new-season flow (`:app`)
+### 5-E — Season-end UI + new-season flow (`:app`) ✓ DONE
 
 1. **`SeasonRecapScreen`** — full-screen interstitial triggered when
    `SeasonEnded` reaches the top of the inbox stream. Retro style: monospace,
@@ -794,7 +794,7 @@ background work is needed — season boundary detection happens inside the exist
 4. **Nav updates** — `AppNavGraph` route for `SeasonRecapScreen`. Route is
    top-level (not nested under inbox nav) so the back stack is clean.
 
-### 5-F — Label Identity screen (`:app`)
+### 5-F — Label Identity screen (`:app`) ✓ DONE
 
 1. **`LabelIdentityScreen`** — accessible from `LabelOfficeScreen` (new list
    entry). Retro style consistent with all other screens. Read-only. Content:

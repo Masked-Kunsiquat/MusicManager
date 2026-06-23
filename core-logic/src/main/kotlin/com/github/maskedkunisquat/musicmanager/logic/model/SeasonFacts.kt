@@ -6,5 +6,6 @@ data class SeasonFacts(
     val rivalPoachArtistIds: Set<String>,
     val renewalWalkedArtistIds: Set<String>,
     val deadlinesMet: Int,
-    val deadlinesMissed: Int
+    val deadlinesMissed: Int,
+    val departedArtistNames: List<String> = emptyList()
 )

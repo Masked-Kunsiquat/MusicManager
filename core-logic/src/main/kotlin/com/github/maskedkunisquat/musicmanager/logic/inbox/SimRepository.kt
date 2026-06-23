@@ -1,5 +1,6 @@
 package com.github.maskedkunisquat.musicmanager.logic.inbox
 
+import com.github.maskedkunisquat.musicmanager.logic.model.LabelIdentity
 import com.github.maskedkunisquat.musicmanager.logic.model.SeasonSummary
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
@@ -19,4 +20,8 @@ interface SimRepository {
     suspend fun getSeasonSummary(): SeasonSummary
     // Advances to the next season and marks the SeasonEnded event resolved.
     suspend fun startNewSeason()
+    // Derives label identity from current-season player actions (never stored; always recomputable).
+    suspend fun getLabelIdentity(): LabelIdentity
+    // Returns the primaryGenre from the previous season's identity, or null if season 1 or no actions.
+    suspend fun getPreviousSeasonPrimaryGenre(): String?
 }

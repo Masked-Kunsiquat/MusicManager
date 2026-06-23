@@ -28,17 +28,18 @@ import com.github.maskedkunisquat.musicmanager.logic.model.LabelState
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.sim.LabelNeedEvaluator
+import com.github.maskedkunisquat.musicmanager.ui.components.RetroButton
 import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxViewModel
 import com.github.maskedkunisquat.musicmanager.ui.theme.RetroTheme
 
 @Composable
-fun LabelOfficeScreen(viewModel: InboxViewModel, onBack: () -> Unit) {
+fun LabelOfficeScreen(viewModel: InboxViewModel, onBack: () -> Unit, onOpenIdentity: () -> Unit) {
     val world by viewModel.world.collectAsStateWithLifecycle()
-    LabelOfficeContent(world = world, onBack = onBack)
+    LabelOfficeContent(world = world, onBack = onBack, onOpenIdentity = onOpenIdentity)
 }
 
 @Composable
-private fun LabelOfficeContent(world: SimWorld, onBack: () -> Unit) {
+private fun LabelOfficeContent(world: SimWorld, onBack: () -> Unit, onOpenIdentity: () -> Unit) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -90,6 +91,14 @@ private fun LabelOfficeContent(world: SimWorld, onBack: () -> Unit) {
                     gateText = gateText(cap, world)
                 )
                 Spacer(modifier = Modifier.height(6.dp))
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+            RetroButton(
+                onClick = onOpenIdentity,
+                filled = false,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("IDENTITY >")
             }
         }
     }
@@ -183,6 +192,7 @@ private fun gateText(type: CapabilityType, world: SimWorld): String = when (type
 private fun LabelOfficePreview() {
     RetroTheme {
         LabelOfficeContent(
+            onOpenIdentity = {},
             world = SimWorld(
                 seed = 1L,
                 currentDay = 42,

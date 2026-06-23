@@ -2,12 +2,13 @@ package com.github.maskedkunisquat.musicmanager.logic.sim
 
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.model.DeadlineStatus
+import com.github.maskedkunisquat.musicmanager.logic.model.LabelIdentity
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import kotlin.random.Random
 
 class SimEngine {
 
-    fun tick(world: SimWorld): TickResult {
+    fun tick(world: SimWorld, labelIdentity: LabelIdentity? = null): TickResult {
         // Three independent seed-deterministic RNGs per tick. XOR operands differ by +0/+1/+2
         // from currentDay, which is sufficient since these are seeds (not offsets) into Random.
         val nextDay = world.currentDay + 1
@@ -17,7 +18,7 @@ class SimEngine {
         val rivalRng  = Random(world.seed xor (nextDay.toLong() + 3L))
 
         val previousMarket = world.market
-        val (updatedScouts, scoutReports) = tickScouts(world.scouts, nextDay, world.prospects, scoutRng)
+        val (updatedScouts, scoutReports) = tickScouts(world.scouts, nextDay, world.prospects, scoutRng, labelIdentity)
         val newMarket = tickMarket(world.market, marketRng)
         val preRivalWorld = world.copy(
             currentDay = nextDay,
@@ -27,7 +28,7 @@ class SimEngine {
             chartSnapshot = if (nextDay % 3 == 0) newMarket else world.chartSnapshot
         )
         val (nextWorld, rivalEvents) = tickRivals(preRivalWorld, rivalRng)
-        val events = generateEvents(nextWorld, previousMarket, eventRng) + scoutReports + rivalEvents
+        val events = generateEvents(nextWorld, previousMarket, eventRng, labelIdentity) + scoutReports + rivalEvents
         val capabilityEvents = events.filterIsInstance<SimEvent.CapabilityUnlockable>()
         val labelNeedEvents = events.filterIsInstance<SimEvent.LabelNeedUrgent>()
         val wantSurfacedEvents = events.filterIsInstance<SimEvent.WantSurfaced>()
@@ -69,11 +70,11 @@ class SimEngine {
         return TickResult(world = finalWorld, events = allEvents)
     }
 
-    fun tickN(world: SimWorld, ticks: Int): TickResult {
+    fun tickN(world: SimWorld, ticks: Int, labelIdentity: LabelIdentity? = null): TickResult {
         var current = world
         val allEvents = mutableListOf<SimEvent>()
         repeat(ticks) {
-            val result = tick(current)
+            val result = tick(current, labelIdentity)
             current = result.world
             allEvents += result.events
         }

@@ -15,11 +15,15 @@ import com.github.maskedkunisquat.musicmanager.logic.ai.LabelAiProvider
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.TapeDeckItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.SimRepository
+import com.github.maskedkunisquat.musicmanager.logic.model.GenreAction
+import com.github.maskedkunisquat.musicmanager.logic.model.LabelIdentity
 import com.github.maskedkunisquat.musicmanager.logic.model.SeasonFacts
 import com.github.maskedkunisquat.musicmanager.logic.model.SeasonSummary
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
+import com.github.maskedkunisquat.musicmanager.logic.sim.LabelIdentityEvaluator
 import com.github.maskedkunisquat.musicmanager.logic.sim.NewSeasonInitializer
+import com.github.maskedkunisquat.musicmanager.logic.sim.SIGNED_ARTIST_ID_PREFIX
 import com.github.maskedkunisquat.musicmanager.logic.sim.SeasonSummaryEvaluator
 import com.github.maskedkunisquat.musicmanager.logic.sim.SimEngine
 import com.github.maskedkunisquat.musicmanager.logic.sim.WorldInitializer
@@ -49,6 +53,7 @@ class SimRepositoryImpl(
 
     private val tickMutex = Mutex()
     private var startupChecksRan = false
+    private val json = Json { ignoreUnknownKeys = true }
 
     override fun observeUnresolved(): Flow<List<InboxItem>> =
         dao.observeUnresolved().map { entities -> entities.mapNotNull { it.toInboxItemOrNull() } }
@@ -62,9 +67,52 @@ class SimRepositoryImpl(
         return aiProvider.generateEmail(item.event, world).options
     }
 
+    // Returns the recordedAt timestamp of the SeasonEnded event for the given season number,
+    // or null if no such event exists in the log.
+    private fun seasonEndTimestamp(allEntities: List<EventLogEntity>, seasonNumber: Int): Long? =
+        allEntities
+            .filter { it.eventType == "season_ended" }
+            .mapNotNull { entity ->
+                runCatching {
+                    val n = json.parseToJsonElement(entity.payload)
+                        .jsonObject["seasonNumber"]?.jsonPrimitive?.content?.toIntOrNull()
+                        ?: return@mapNotNull null
+                    if (n == seasonNumber) entity.recordedAt else null
+                }.getOrNull()
+            }
+            .maxOrNull()
+
+    // Returns event log entities scoped to the current season only.
+    // Anchors on the recordedAt of the previous SeasonEnded entity so that restarted seasons
+    // (where seasonStartTick resets to 0) don't bleed prior-season events into current queries.
+    private suspend fun currentSeasonEntities(): List<EventLogEntity> {
+        val allEntities = dao.getAll()
+        val prevSeasonNumber = world.season.seasonNumber - 1
+        val seasonBoundary = if (prevSeasonNumber < 1) 0L else
+            seasonEndTimestamp(allEntities, prevSeasonNumber) ?: 0L
+        return if (seasonBoundary == 0L) allEntities
+               else allEntities.filter { it.recordedAt > seasonBoundary }
+    }
+
+    // Returns event log entities scoped to the previous season (season N-1).
+    // Returns empty list when currently in season 1 or no SeasonEnded event for N-1 is found.
+    private suspend fun previousSeasonEntities(): List<EventLogEntity> {
+        val prevSeasonNumber = world.season.seasonNumber - 1
+        if (prevSeasonNumber < 1) return emptyList()
+        val allEntities = dao.getAll()
+        val end = seasonEndTimestamp(allEntities, prevSeasonNumber) ?: return emptyList()
+        val start = if (prevSeasonNumber <= 1) 0L else
+            seasonEndTimestamp(allEntities, prevSeasonNumber - 1) ?: 0L
+        return allEntities.filter { it.recordedAt > start && it.recordedAt <= end }
+    }
+
     // All world mutation goes through this; callers must already hold tickMutex.
     private suspend fun tickUnderLock() {
-        val result = engine.tick(world)
+        // TODO: cache identity between ticks and invalidate only on response_applied writes;
+        //  currently dao.getAll() is called on every tick (O(N) full scan).
+        val identity = getLabelIdentity()
+        aiProvider.onIdentityUpdated(identity)
+        val result = engine.tick(world, identity)
         world = result.world
         // Build a signature set from currently-open events so the same (artist, need/want/contract)
         // doesn't flood the inbox across ticks while the player hasn't responded yet.
@@ -115,7 +163,6 @@ class SimRepositoryImpl(
         val walkedIds = mutableSetOf<String>()
         var met = 0
         var missed = 0
-        val json = Json { ignoreUnknownKeys = true }
         for (entity in entities) {
             when (entity.eventType) {
                 "rival_poach" -> {
@@ -141,11 +188,14 @@ class SimRepositoryImpl(
                 }
             }
         }
+        val lostIds = poachIds + walkedIds
+        val departedNames = lostIds.mapNotNull { id -> world.artists[id]?.name }.sorted()
         return SeasonFacts(
             rivalPoachArtistIds = poachIds,
             renewalWalkedArtistIds = walkedIds,
             deadlinesMet = met,
-            deadlinesMissed = missed
+            deadlinesMissed = missed,
+            departedArtistNames = departedNames
         )
     }
 
@@ -197,30 +247,66 @@ class SimRepositoryImpl(
         dao.observeUnresolvedSeasonEnd().map { it.isNotEmpty() }
 
     override suspend fun getSeasonSummary(): SeasonSummary {
-        val prevSeasonNumber = world.season.seasonNumber - 1
-        val json = Json { ignoreUnknownKeys = true }
-        val allEntities = dao.getAll()
-        // Anchor on the recordedAt of the SeasonEnded event from the previous season so we only
-        // count events from the current season. `seasonStartTick` is always 0 after each new
-        // season and cannot be used to discriminate — dayOfGame ranges restart from 0 each season.
-        val seasonBoundary: Long = if (prevSeasonNumber < 1) 0L else {
-            allEntities
-                .filter { it.eventType == "season_ended" }
-                .mapNotNull { entity ->
-                    runCatching {
-                        val n = json.parseToJsonElement(entity.payload)
-                            .jsonObject["seasonNumber"]?.jsonPrimitive?.content?.toIntOrNull()
-                            ?: return@mapNotNull null
-                        if (n == prevSeasonNumber) entity.recordedAt else null
-                    }.getOrNull()
-                }
-                .maxOrNull() ?: 0L
-        }
-        val entities = if (seasonBoundary == 0L) allEntities
-                       else allEntities.filter { it.recordedAt > seasonBoundary }
+        val entities = currentSeasonEntities()
         val facts = extractSeasonFacts(entities)
         return SeasonSummaryEvaluator.evaluate(world, facts)
     }
+
+    override suspend fun getLabelIdentity(): LabelIdentity {
+        val entities = currentSeasonEntities()
+        val actions = extractGenreActions(entities)
+        return LabelIdentityEvaluator.evaluate(actions, world.artists.values)
+    }
+
+    override suspend fun getPreviousSeasonPrimaryGenre(): String? {
+        val entities = previousSeasonEntities()
+        if (entities.isEmpty()) return null
+        val actions = extractGenreActions(entities)
+        // Pass empty artist list: only primaryGenre is used by callers; aesthetic (roster-driven)
+        // would be wrong here since world.artists reflects the current season.
+        return LabelIdentityEvaluator.evaluate(actions, emptyList()).primaryGenre
+    }
+
+    // Extracts GenreAction list from current-season response_applied entities.
+    // Genre is resolved by looking up prospectId/artistId in the current world; unknown IDs
+    // are skipped (may occur when old-season prospects have left the pool after a season advance).
+    private fun extractGenreActions(entities: List<EventLogEntity>): List<GenreAction> {
+        val result = mutableListOf<GenreAction>()
+        for (entity in entities) {
+            if (entity.eventType != "response_applied") continue
+            runCatching {
+                val effects = json.parseToJsonElement(entity.payload)
+                    .jsonObject["effects"]?.jsonArray ?: return@runCatching
+                for (e in effects) {
+                    val obj = e.jsonObject
+                    val action: GenreAction? = when (obj["type"]?.jsonPrimitive?.content) {
+                        "pursue_lead" -> obj["prospectId"]?.jsonPrimitive?.content
+                            ?.let { resolveProspectGenre(it) }
+                            ?.let { GenreAction(it, +0.05f) }
+                        "pass_lead" -> obj["prospectId"]?.jsonPrimitive?.content
+                            ?.let { resolveProspectGenre(it) }
+                            ?.let { GenreAction(it, -0.03f) }
+                        "sign_artist" -> obj["prospectId"]?.jsonPrimitive?.content
+                            ?.let { resolveSignedGenre(it) }
+                            ?.let { GenreAction(it, +0.10f) }
+                        else -> null
+                    }
+                    action?.let { result += it }
+                }
+            }
+        }
+        return result
+    }
+
+    // Prospects stay in world.prospects even after being pursued/passed, so the lookup is valid
+    // within a season. If the prospect was signed, the new artist carries the same genre.
+    private fun resolveProspectGenre(prospectId: String): String? =
+        world.prospects[prospectId]?.genre
+            ?: world.artists["$SIGNED_ARTIST_ID_PREFIX$prospectId"]?.genre
+
+    private fun resolveSignedGenre(prospectId: String): String? =
+        world.artists["$SIGNED_ARTIST_ID_PREFIX$prospectId"]?.genre
+            ?: world.prospects[prospectId]?.genre
 
     override suspend fun startNewSeason() = tickMutex.withLock {
         val seasonEndEntity = dao.getUnresolvedSeasonEnd().firstOrNull() ?: return@withLock
@@ -228,7 +314,7 @@ class SimRepositoryImpl(
         // Guard against double-advance: if the world was already saved for this season (e.g.,
         // saveWorld succeeded but markResolved crashed), skip the advance but always markResolved.
         val eventSeasonNumber = runCatching {
-            Json.parseToJsonElement(seasonEndEntity.payload)
+            json.parseToJsonElement(seasonEndEntity.payload)
                 .jsonObject["seasonNumber"]?.jsonPrimitive?.content?.toIntOrNull()
         }.getOrNull()
         if (eventSeasonNumber == null || world.season.seasonNumber < eventSeasonNumber) {

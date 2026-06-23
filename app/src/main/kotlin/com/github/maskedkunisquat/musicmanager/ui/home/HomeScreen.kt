@@ -51,7 +51,13 @@ fun HomeScreen(
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary
         )
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = "SEASON ${world.season.seasonNumber} — DAY ${world.currentDay}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(16.dp))
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
         Spacer(modifier = Modifier.height(24.dp))
         RetroButton(onClick = onOpenInbox, modifier = Modifier.fillMaxWidth()) {

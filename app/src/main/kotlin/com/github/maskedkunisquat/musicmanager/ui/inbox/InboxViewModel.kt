@@ -8,12 +8,15 @@ import com.github.maskedkunisquat.musicmanager.logic.ai.ModelLoadState
 import com.github.maskedkunisquat.musicmanager.logic.inbox.TapeDeckItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.SimRepository
+import com.github.maskedkunisquat.musicmanager.logic.model.LabelIdentity
+import com.github.maskedkunisquat.musicmanager.logic.model.SeasonSummary
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -32,6 +35,22 @@ class InboxViewModel(
 
     val activeSurfacedLeads: StateFlow<List<TapeDeckItem>> = repository.observeActiveSurfacedLeads()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // Suppressed while startNewSeason() is in flight to prevent the recap re-appearing
+    // between "button pressed" and "SeasonEnded event marked resolved".
+    private val _recapNavigating = MutableStateFlow(false)
+    val showRecap: StateFlow<Boolean> = repository.observeUnresolvedSeasonEnd()
+        .combine(_recapNavigating) { unresolved, navigating -> unresolved && !navigating }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    private val _seasonSummary = MutableStateFlow<SeasonSummary?>(null)
+    val seasonSummary: StateFlow<SeasonSummary?> = _seasonSummary.asStateFlow()
+
+    private val _labelIdentity = MutableStateFlow<LabelIdentity?>(null)
+    val labelIdentity: StateFlow<LabelIdentity?> = _labelIdentity.asStateFlow()
+
+    private val _prevSeasonPrimaryGenre = MutableStateFlow<String?>(null)
+    val prevSeasonPrimaryGenre: StateFlow<String?> = _prevSeasonPrimaryGenre.asStateFlow()
 
     // Keyed by event ID — populated asynchronously so real inference doesn't block composition.
     private val _options = MutableStateFlow<Map<String, List<ResponseOption>>>(emptyMap())
@@ -70,6 +89,38 @@ class InboxViewModel(
         viewModelScope.launch { repository.markViewed(eventId) }
     }
 
+    fun loadSeasonSummary() {
+        if (_seasonSummary.value != null) return
+        viewModelScope.launch {
+            _seasonSummary.value = runCatching { repository.getSeasonSummary() }.getOrNull()
+        }
+    }
+
+    fun loadLabelIdentity() {
+        if (_labelIdentity.value != null) return
+        viewModelScope.launch {
+            _labelIdentity.value = runCatching { repository.getLabelIdentity() }.getOrNull()
+            _prevSeasonPrimaryGenre.value = runCatching { repository.getPreviousSeasonPrimaryGenre() }.getOrNull()
+        }
+    }
+
+    fun startNewSeason() {
+        if (_recapNavigating.value) return
+        _recapNavigating.value = true
+        viewModelScope.launch {
+            runCatching {
+                repository.startNewSeason()
+                _world.value = repository.world
+            }.onFailure { e ->
+                Log.e(TAG, "startNewSeason failed", e)
+            }
+            _seasonSummary.value = null
+            _labelIdentity.value = null
+            _prevSeasonPrimaryGenre.value = null
+            _recapNavigating.value = false
+        }
+    }
+
     fun resolveEvent(eventId: String, option: ResponseOption) {
         _options.update { it - eventId }
         viewModelScope.launch {
@@ -79,6 +130,10 @@ class InboxViewModel(
             }.onFailure { e ->
                 Log.e(TAG, "resolveEvent failed for $eventId", e)
             }
+            // Any resolved event may include a lead action (pursue/pass/sign) that changes the
+            // season's genre identity. Invalidate so the next loadLabelIdentity() call refetches.
+            _labelIdentity.value = null
+            _prevSeasonPrimaryGenre.value = null
         }
     }
 

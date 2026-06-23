@@ -4,6 +4,7 @@ import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.model.ArtistState
 import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.DeadlineStatus
+import com.github.maskedkunisquat.musicmanager.logic.model.LabelIdentity
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.MarketState
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
@@ -53,7 +54,8 @@ private val CAPABILITY_SPECS = mapOf(
 internal fun generateEvents(
     world: SimWorld,
     previousMarket: MarketState = world.market,
-    rng: Random = Random(0L)
+    rng: Random = Random(0L),
+    labelIdentity: LabelIdentity? = null
 ): List<SimEvent> = buildList {
     for (artist in world.artists.values) {
         addAll(needEvents(artist, world.currentDay))
@@ -62,7 +64,7 @@ internal fun generateEvents(
     }
     addAll(deadlineEvents(world))
     addAll(marketShiftEvents(world, previousMarket))
-    addAll(intelDropEvents(world, rng))
+    addAll(intelDropEvents(world, rng, labelIdentity))
     addAll(labelNeedEvents(world))
     addAll(capabilityUnlockableEvents(world))
     addAll(leadSurfacedEvents(world))
@@ -126,21 +128,32 @@ private fun marketShiftEvents(world: SimWorld, previousMarket: MarketState): Lis
         } else null
     }
 
-private fun intelDropEvents(world: SimWorld, rng: Random): List<SimEvent> {
+private fun intelDropEvents(world: SimWorld, rng: Random, labelIdentity: LabelIdentity? = null): List<SimEvent> {
     if (rng.nextFloat() > INTEL_BASE_CHANCE) return emptyList()
-    val rosterGenres = world.artists.values.map { it.genre }.toSet()
     val genrePool = world.market.genreTrends.keys.toList().ifEmpty { return emptyList() }
-    // Artists with low RECOGNITION need benefit most from market awareness; their genre gets extra
-    // weight in the pool by appearing twice (once from rosterGenres, once from the recognition list).
-    val recognitionHungryGenres = world.artists.values
-        .filter { (it.needs[NeedType.RECOGNITION]?.value ?: 1f) < NEED_URGENT_THRESHOLD }
-        .map { it.genre }
-        .filter { it in world.market.genreTrends }
-    val weightedRosterPool = rosterGenres.toList() + recognitionHungryGenres
-    val genre = if (weightedRosterPool.isNotEmpty() && rng.nextFloat() < INTEL_ROSTER_GENRE_WEIGHT) {
-        weightedRosterPool.random(rng)
-    } else {
-        genrePool.random(rng)
+    val genre = when {
+        // Strong label identity: bias intel toward the primary genre the player is building toward.
+        labelIdentity != null &&
+        labelIdentity.focusScore > IDENTITY_FOCUS_THRESHOLD &&
+        labelIdentity.primaryGenre != null &&
+        labelIdentity.primaryGenre in world.market.genreTrends -> {
+            if (rng.nextFloat() < INTEL_ROSTER_GENRE_WEIGHT) labelIdentity.primaryGenre
+            else genrePool.random(rng)
+        }
+        else -> {
+            // Default: weight toward roster genres, with extra weight for recognition-hungry artists.
+            val rosterGenres = world.artists.values.map { it.genre }.toSet()
+            val recognitionHungryGenres = world.artists.values
+                .filter { (it.needs[NeedType.RECOGNITION]?.value ?: 1f) < NEED_URGENT_THRESHOLD }
+                .map { it.genre }
+                .filter { it in world.market.genreTrends }
+            val weightedRosterPool = rosterGenres.toList() + recognitionHungryGenres
+            if (weightedRosterPool.isNotEmpty() && rng.nextFloat() < INTEL_ROSTER_GENRE_WEIGHT) {
+                weightedRosterPool.random(rng)
+            } else {
+                genrePool.random(rng)
+            }
+        }
     }
     val trend = world.market.genreTrends[genre] ?: return emptyList()
     return listOf(SimEvent.IntelDrop(genre = genre, headline = stubHeadline(genre, trend), dayOfGame = world.currentDay))
