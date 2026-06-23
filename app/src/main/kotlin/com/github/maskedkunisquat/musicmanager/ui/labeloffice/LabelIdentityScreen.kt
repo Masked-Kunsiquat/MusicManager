@@ -79,6 +79,12 @@ fun LabelIdentityScreen(viewModel: InboxViewModel, onBack: () -> Unit) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Sign artists to anchor your roster, pursue or pass leads in the tape deck, and respond to market events — your sound takes shape from all of it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 else -> {
                     IdentityContent(

@@ -257,7 +257,8 @@ class SimRepositoryImpl(
     override suspend fun getLabelIdentity(): LabelIdentity {
         val entities = currentSeasonEntities()
         val actions = extractGenreActions(entities)
-        return LabelIdentityEvaluator.evaluate(actions, world.artists.values)
+        val rosterArtists = world.label.rosterIds.mapNotNull { world.artists[it] }
+        return LabelIdentityEvaluator.evaluate(actions, rosterArtists)
     }
 
     override suspend fun getPreviousSeasonPrimaryGenre(): String? {
@@ -269,16 +270,35 @@ class SimRepositoryImpl(
         return LabelIdentityEvaluator.evaluate(actions, emptyList()).primaryGenre
     }
 
-    // Extracts GenreAction list from current-season response_applied entities.
-    // Genre is resolved by looking up prospectId/artistId in the current world; unknown IDs
-    // are skipped (may occur when old-season prospects have left the pool after a season advance).
+    // Extracts GenreAction list from current-season entities.
+    // Sources: scouting decisions (pursue/pass/sign) + market and intel responses.
+    // Genre is resolved from the original event for market/intel; from world lookup for scouting.
     private fun extractGenreActions(entities: List<EventLogEntity>): List<GenreAction> {
+        // Index genre by event ID for any market_shift or intel_drop event in this season.
+        // response_applied rows reference these via originalEventId.
+        val genreByEventId = buildMap<String, String> {
+            for (entity in entities) {
+                if (entity.eventType != "market_shift" && entity.eventType != "intel_drop") continue
+                runCatching {
+                    val genre = json.parseToJsonElement(entity.payload)
+                        .jsonObject["genre"]?.jsonPrimitive?.content ?: return@runCatching
+                    put(entity.id, genre)
+                }
+            }
+        }
+
         val result = mutableListOf<GenreAction>()
         for (entity in entities) {
             if (entity.eventType != "response_applied") continue
             runCatching {
-                val effects = json.parseToJsonElement(entity.payload)
-                    .jsonObject["effects"]?.jsonArray ?: return@runCatching
+                val payload = json.parseToJsonElement(entity.payload).jsonObject
+                val effects = payload["effects"]?.jsonArray ?: return@runCatching
+
+                // If this response was to a market/intel event, treat it as a weak genre signal.
+                val originalEventId = payload["originalEventId"]?.jsonPrimitive?.content
+                originalEventId?.let { genreByEventId[it] }
+                    ?.let { result += GenreAction(it, +0.03f) }
+
                 for (e in effects) {
                     val obj = e.jsonObject
                     val action: GenreAction? = when (obj["type"]?.jsonPrimitive?.content) {

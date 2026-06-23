@@ -6,12 +6,19 @@ import com.github.maskedkunisquat.musicmanager.logic.model.LabelAesthetic
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelIdentity
 import kotlin.math.ln
 
+private const val ROSTER_WEIGHT_PER_ARTIST = 0.06f
+
 object LabelIdentityEvaluator {
 
     fun evaluate(actions: List<GenreAction>, artists: Collection<ArtistState>): LabelIdentity {
-        // Fold player actions into per-genre weights starting from a 0.5 neutral baseline.
-        // Weights clamp to [0, 1]; a genre only appears in the map if it was touched.
         val weights = mutableMapOf<String, Float>()
+        // Seed from roster: each signed artist anchors their genre above the neutral baseline.
+        // This means a player who hasn't scouted yet still has a readable identity from their roster.
+        for (artist in artists) {
+            val current = weights.getOrDefault(artist.genre, 0.5f)
+            weights[artist.genre] = (current + ROSTER_WEIGHT_PER_ARTIST).coerceIn(0f, 1f)
+        }
+        // Fold player actions on top; scouting signals dominate over the roster baseline.
         for (action in actions) {
             val current = weights.getOrDefault(action.genre, 0.5f)
             weights[action.genre] = (current + action.delta).coerceIn(0f, 1f)
