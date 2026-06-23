@@ -17,15 +17,14 @@ import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.TapeDeckItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.SimRepository
 import com.github.maskedkunisquat.musicmanager.logic.model.ArtistInteractionEntry
-import com.github.maskedkunisquat.musicmanager.logic.model.GenreAction
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelIdentity
+import com.github.maskedkunisquat.musicmanager.logic.sim.EntityRecord
 import com.github.maskedkunisquat.musicmanager.logic.model.SeasonFacts
 import com.github.maskedkunisquat.musicmanager.logic.model.SeasonSummary
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
 import com.github.maskedkunisquat.musicmanager.logic.sim.LabelIdentityEvaluator
 import com.github.maskedkunisquat.musicmanager.logic.sim.NewSeasonInitializer
-import com.github.maskedkunisquat.musicmanager.logic.sim.SIGNED_ARTIST_ID_PREFIX
 import com.github.maskedkunisquat.musicmanager.logic.sim.SeasonSummaryEvaluator
 import com.github.maskedkunisquat.musicmanager.logic.sim.SimEngine
 import com.github.maskedkunisquat.musicmanager.logic.sim.WorldInitializer
@@ -255,8 +254,8 @@ class SimRepositoryImpl(
     }
 
     override suspend fun getLabelIdentity(): LabelIdentity {
-        val entities = currentSeasonEntities()
-        val actions = extractGenreActions(entities)
+        val entities = currentSeasonEntities().map { EntityRecord(it.id, it.eventType, it.payload) }
+        val actions = LabelIdentityEvaluator.extractGenreActions(entities, world)
         val rosterArtists = world.label.rosterIds.mapNotNull { world.artists[it] }
         return LabelIdentityEvaluator.evaluate(actions, rosterArtists)
     }
@@ -264,71 +263,12 @@ class SimRepositoryImpl(
     override suspend fun getPreviousSeasonPrimaryGenre(): String? {
         val entities = previousSeasonEntities()
         if (entities.isEmpty()) return null
-        val actions = extractGenreActions(entities)
+        val records = entities.map { EntityRecord(it.id, it.eventType, it.payload) }
+        val actions = LabelIdentityEvaluator.extractGenreActions(records, world)
         // Pass empty artist list: only primaryGenre is used by callers; aesthetic (roster-driven)
         // would be wrong here since world.artists reflects the current season.
         return LabelIdentityEvaluator.evaluate(actions, emptyList()).primaryGenre
     }
-
-    // Extracts GenreAction list from current-season entities.
-    // Sources: scouting decisions (pursue/pass/sign) + market and intel responses.
-    // Genre is resolved from the original event for market/intel; from world lookup for scouting.
-    private fun extractGenreActions(entities: List<EventLogEntity>): List<GenreAction> {
-        // Index genre by event ID for any market_shift or intel_drop event in this season.
-        // response_applied rows reference these via originalEventId.
-        val genreByEventId = buildMap<String, String> {
-            for (entity in entities) {
-                if (entity.eventType != "market_shift" && entity.eventType != "intel_drop") continue
-                runCatching {
-                    val genre = json.parseToJsonElement(entity.payload)
-                        .jsonObject["genre"]?.jsonPrimitive?.content ?: return@runCatching
-                    put(entity.id, genre)
-                }
-            }
-        }
-
-        val result = mutableListOf<GenreAction>()
-        for (entity in entities) {
-            if (entity.eventType != "response_applied") continue
-            runCatching {
-                val payload = json.parseToJsonElement(entity.payload).jsonObject
-                val effects = payload["effects"]?.jsonArray ?: return@runCatching
-
-                // If this response was to a market/intel event, treat it as a weak genre signal.
-                val originalEventId = payload["originalEventId"]?.jsonPrimitive?.content
-                originalEventId?.let { genreByEventId[it] }
-                    ?.let { result += GenreAction(it, +0.03f) }
-
-                for (e in effects) {
-                    val obj = e.jsonObject
-                    val action: GenreAction? = when (obj["type"]?.jsonPrimitive?.content) {
-                        "pursue_lead" -> obj["prospectId"]?.jsonPrimitive?.content
-                            ?.let { resolveProspectGenre(it) }
-                            ?.let { GenreAction(it, +0.05f) }
-                        "pass_lead" -> obj["prospectId"]?.jsonPrimitive?.content
-                            ?.let { resolveProspectGenre(it) }
-                            ?.let { GenreAction(it, -0.03f) }
-                        "sign_artist" -> obj["prospectId"]?.jsonPrimitive?.content
-                            ?.let { resolveSignedGenre(it) }
-                            ?.let { GenreAction(it, +0.10f) }
-                        else -> null
-                    }
-                    action?.let { result += it }
-                }
-            }
-        }
-        return result
-    }
-
-    // Prospects stay in world.prospects even after being pursued/passed, so the lookup is valid
-    // within a season. If the prospect was signed, the new artist carries the same genre.
-    private fun resolveProspectGenre(prospectId: String): String? =
-        world.prospects[prospectId]?.genre
-            ?: world.artists["$SIGNED_ARTIST_ID_PREFIX$prospectId"]?.genre
-
-    private fun resolveSignedGenre(prospectId: String): String? =
-        world.artists["$SIGNED_ARTIST_ID_PREFIX$prospectId"]?.genre
-            ?: world.prospects[prospectId]?.genre
 
     override suspend fun getArtistHistory(artistId: String): List<ArtistInteractionEntry> {
         // Escape SQLite LIKE wildcards so "signed_" prefixes don't match unintended rows.
@@ -350,12 +290,13 @@ class SimRepositoryImpl(
             val subject = event.emailSubject.ifBlank { return@mapNotNull null }
             val choice = optionTextByOriginalId[event.id] ?: return@mapNotNull null
             ArtistInteractionEntry(day = event.dayOfGame, eventSummary = subject, choiceMade = choice)
-        }.takeLast(10)
+        }.sortedBy { it.day }.takeLast(10)
     }
 
     override suspend fun getGenreTrendHistory(): Map<String, List<Float>> {
         val events = dao.getMarketShiftEvents()
             .mapNotNull { it.toSimEventOrNull() as? SimEvent.MarketShift }
+            .sortedBy { it.dayOfGame }
         if (events.isEmpty()) return emptyMap()
         val byGenre = mutableMapOf<String, MutableList<Float>>()
         for (event in events) {
