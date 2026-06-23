@@ -48,6 +48,17 @@ abstract class EventLogDao {
     @Query("SELECT * FROM event_log WHERE eventType = 'response_applied'")
     abstract suspend fun getResponseEntities(): List<EventLogEntity>
 
+    // Resolved inbox events that mention a specific artistId in their JSON payload.
+    // Excludes response_applied rows (those don't have emailSubject or direct artistId context).
+    @Query("""
+        SELECT * FROM event_log
+        WHERE payload LIKE '%"artistId":"' || :artistId || '"%'
+        AND selectedOptionId IS NOT NULL
+        AND eventType != 'response_applied'
+        ORDER BY dayOfGame ASC, recordedAt ASC
+    """)
+    abstract suspend fun getResolvedForArtist(artistId: String): List<EventLogEntity>
+
     @Query("SELECT * FROM event_log WHERE eventType = :eventType ORDER BY dayOfGame DESC, recordedAt DESC")
     abstract fun observeByType(eventType: String): Flow<List<EventLogEntity>>
 

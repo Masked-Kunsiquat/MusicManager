@@ -15,6 +15,7 @@ import com.github.maskedkunisquat.musicmanager.logic.ai.LabelAiProvider
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.TapeDeckItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.SimRepository
+import com.github.maskedkunisquat.musicmanager.logic.model.ArtistInteractionEntry
 import com.github.maskedkunisquat.musicmanager.logic.model.GenreAction
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelIdentity
 import com.github.maskedkunisquat.musicmanager.logic.model.SeasonFacts
@@ -307,6 +308,27 @@ class SimRepositoryImpl(
     private fun resolveSignedGenre(prospectId: String): String? =
         world.artists["$SIGNED_ARTIST_ID_PREFIX$prospectId"]?.genre
             ?: world.prospects[prospectId]?.genre
+
+    override suspend fun getArtistHistory(artistId: String): List<ArtistInteractionEntry> {
+        val resolved = dao.getResolvedForArtist(artistId)
+        if (resolved.isEmpty()) return emptyList()
+        // Build lookup from originalEventId → optionText from response_applied rows.
+        val optionTextByOriginalId = buildMap<String, String> {
+            for (entity in dao.getResponseEntities()) {
+                runCatching {
+                    val obj = json.parseToJsonElement(entity.payload).jsonObject
+                    val origId = obj["originalEventId"]?.jsonPrimitive?.content ?: return@runCatching
+                    val text = obj["optionText"]?.jsonPrimitive?.content ?: return@runCatching
+                    put(origId, text)
+                }
+            }
+        }
+        return resolved.mapNotNull { event ->
+            val subject = event.emailSubject.ifBlank { return@mapNotNull null }
+            val choice = optionTextByOriginalId[event.id] ?: return@mapNotNull null
+            ArtistInteractionEntry(day = event.dayOfGame, eventSummary = subject, choiceMade = choice)
+        }.takeLast(10)
+    }
 
     override suspend fun startNewSeason() = tickMutex.withLock {
         val seasonEndEntity = dao.getUnresolvedSeasonEnd().firstOrNull() ?: return@withLock

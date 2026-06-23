@@ -1,5 +1,6 @@
 package com.github.maskedkunisquat.musicmanager.logic.inbox
 
+import com.github.maskedkunisquat.musicmanager.logic.model.ArtistInteractionEntry
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelIdentity
 import com.github.maskedkunisquat.musicmanager.logic.model.SeasonSummary
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
@@ -24,4 +25,6 @@ interface SimRepository {
     suspend fun getLabelIdentity(): LabelIdentity
     // Returns the primaryGenre from the previous season's identity, or null if season 1 or no actions.
     suspend fun getPreviousSeasonPrimaryGenre(): String?
+    // Returns the most recent resolved interactions for an artist, newest last. Max 10 entries.
+    suspend fun getArtistHistory(artistId: String): List<ArtistInteractionEntry>
 }
