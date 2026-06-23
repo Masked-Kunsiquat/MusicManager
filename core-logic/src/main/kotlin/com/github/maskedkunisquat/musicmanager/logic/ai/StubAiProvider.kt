@@ -92,9 +92,11 @@ class StubAiProvider : LabelAiProvider {
         world: SimWorld
     ): Pair<String, String> = when (event) {
         is SimEvent.NeedUrgent ->
-            needUrgentProse(event.needType, event.currentValue, name, loyalty, confidence, volatility, event.artistId)
+            needUrgentProse(event.needType, event.currentValue, name, loyalty, confidence, volatility, event.artistId,
+                world.artists[event.artistId]?.genre ?: "music", world.currentDay)
         is SimEvent.ContractExpiring ->
-            contractExpiringProse(name, event.daysRemaining, loyalty, confidence)
+            contractExpiringProse(name, event.daysRemaining, loyalty, confidence,
+                (event.artistId.hashCode() ushr 1) % 2)
         is SimEvent.WantSurfaced ->
             wantSurfacedProse(event.wantType, name, loyalty, confidence)
         is SimEvent.MarketShift -> marketShiftProse(event)
@@ -119,54 +121,89 @@ class StubAiProvider : LabelAiProvider {
         loyalty: Float,
         confidence: Float,
         volatility: Float,
-        artistId: String
+        artistId: String,
+        genre: String,
+        currentDay: Int
     ): Pair<String, String> {
         val h = hedge(confidence)
         val u = urgencyPrefix(currentValue, volatility)
         val a = aestheticSuffix(needType)
         val s = signing(name, loyalty)
-        val subject = needUrgentSubject(needType, artistId)
-        return when (needType) {
-            NeedType.CREATIVE_FULFILLMENT -> Pair(
-                subject,
-                "${h}${u}Hey — I don't want to make this weird but I need to be honest. I've been going " +
-                "through the motions lately and it's starting to show in the demos. I need to make " +
-                "something I actually care about. Can we block off some proper creative time — no " +
-                "brief, no deadline, just space to work? I think it'll pay off.$a$s"
-            )
-            NeedType.FINANCIAL_SECURITY -> Pair(
-                subject,
-                "${h}${u}My manager's been on me to bring this up and I keep putting it off because it's " +
-                "awkward, but here we are. The current setup isn't sustainable for me. Between releases " +
-                "I'm covering basics out of my own pocket and it's stressing me out in ways that " +
-                "affect the work. Can we look at the numbers together?$a$s"
-            )
-            NeedType.RECOGNITION -> Pair(
-                subject,
-                "${h}${u}It's starting to feel like we're doing good work in a room with no windows. " +
-                "Other artists — on smaller labels, with less — are getting write-ups, festival slots, " +
-                "interviews. What's the strategy here? I just need to understand the plan.$a$s"
-            )
-            NeedType.BELONGING -> Pair(
-                subject,
-                "${h}${u}Is everything okay between us? I might be overthinking it but there's been a " +
-                "distance lately that I can't quite name. I see the label posting about other artists " +
-                "and the energy in the room when we meet feels different. I'm not going anywhere — " +
-                "I just want to make sure we're still on the same page.$a$s"
-            )
-            NeedType.AUTONOMY -> Pair(
-                subject,
-                "${h}${u}The last three decisions on this album have gone the label's way and I've been " +
-                "okay with that — but this one feels different. I have a specific vision for the next " +
-                "single and I need it to be mine. Not a fight, not a power move — I just need one " +
-                "real win creatively. Can we talk?$a$s"
-            )
-        }
+        val v = (artistId.hashCode() ushr 1 + currentDay / 20) % 3
+        val subject = needUrgentSubject(needType, artistId, currentDay)
+        return Pair(subject, "${h}${u}${needUrgentBody(needType, v, genre)}${a}${s}")
     }
 
-    // Rotates subject templates by artistId hash for variety within a need type.
+    // Three body variants per NeedType — rotated by (artistId hash + day bucket) so the same
+    // artist sees different phrasing when the same need fires again later in the season.
+    // Some variants reference `genre` to make the email feel artist-specific.
+    private fun needUrgentBody(needType: NeedType, variant: Int, genre: String): String =
+        when (needType) {
+            NeedType.CREATIVE_FULFILLMENT -> when (variant) {
+                0 -> "Hey — I don't want to make this weird but I need to be honest. I've been going " +
+                     "through the motions lately and it's starting to show in the demos. I need to make " +
+                     "something I actually care about. Can we block off some proper creative time — no " +
+                     "brief, no deadline, just space to work? I think it'll pay off."
+                1 -> "The last few sessions haven't felt like mine. I'm not complaining about the direction " +
+                     "but I need to carve out some time that isn't pre-planned. No session notes, no reference " +
+                     "tracks. Just me, a room, and some $genre ideas I haven't been able to touch. " +
+                     "It doesn't have to be long."
+                else -> "I haven't made a thing I'm genuinely proud of in a while and I'm starting to notice it. " +
+                        "The music is fine but that's the problem — it's fine. I don't want to make fine $genre " +
+                        "records. Can we create some room for something that actually risks something?"
+            }
+            NeedType.FINANCIAL_SECURITY -> when (variant) {
+                0 -> "My manager's been on me to bring this up and I keep putting it off because it's " +
+                     "awkward, but here we are. The current setup isn't sustainable for me. Between releases " +
+                     "I'm covering basics out of my own pocket and it's stressing me out in ways that " +
+                     "affect the work. Can we look at the numbers together?"
+                1 -> "I've been pretty quiet about this but I think it's time to be direct. Between cycles " +
+                     "the cash flow is inconsistent and I've been covering things I shouldn't have to cover. " +
+                     "I'm not trying to make this dramatic — I just need the financial setup to actually work for me."
+                else -> "I did the math last month and the numbers aren't adding up the way I thought they would " +
+                        "when we signed. I'm not pointing fingers — a lot has changed. But I think we both know " +
+                        "a revisit is overdue. Can we get in a room and look at it honestly?"
+            }
+            NeedType.RECOGNITION -> when (variant) {
+                0 -> "It's starting to feel like we're doing good work in a room with no windows. " +
+                     "Other artists — on smaller labels, with less — are getting write-ups, festival slots, " +
+                     "interviews. What's the strategy here? I just need to understand the plan."
+                1 -> "I keep seeing artists with half the output getting covered. I'm not bitter about it " +
+                     "but I'd be lying if I said it wasn't starting to get to me. There has to be a press " +
+                     "strategy. What does it look like for $genre right now?"
+                else -> "Last three releases went out without a single feature placement. I've been patient " +
+                        "but patience has a ceiling. I need to know what the plan is for visibility — " +
+                        "not eventually, for this next cycle specifically."
+            }
+            NeedType.BELONGING -> when (variant) {
+                0 -> "Is everything okay between us? I might be overthinking it but there's been a " +
+                     "distance lately that I can't quite name. I see the label posting about other artists " +
+                     "and the energy in the room when we meet feels different. I'm not going anywhere — " +
+                     "I just want to make sure we're still on the same page."
+                1 -> "I don't know how to say this without it sounding like a complaint, so I'll just say it: " +
+                     "I've been feeling like a vendor lately, not an artist on this label. The conversations " +
+                     "are transactional. I'm not going anywhere — I just wanted to name it."
+                else -> "Something's been off and I can't shake it. Last time we talked it felt like you were " +
+                        "somewhere else. I don't need anything big — just to feel like we're actually in this " +
+                        "together. Are we?"
+            }
+            NeedType.AUTONOMY -> when (variant) {
+                0 -> "The last three decisions on this album have gone the label's way and I've been " +
+                     "okay with that — but this one feels different. I have a specific vision for the next " +
+                     "single and I need it to be mine. Not a fight, not a power move — I just need one " +
+                     "real win creatively. Can we talk?"
+                1 -> "I've been in the studio for weeks and I don't feel like this record is mine anymore. " +
+                     "Every $genre direction has been through a filter. I understand why — I do — but I need " +
+                     "one decision that's purely mine. Can we identify something and hand it over?"
+                else -> "I want to be clear: I'm not asking for a free pass on everything. I'm asking for one " +
+                        "thing. One real choice on this album that I get to make and live with. That's it. " +
+                        "Is that possible?"
+            }
+        }
+
+    // Rotates subject templates by artistId hash + day bucket so repeated firings feel distinct.
     // ushr 1 drops the sign bit so the result is always non-negative.
-    private fun needUrgentSubject(needType: NeedType, artistId: String): String {
+    private fun needUrgentSubject(needType: NeedType, artistId: String, currentDay: Int): String {
         val templates = when (needType) {
             NeedType.CREATIVE_FULFILLMENT -> CREATIVE_SUBJECTS
             NeedType.FINANCIAL_SECURITY   -> FINANCIAL_SUBJECTS
@@ -174,35 +211,49 @@ class StubAiProvider : LabelAiProvider {
             NeedType.BELONGING            -> BELONGING_SUBJECTS
             NeedType.AUTONOMY             -> AUTONOMY_SUBJECTS
         }
-        return templates[(artistId.hashCode() ushr 1) % templates.size]
+        return templates[(artistId.hashCode() ushr 1 + currentDay / 25) % templates.size]
     }
 
     private fun contractExpiringProse(
         name: String,
         daysRemaining: Int,
         loyalty: Float,
-        confidence: Float
+        confidence: Float,
+        variant: Int
     ): Pair<String, String> {
         val h = hedge(confidence)
         val s = signing(name, loyalty)
         return when {
-            daysRemaining <= CONTRACT_TIER_URGENT -> Pair(
+            daysRemaining <= CONTRACT_TIER_URGENT -> if (variant == 0) Pair(
                 "contract — decision time",
                 "${h}$daysRemaining days. I need an answer, not a check-in. I've respected the process " +
                 "but I won't leave this open indefinitely. What are you offering?$s"
+            ) else Pair(
+                "contract — decision time",
+                "${h}$daysRemaining days on the clock. I've been patient the whole way through this " +
+                "but that's over now. What's the deal or what's the plan?$s"
             )
-            daysRemaining <= CONTRACT_TIER_WARN -> Pair(
+            daysRemaining <= CONTRACT_TIER_WARN -> if (variant == 0) Pair(
                 "contract window — getting close",
                 "${h}$daysRemaining days left and I can't keep this in a holding pattern. I've been " +
                 "patient but I need to know where we stand. I'm not looking for a perfect deal — I'm " +
                 "looking for a real one. Can we have the actual conversation?$s"
+            ) else Pair(
+                "contract window — getting close",
+                "${h}$daysRemaining days. I want to stay — I've been clear about that. But I need to " +
+                "know I'm actually a priority here, not just a line item. What are you offering?$s"
             )
-            else -> Pair(
+            else -> if (variant == 0) Pair(
                 "re: contract renewal",
                 "${h}My manager flagged that we're coming up on the window — about $daysRemaining days out. " +
                 "I wanted to reach out directly before it gets too formal. I'm not in panic mode but I'm " +
                 "also not going to pretend I don't have other conversations in my back pocket. If we're " +
                 "doing this, let's figure it out soon.$s"
+            ) else Pair(
+                "re: contract renewal",
+                "${h}You probably already know the window is coming — $daysRemaining days out. I wanted to " +
+                "reach out before we're in formal mode. I'd rather have a real conversation now than a " +
+                "negotiation later. What's on your mind?$s"
             )
         }
     }
@@ -961,22 +1012,35 @@ class StubAiProvider : LabelAiProvider {
         val name = world.artists[event.artistId]?.name ?: "your artist"
         val deadline = deadlineTypeName(event.type)
         val s = signing(name, world.artists[event.artistId]?.dimensions?.loyalty ?: 0.5f)
+        val v = (event.artistId.hashCode() ushr 1) % 2
         return when {
-            event.ticksRemaining <= 5 -> Pair(
+            event.ticksRemaining <= 5 -> if (v == 0) Pair(
                 "$deadline — decision needed now",
                 "We're at ${event.ticksRemaining} ticks on the $deadline window. I need an answer — " +
                 "this can't keep floating. What are we doing?$s"
+            ) else Pair(
+                "$deadline — decision needed now",
+                "${event.ticksRemaining} ticks. This is the point where we can't keep kicking it. " +
+                "I need a yes or no on the $deadline — not a status update, a decision.$s"
             )
-            event.ticksRemaining <= 10 -> Pair(
+            event.ticksRemaining <= 10 -> if (v == 0) Pair(
                 "$deadline — coming up fast",
                 "Flagging the $deadline timeline — ${event.ticksRemaining} ticks out. " +
                 "We should be locked by now or have a plan to get there. " +
                 "What's the status?$s"
+            ) else Pair(
+                "$deadline — coming up fast",
+                "We're ${event.ticksRemaining} ticks from the $deadline. I'd like to know we're " +
+                "actually on track, not just close enough. What's the honest picture?$s"
             )
-            else -> Pair(
+            else -> if (v == 0) Pair(
                 "heads up — $deadline window",
                 "Just a heads up that the $deadline is about ${event.ticksRemaining} ticks away. " +
                 "Nothing urgent yet, but wanted to make sure it's on your radar.$s"
+            ) else Pair(
+                "heads up — $deadline window",
+                "Circling back — the $deadline is coming up in ${event.ticksRemaining} ticks. " +
+                "Nothing urgent yet, I just want to make sure this is on the list for real and not just in theory.$s"
             )
         }
     }
@@ -1053,27 +1117,37 @@ class StubAiProvider : LabelAiProvider {
         private val CREATIVE_SUBJECTS = listOf(
             "creative direction — can we talk?",
             "I need to make something real",
-            "re: where my head is creatively"
+            "re: where my head is creatively",
+            "blocked and I need your help with it",
+            "the demos aren't reflecting what I can do"
         )
         private val FINANCIAL_SUBJECTS = listOf(
             "royalties / advance — overdue conversation",
             "the financial picture needs a conversation",
-            "re: money and what comes next"
+            "re: money and what comes next",
+            "need to revisit the economics here",
+            "finances — long overdue"
         )
         private val RECOGNITION_SUBJECTS = listOf(
             "feeling invisible lately",
             "what's the strategy for visibility?",
-            "re: press and profile"
+            "re: press and profile",
+            "where's my profile in all of this?",
+            "press and visibility — I need a plan"
         )
         private val BELONGING_SUBJECTS = listOf(
             "honest question",
             "checking in — is everything okay?",
-            "something feels off, can we talk?"
+            "something feels off, can we talk?",
+            "feels like something's shifted between us",
+            "need to know we're still in this together"
         )
         private val AUTONOMY_SUBJECTS = listOf(
             "re: next single",
             "I need this one to be mine",
-            "creative control — a real conversation"
+            "creative control — a real conversation",
+            "one decision that's actually mine",
+            "the direction needs to come from me this time"
         )
     }
 }
