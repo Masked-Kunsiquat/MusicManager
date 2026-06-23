@@ -248,7 +248,7 @@ private fun gateInfo(type: CapabilityType, world: SimWorld): Pair<String, Boolea
         val ready = world.label.funds >= 5_000_000L
         val dollars = world.label.funds / 100L
         val text = if (ready) "ready to unlock — watch for inbox offer"
-                   else "funds: \$${"%.0f".format(dollars.toFloat() / 1000)}k / \$50k needed"
+                   else "funds: \$${dollars / 1000}k / \$50k needed"
         text to ready
     }
 }

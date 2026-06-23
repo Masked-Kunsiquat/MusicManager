@@ -52,7 +52,7 @@ abstract class EventLogDao {
     // Excludes response_applied rows (those don't have emailSubject or direct artistId context).
     @Query("""
         SELECT * FROM event_log
-        WHERE payload LIKE '%"artistId":"' || :artistId || '"%'
+        WHERE payload LIKE '%"artistId":"' || :artistId || '"%' ESCAPE '\'
         AND selectedOptionId IS NOT NULL
         AND eventType != 'response_applied'
         ORDER BY dayOfGame ASC, recordedAt ASC

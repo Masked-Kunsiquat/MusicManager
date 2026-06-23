@@ -331,7 +331,9 @@ class SimRepositoryImpl(
             ?: world.prospects[prospectId]?.genre
 
     override suspend fun getArtistHistory(artistId: String): List<ArtistInteractionEntry> {
-        val resolved = dao.getResolvedForArtist(artistId)
+        // Escape SQLite LIKE wildcards so "signed_" prefixes don't match unintended rows.
+        val escapedId = artistId.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        val resolved = dao.getResolvedForArtist(escapedId)
         if (resolved.isEmpty()) return emptyList()
         // Build lookup from originalEventId → optionText from response_applied rows.
         val optionTextByOriginalId = buildMap<String, String> {

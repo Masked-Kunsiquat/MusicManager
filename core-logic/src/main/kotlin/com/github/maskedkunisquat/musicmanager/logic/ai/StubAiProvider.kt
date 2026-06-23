@@ -131,7 +131,7 @@ class StubAiProvider : LabelAiProvider {
         val u = urgencyPrefix(currentValue, volatility)
         val a = aestheticSuffix(needType)
         val s = signing(name, loyalty)
-        val v = (artistId.hashCode() ushr 1 + currentDay / 20) % 3
+        val v = ((artistId.hashCode() ushr 1) + currentDay / 20) % 3
         val subject = needUrgentSubject(needType, artistId, currentDay)
         return Pair(subject, "${h}${u}${needUrgentBody(needType, v, genre)}${a}${s}")
     }
@@ -213,7 +213,7 @@ class StubAiProvider : LabelAiProvider {
             NeedType.BELONGING            -> BELONGING_SUBJECTS
             NeedType.AUTONOMY             -> AUTONOMY_SUBJECTS
         }
-        return templates[(artistId.hashCode() ushr 1 + currentDay / 25) % templates.size]
+        return templates[((artistId.hashCode() ushr 1) + currentDay / 25) % templates.size]
     }
 
     private fun contractExpiringProse(
@@ -272,7 +272,7 @@ class StubAiProvider : LabelAiProvider {
     ): Pair<String, String> {
         val h = hedge(confidence)
         val s = signing(name, loyalty)
-        val v = (artistId.hashCode() ushr 1 + currentDay / 20) % 3
+        val v = ((artistId.hashCode() ushr 1) + currentDay / 20) % 3
         return when (wantType) {
             WantType.MAJOR_VENUE_TOUR -> {
                 val subjects = listOf(

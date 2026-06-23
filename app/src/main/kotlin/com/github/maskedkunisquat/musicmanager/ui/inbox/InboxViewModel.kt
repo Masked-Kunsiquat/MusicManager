@@ -126,6 +126,7 @@ class InboxViewModel(
             _seasonSummary.value = null
             _labelIdentity.value = null
             _prevSeasonPrimaryGenre.value = null
+            _trendHistory.value = emptyMap()
             _recapNavigating.value = false
         }
     }
@@ -158,8 +159,9 @@ class InboxViewModel(
             // season's genre identity. Invalidate so the next loadLabelIdentity() call refetches.
             _labelIdentity.value = null
             _prevSeasonPrimaryGenre.value = null
-            // Clear history cache so next expansion fetches the newly resolved event.
+            // Clear caches so next open fetches fresh data reflecting the resolved event.
             _artistHistories.value = emptyMap()
+            _trendHistory.value = emptyMap()
         }
     }
 
