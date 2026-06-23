@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.graphics.Color
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
 
@@ -89,6 +90,7 @@ fun InboxScreen(
                         },
                         dayOfGame = item.dayOfGame,
                         isRead = item.isRead,
+                        urgency = urgencyLevel(item.event),
                         onClick = {
                             viewModel.markViewed(item.id)
                             onOpenEmail(item.id)
@@ -101,14 +103,23 @@ fun InboxScreen(
     }
 }
 
+private enum class UrgencyLevel { CRITICAL, URGENT, ROUTINE }
+
 @Composable
 private fun InboxRow(
     subject: String,
     artistName: String,
     dayOfGame: Int,
     isRead: Boolean,
+    urgency: UrgencyLevel,
     onClick: () -> Unit
 ) {
+    val urgencyColor: Color = when (urgency) {
+        UrgencyLevel.CRITICAL -> MaterialTheme.colorScheme.error
+        UrgencyLevel.URGENT   -> MaterialTheme.colorScheme.secondary
+        UrgencyLevel.ROUTINE  -> Color.Unspecified
+    }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -120,14 +131,19 @@ private fun InboxRow(
                 Box(
                     modifier = Modifier
                         .size(6.dp)
-                        .background(MaterialTheme.colorScheme.primary, CircleShape)
+                        .background(
+                            if (urgency != UrgencyLevel.ROUTINE) urgencyColor
+                            else MaterialTheme.colorScheme.primary,
+                            CircleShape
+                        )
                 )
                 Spacer(modifier = Modifier.width(6.dp))
             }
             Text(
                 text = subject,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = if (urgency != UrgencyLevel.ROUTINE) urgencyColor
+                        else MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
@@ -139,11 +155,43 @@ private fun InboxRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Text(
-            text = artistName,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 2.dp)
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = artistName,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (urgency != UrgencyLevel.ROUTINE) urgencyColor
+                        else MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(top = 2.dp)
+            )
+            if (urgency != UrgencyLevel.ROUTINE) {
+                Text(
+                    text = if (urgency == UrgencyLevel.CRITICAL) "!!" else "!",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = urgencyColor
+                )
+            }
+        }
     }
+}
+
+private fun urgencyLevel(event: SimEvent): UrgencyLevel = when (event) {
+    is SimEvent.NeedUrgent -> when {
+        event.currentValue < 0.20f -> UrgencyLevel.CRITICAL
+        else                       -> UrgencyLevel.URGENT
+    }
+    is SimEvent.DeadlineApproaching -> when {
+        event.ticksRemaining <= 5  -> UrgencyLevel.CRITICAL
+        event.ticksRemaining <= 10 -> UrgencyLevel.URGENT
+        else                       -> UrgencyLevel.ROUTINE
+    }
+    is SimEvent.DeadlineMissed   -> UrgencyLevel.CRITICAL
+    is SimEvent.ContractExpiring -> if (event.daysRemaining <= 7) UrgencyLevel.URGENT else UrgencyLevel.ROUTINE
+    is SimEvent.LabelNeedUrgent  -> UrgencyLevel.URGENT
+    is SimEvent.RivalPoach       -> UrgencyLevel.URGENT
+    else                         -> UrgencyLevel.ROUTINE
 }

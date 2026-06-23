@@ -1123,36 +1123,56 @@ class StubAiProvider : LabelAiProvider {
         val name = world.artists[event.artistId]?.name ?: "your artist"
         val deadline = deadlineTypeName(event.type)
         val s = signing(name, world.artists[event.artistId]?.dimensions?.loyalty ?: 0.5f)
-        val v = (event.artistId.hashCode() ushr 1) % 2
+        val v = (event.artistId.hashCode() ushr 1) % 3
         return when {
-            event.ticksRemaining <= 5 -> if (v == 0) Pair(
-                "$deadline — decision needed now",
-                "We're at ${event.ticksRemaining} ticks on the $deadline window. I need an answer — " +
-                "this can't keep floating. What are we doing?$s"
-            ) else Pair(
-                "$deadline — decision needed now",
-                "${event.ticksRemaining} ticks. This is the point where we can't keep kicking it. " +
-                "I need a yes or no on the $deadline — not a status update, a decision.$s"
-            )
-            event.ticksRemaining <= 10 -> if (v == 0) Pair(
-                "$deadline — coming up fast",
-                "Flagging the $deadline timeline — ${event.ticksRemaining} ticks out. " +
-                "We should be locked by now or have a plan to get there. " +
-                "What's the status?$s"
-            ) else Pair(
-                "$deadline — coming up fast",
-                "We're ${event.ticksRemaining} ticks from the $deadline. I'd like to know we're " +
-                "actually on track, not just close enough. What's the honest picture?$s"
-            )
-            else -> if (v == 0) Pair(
-                "heads up — $deadline window",
-                "Just a heads up that the $deadline is about ${event.ticksRemaining} ticks away. " +
-                "Nothing urgent yet, but wanted to make sure it's on your radar.$s"
-            ) else Pair(
-                "heads up — $deadline window",
-                "Circling back — the $deadline is coming up in ${event.ticksRemaining} ticks. " +
-                "Nothing urgent yet, I just want to make sure this is on the list for real and not just in theory.$s"
-            )
+            event.ticksRemaining <= 5 -> {
+                val subjects = listOf(
+                    "$name — $deadline, final window",
+                    "$deadline — no more runway",
+                    "$deadline — this is the call"
+                )
+                val bodies = listOf(
+                    "We are at ${event.ticksRemaining} ticks on the $deadline. This is not a status check — " +
+                    "this is the decision. I need a yes or a no. Not tomorrow. Now.$s",
+                    "${event.ticksRemaining} ticks. The $deadline window closes here. " +
+                    "I've held off flagging this every tick but I'm flagging it now — what are we doing?$s",
+                    "The $deadline is ${event.ticksRemaining} ticks out. There is nothing left to figure out after this. " +
+                    "Call it. Whatever the decision is, we make it now and deal with whatever comes next.$s"
+                )
+                Pair(subjects[v], bodies[v])
+            }
+            event.ticksRemaining <= 10 -> {
+                val subjects = listOf(
+                    "$deadline — coming up fast",
+                    "re: $deadline timeline",
+                    "$deadline — where are we"
+                )
+                val bodies = listOf(
+                    "Flagging the $deadline timeline — ${event.ticksRemaining} ticks out. " +
+                    "We should be locked by now or have a real plan to get there. What's the status?$s",
+                    "We're ${event.ticksRemaining} ticks from the $deadline. I'd like to know we're " +
+                    "actually on track, not just close enough. What's the honest picture?$s",
+                    "${event.ticksRemaining} ticks on the $deadline. I want to make sure this isn't still in the " +
+                    "'we'll figure it out' bucket — if it is, that's a problem we need to surface now, not at tick five.$s"
+                )
+                Pair(subjects[v], bodies[v])
+            }
+            else -> {
+                val subjects = listOf(
+                    "heads up — $deadline window",
+                    "re: $deadline",
+                    "early flag — $deadline"
+                )
+                val bodies = listOf(
+                    "Just a heads up that the $deadline is about ${event.ticksRemaining} ticks away. " +
+                    "Nothing urgent yet, but wanted to make sure it's on your radar.$s",
+                    "Circling back on the $deadline — ${event.ticksRemaining} ticks out. " +
+                    "Nothing urgent yet. I just want to make sure this is on the list for real, not just in theory.$s",
+                    "Flagging the $deadline early — ${event.ticksRemaining} ticks from now. " +
+                    "No action needed yet. Just want it visible while we still have room to plan properly.$s"
+                )
+                Pair(subjects[v], bodies[v])
+            }
         }
     }
 
