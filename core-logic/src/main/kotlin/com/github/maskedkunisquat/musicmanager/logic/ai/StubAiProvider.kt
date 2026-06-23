@@ -104,7 +104,7 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.ScoutReport -> scoutReportProse(event, world)
         is SimEvent.NegotiationRound -> negotiationRoundProse(event, world)
         is SimEvent.RenewalOpened -> renewalOpenedProse(event, world)
-        is SimEvent.LabelNeedUrgent -> labelNeedUrgentProse(event)
+        is SimEvent.LabelNeedUrgent -> labelNeedUrgentProse(event, world)
         is SimEvent.CapabilityUnlockable -> capabilityUnlockableProse(event)
         is SimEvent.RivalSigning -> rivalSigningProse(event)
         is SimEvent.LeadSurfaced -> Pair("", "")  // TapeDeck only -- no email rendered
@@ -759,39 +759,68 @@ class StubAiProvider : LabelAiProvider {
 
     // --- Label meso tier ---
 
-    private fun labelNeedUrgentProse(event: SimEvent.LabelNeedUrgent): Pair<String, String> =
+    private fun labelNeedUrgentProse(event: SimEvent.LabelNeedUrgent, world: SimWorld): Pair<String, String> =
         when (event.needType) {
             LabelNeedType.CASH_FLOW -> {
-                val urgency = when {
-                    event.severity < 0.15f -> "We're close to the wire and something has to give."
-                    else -> "The runway is shorter than it should be right now."
+                val dollars = world.label.funds / 100L
+                val (subject, framing) = when {
+                    dollars < 5_000L -> Pair(
+                        "label finances — urgent",
+                        "The account is at \$$dollars. That's not a runway problem — that's a crisis. Something has to move now."
+                    )
+                    dollars < 20_000L -> Pair(
+                        "label finances — heads up",
+                        "We're sitting at \$$dollars. Below targets and getting tighter. " +
+                        "The margin for error is shrinking."
+                    )
+                    else -> Pair(
+                        "label finances — worth flagging",
+                        "Cash is at \$$dollars — below the threshold I'm comfortable with. " +
+                        "Not critical yet but the runway is shorter than I'd like."
+                    )
                 }
                 Pair(
-                    "label finances — heads up",
-                    "Internal flag — cash position is tighter than the targets. $urgency " +
+                    subject,
+                    "Internal flag — $framing " +
                     "We have a few levers: cut discretionary spend, pull forward a deal that " +
                     "brings revenue in, or accept less favorable terms somewhere to unlock " +
                     "liquidity. None of these are painless. What's the call?"
                 )
             }
-            LabelNeedType.GENRE_DIVERSITY -> Pair(
-                "roster check — genre concentration",
-                "Looking at the active roster — we're getting concentrated. " +
-                "If this genre hits a rough patch, we feel the whole thing at once. " +
-                "Might be worth being deliberate about the next signing rather than " +
-                "just chasing what's already working for us. Something to consider."
-            )
+            LabelNeedType.GENRE_DIVERSITY -> {
+                val dominant = rosterDominantGenre(world)
+                val concentration = if (dominant != null) {
+                    val (genre, count) = dominant
+                    "$count of ${world.label.rosterIds.size} roster artists are $genre. "
+                } else ""
+                val genreRef = dominant?.first ?: "this genre"
+                Pair(
+                    "roster check — genre concentration",
+                    "Looking at the active roster — we're concentrated. $concentration" +
+                    "If $genreRef hits a rough patch, we feel the whole thing at once. " +
+                    "Might be worth being deliberate about the next signing rather than " +
+                    "just chasing what's already working for us. Something to consider."
+                )
+            }
         }
+
+    private fun rosterDominantGenre(world: SimWorld): Pair<String, Int>? {
+        val genres = world.label.rosterIds.mapNotNull { world.artists[it]?.genre }
+        if (genres.isEmpty()) return null
+        return genres.groupingBy { it }.eachCount().maxByOrNull { it.value }?.let { it.key to it.value }
+    }
 
     private fun labelNeedUrgentOptions(event: SimEvent.LabelNeedUrgent, world: SimWorld): List<ResponseOption> =
         when (event.needType) {
             LabelNeedType.CASH_FLOW -> {
                 val highestLoyaltyArtistId = world.artists.values
+                    .filter { it.id in world.label.rosterIds }
                     .maxByOrNull { it.dimensions.loyalty }?.id
                 buildList {
                     add(option("label:cash:cut_spend",
                         "Cut discretionary spending across the board for this quarter",
-                        emptyList()))
+                        // Cutting spend reduces scene presence — fewer shows, less activity.
+                        listOf(StateEffect.ReputationChange(ReputationCommunity.INDIE_SCENE, -0.03f))))
                     if (highestLoyaltyArtistId != null) {
                         add(option("label:cash:advance_recovery",
                             "Negotiate an advance recovery from ${world.artists[highestLoyaltyArtistId]?.name ?: "a roster artist"}",
@@ -807,17 +836,20 @@ class StubAiProvider : LabelAiProvider {
                         emptyList()))
                 }
             }
-            LabelNeedType.GENRE_DIVERSITY -> listOf(
-                option("label:diversity:target_contrarian",
-                    "Instruct scouts to prioritize off-genre prospects this cycle",
-                    emptyList()),
-                option("label:diversity:hold_course",
-                    "Stay focused — the genre concentration is a calculated bet, not an oversight",
-                    emptyList()),
-                option("label:diversity:review",
-                    "Pull together a roster review — map where we're exposed before deciding",
-                    emptyList())
-            )
+            LabelNeedType.GENRE_DIVERSITY -> {
+                val avoidGenre = rosterDominantGenre(world)?.first ?: "the concentrated genre"
+                listOf(
+                    option("label:diversity:target_contrarian",
+                        "Instruct scouts to prioritize non-$avoidGenre acts this cycle",
+                        emptyList()),
+                    option("label:diversity:hold_course",
+                        "Stay focused — the $avoidGenre concentration is a calculated bet, not an oversight",
+                        emptyList()),
+                    option("label:diversity:review",
+                        "Pull together a roster review — map where we're exposed before deciding",
+                        emptyList())
+                )
+            }
         }
 
     private fun option(id: String, text: String, effects: List<StateEffect>, cost: Long = 0L) =
