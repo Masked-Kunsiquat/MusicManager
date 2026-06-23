@@ -207,6 +207,26 @@ class LabelIdentityTest {
         assertEquals(LabelAesthetic.ECLECTIC, LabelIdentityEvaluator.deriveAesthetic(emptyList()))
     }
 
+    @Test
+    fun `EXPERIMENTAL takes priority over MAINSTREAM when both conditions are met`() {
+        // Artists have both high volatility AND high commercial appetite.
+        val artists = listOf(
+            baseArtist("a", volatility = 0.70f, commercialAppetite = 0.80f),
+            baseArtist("b", volatility = 0.70f, commercialAppetite = 0.80f),
+            baseArtist("c", volatility = 0.30f, commercialAppetite = 0.20f)
+        )
+        assertEquals(LabelAesthetic.EXPERIMENTAL, LabelIdentityEvaluator.deriveAesthetic(artists))
+    }
+
+    @Test
+    fun `primaryGenre is null when all genre weights decay to zero`() {
+        // Each genre starts at 0.5f; 10 pass actions of -0.05f each will decay it to 0.0f.
+        val actions = List(10) { GenreAction("indie-rock", -0.05f) }
+        val identity = LabelIdentityEvaluator.evaluate(actions, emptyList())
+        assertEquals(0.0f, identity.genreWeights["indie-rock"]!!, 0.001f)
+        assertNull("primaryGenre should be null when all weights are zero", identity.primaryGenre)
+    }
+
     // --- ScoutTicker identity weighting ---
 
     @Test

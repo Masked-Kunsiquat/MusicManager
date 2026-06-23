@@ -10,7 +10,7 @@ internal const val SCOUT_REPORT_INTERVAL = 8
 // Probability that a scout targets a focus-genre prospect (vs. any prospect).
 private const val SCOUT_FOCUS_WEIGHT = 0.70f
 // Threshold above which label identity biases scout prospect selection.
-private const val IDENTITY_FOCUS_THRESHOLD = 0.6f
+internal const val IDENTITY_FOCUS_THRESHOLD = 0.6f
 
 internal fun tickScouts(
     scouts: Map<String, ScoutState>,

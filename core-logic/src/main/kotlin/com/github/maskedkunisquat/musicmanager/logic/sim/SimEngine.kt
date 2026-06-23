@@ -70,11 +70,11 @@ class SimEngine {
         return TickResult(world = finalWorld, events = allEvents)
     }
 
-    fun tickN(world: SimWorld, ticks: Int): TickResult {
+    fun tickN(world: SimWorld, ticks: Int, labelIdentity: LabelIdentity? = null): TickResult {
         var current = world
         val allEvents = mutableListOf<SimEvent>()
         repeat(ticks) {
-            val result = tick(current)
+            val result = tick(current, labelIdentity)
             current = result.world
             allEvents += result.events
         }

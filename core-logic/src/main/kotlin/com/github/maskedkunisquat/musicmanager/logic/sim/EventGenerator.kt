@@ -134,7 +134,7 @@ private fun intelDropEvents(world: SimWorld, rng: Random, labelIdentity: LabelId
     val genre = when {
         // Strong label identity: bias intel toward the primary genre the player is building toward.
         labelIdentity != null &&
-        labelIdentity.focusScore > 0.6f &&
+        labelIdentity.focusScore > IDENTITY_FOCUS_THRESHOLD &&
         labelIdentity.primaryGenre != null &&
         labelIdentity.primaryGenre in world.market.genreTrends -> {
             if (rng.nextFloat() < INTEL_ROSTER_GENRE_WEIGHT) labelIdentity.primaryGenre

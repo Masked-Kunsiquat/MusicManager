@@ -105,6 +105,7 @@ class InboxViewModel(
     }
 
     fun startNewSeason() {
+        if (_recapNavigating.value) return
         _recapNavigating.value = true
         viewModelScope.launch {
             runCatching {
@@ -114,6 +115,8 @@ class InboxViewModel(
                 Log.e(TAG, "startNewSeason failed", e)
             }
             _seasonSummary.value = null
+            _labelIdentity.value = null
+            _prevSeasonPrimaryGenre.value = null
             _recapNavigating.value = false
         }
     }
