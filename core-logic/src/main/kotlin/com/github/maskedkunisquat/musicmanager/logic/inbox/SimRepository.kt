@@ -9,10 +9,15 @@ import kotlinx.coroutines.flow.Flow
 
 interface SimRepository {
     val world: SimWorld
+    val isWorldInitialized: Boolean
     fun observeUnresolved(): Flow<List<InboxItem>>
     suspend fun generateOptions(item: InboxItem): List<ResponseOption>
     suspend fun tick()
     suspend fun initializeIfEmpty(days: Int = 2)
+    // Called from onboarding: names the label and seeds the initial inbox.
+    suspend fun initializeWorld(labelName: String, days: Int = 2)
+    // Renames the label and deducts the notoriety-scaled cost from funds atomically.
+    suspend fun renameLabel(name: String)
     suspend fun markViewed(eventId: String)
     suspend fun resolveEvent(eventId: String, option: ResponseOption)
     fun observeActiveSurfacedLeads(): Flow<List<TapeDeckItem>>

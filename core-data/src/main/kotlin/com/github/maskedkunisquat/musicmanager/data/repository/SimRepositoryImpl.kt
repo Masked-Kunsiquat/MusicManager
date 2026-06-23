@@ -18,6 +18,7 @@ import com.github.maskedkunisquat.musicmanager.logic.inbox.TapeDeckItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.SimRepository
 import com.github.maskedkunisquat.musicmanager.logic.model.ArtistInteractionEntry
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelIdentity
+import com.github.maskedkunisquat.musicmanager.logic.model.labelRenameCost
 import com.github.maskedkunisquat.musicmanager.logic.sim.EntityRecord
 import com.github.maskedkunisquat.musicmanager.logic.model.SeasonFacts
 import com.github.maskedkunisquat.musicmanager.logic.model.SeasonSummary
@@ -49,8 +50,11 @@ class SimRepositoryImpl(
     private val loadWorld: () -> SimWorld? = { null }
 ) : SimRepository {
 
-    override var world: SimWorld = loadWorld() ?: WorldInitializer.initializeWorld(seed)
+    private val _loadedWorld: SimWorld? = loadWorld()
+    override var world: SimWorld = _loadedWorld ?: WorldInitializer.initializeWorld(seed)
         private set
+    private var _isWorldInitialized: Boolean = _loadedWorld != null
+    override val isWorldInitialized: Boolean get() = _isWorldInitialized
 
     private val tickMutex = Mutex()
     private var startupChecksRan = false
@@ -221,6 +225,35 @@ class SimRepositoryImpl(
     }
 
     override suspend fun initializeIfEmpty(days: Int) = tickMutex.withLock {
+        runStartupChecksUnderLock()
+        if (dao.getAll().isEmpty()) {
+            populateInboxUnderLock(days)
+        }
+    }
+
+    override suspend fun initializeWorld(labelName: String, days: Int) = tickMutex.withLock {
+        val trimmed = labelName.trim().ifBlank { "Unnamed Label" }
+        world = world.copy(label = world.label.copy(name = trimmed))
+        withContext(Dispatchers.IO) { saveWorld(world) }
+        _isWorldInitialized = true
+        runStartupChecksUnderLock()
+        populateInboxUnderLock(days)
+    }
+
+    override suspend fun renameLabel(name: String) = tickMutex.withLock {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return@withLock
+        val cost = labelRenameCost(world.label)
+        world = world.copy(
+            label = world.label.copy(
+                name = trimmed,
+                funds = (world.label.funds - cost).coerceAtLeast(0L)
+            )
+        )
+        withContext(Dispatchers.IO) { saveWorld(world) }
+    }
+
+    private suspend fun runStartupChecksUnderLock() {
         if (!startupChecksRan) {
             reconcileRelationshipBalancesUnderLock()
             reconcileLastInteractionDaysUnderLock()
@@ -229,14 +262,15 @@ class SimRepositoryImpl(
             }
             startupChecksRan = true
         }
-        if (dao.getAll().isEmpty()) {
-            // Tick until we have at least `days` inbox events, capped at 90 ticks to prevent
-            // infinite loops on pathological seeds. `days` here means target event count.
-            var ticks = 0
-            while (dao.getAll().size < days && ticks < 90) {
-                tickUnderLock()
-                ticks++
-            }
+    }
+
+    // Tick until we have at least `days` inbox events, capped at 90 ticks to prevent
+    // infinite loops on pathological seeds. `days` here means target event count.
+    private suspend fun populateInboxUnderLock(days: Int) {
+        var ticks = 0
+        while (dao.getAll().size < days && ticks < 90) {
+            tickUnderLock()
+            ticks++
         }
     }
 

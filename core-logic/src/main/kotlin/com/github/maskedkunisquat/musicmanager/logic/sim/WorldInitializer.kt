@@ -51,7 +51,7 @@ object WorldInitializer {
         "r&b"        to listOf("late-night smooth r&b", "neo-soul warmth", "gospel-tinged r&b", "bedroom r&b haze")
     )
 
-    fun initializeWorld(seed: Long): SimWorld {
+    fun initializeWorld(seed: Long, labelName: String = "Unnamed Label"): SimWorld {
         val rng = Random(seed)
         val artistCount = 3 + rng.nextInt(3) // 3-5
         val nextName = namePicker(rng)
@@ -87,7 +87,7 @@ object WorldInitializer {
         }
 
         val deadlines = buildDeadlines(artists.keys, rng, seasonNumber = 1)
-        val label = buildLabel(artists.keys.toSet(), rng)
+        val label = buildLabel(artists.keys.toSet(), rng, labelName)
 
         return SimWorld(
             seed = seed,
@@ -180,10 +180,11 @@ object WorldInitializer {
         creativeControl = CreativeControl.entries.random(rng)
     )
 
-    private fun buildLabel(rosterIds: Set<String>, rng: Random): LabelState = LabelState(
+    private fun buildLabel(rosterIds: Set<String>, rng: Random, name: String = "Unnamed Label"): LabelState = LabelState(
         funds = rng.nextLong(50_000 * CENTS_PER_DOLLAR, 100_000 * CENTS_PER_DOLLAR),
         reputation = ReputationCommunity.entries.associateWith { 0.3f + rng.nextFloat() * 0.2f },
         rosterIds = rosterIds,
+        name = name,
         tasteVector = GENRES.associateWith { 0.5f }
     )
 
