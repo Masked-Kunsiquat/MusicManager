@@ -61,6 +61,10 @@ class InboxViewModel(
     private val _artistHistories = MutableStateFlow<Map<String, List<ArtistInteractionEntry>>>(emptyMap())
     val artistHistories: StateFlow<Map<String, List<ArtistInteractionEntry>>> = _artistHistories.asStateFlow()
 
+    // Per-genre ordered trend values reconstructed from MarketShift history; populated once on ChartsScreen open.
+    private val _trendHistory = MutableStateFlow<Map<String, List<Float>>>(emptyMap())
+    val trendHistory: StateFlow<Map<String, List<Float>>> = _trendHistory.asStateFlow()
+
     // Tracks IDs currently being fetched to prevent duplicate coroutine launches on rapid recomposition.
     // ConcurrentHashMap-backed so add/remove are thread-safe if ever called off the main thread.
     private val inFlightOptions: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
@@ -123,6 +127,13 @@ class InboxViewModel(
             _labelIdentity.value = null
             _prevSeasonPrimaryGenre.value = null
             _recapNavigating.value = false
+        }
+    }
+
+    fun loadTrendHistory() {
+        if (_trendHistory.value.isNotEmpty()) return
+        viewModelScope.launch {
+            _trendHistory.value = runCatching { repository.getGenreTrendHistory() }.getOrElse { emptyMap() }
         }
     }
 

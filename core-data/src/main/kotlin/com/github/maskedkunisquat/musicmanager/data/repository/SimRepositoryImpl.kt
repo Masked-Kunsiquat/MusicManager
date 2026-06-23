@@ -12,6 +12,7 @@ import com.github.maskedkunisquat.musicmanager.data.mapper.toResponseEntity
 import com.github.maskedkunisquat.musicmanager.data.mapper.toSimEventOrNull
 import com.github.maskedkunisquat.musicmanager.data.mapper.toEntity
 import com.github.maskedkunisquat.musicmanager.logic.ai.LabelAiProvider
+import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.TapeDeckItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.SimRepository
@@ -328,6 +329,19 @@ class SimRepositoryImpl(
             val choice = optionTextByOriginalId[event.id] ?: return@mapNotNull null
             ArtistInteractionEntry(day = event.dayOfGame, eventSummary = subject, choiceMade = choice)
         }.takeLast(10)
+    }
+
+    override suspend fun getGenreTrendHistory(): Map<String, List<Float>> {
+        val events = dao.getMarketShiftEvents()
+            .mapNotNull { it.toSimEventOrNull() as? SimEvent.MarketShift }
+        if (events.isEmpty()) return emptyMap()
+        val byGenre = mutableMapOf<String, MutableList<Float>>()
+        for (event in events) {
+            val list = byGenre.getOrPut(event.genre) { mutableListOf() }
+            if (list.isEmpty()) list.add(event.previousTrend)
+            list.add(event.currentTrend)
+        }
+        return byGenre
     }
 
     override suspend fun startNewSeason() = tickMutex.withLock {

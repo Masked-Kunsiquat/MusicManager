@@ -59,6 +59,9 @@ abstract class EventLogDao {
     """)
     abstract suspend fun getResolvedForArtist(artistId: String): List<EventLogEntity>
 
+    @Query("SELECT * FROM event_log WHERE eventType = 'market_shift' ORDER BY dayOfGame ASC, recordedAt ASC")
+    abstract suspend fun getMarketShiftEvents(): List<EventLogEntity>
+
     @Query("SELECT * FROM event_log WHERE eventType = :eventType ORDER BY dayOfGame DESC, recordedAt DESC")
     abstract fun observeByType(eventType: String): Flow<List<EventLogEntity>>
 
