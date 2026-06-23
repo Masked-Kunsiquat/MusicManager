@@ -53,14 +53,14 @@ class SimEngineTest {
 
     @Test
     fun `contract expiry events fire when approaching expiry`() {
-        // Contracts expire in 180–360 days; tick to just inside the warning window
+        // Contracts expire in 60-90 ticks; tick to exactly the 20-tick warning threshold
         val world = WorldInitializer.initializeWorld(3L)
         val shortestExpiry = world.contracts.values.minOf { it.expiryDay }
-        val ticksToWarning = (shortestExpiry - 29).coerceAtLeast(1)
+        val ticksToWarning = (shortestExpiry - 20).coerceAtLeast(1)
         val (_, events) = engine.tickN(world, ticksToWarning)
         assertTrue(
-            "Expected ContractExpiring event with daysRemaining in 1..30",
-            events.any { it is SimEvent.ContractExpiring && it.daysRemaining in 1..30 }
+            "Expected ContractExpiring event at 20-tick threshold",
+            events.any { it is SimEvent.ContractExpiring && it.daysRemaining == 20 }
         )
     }
 }

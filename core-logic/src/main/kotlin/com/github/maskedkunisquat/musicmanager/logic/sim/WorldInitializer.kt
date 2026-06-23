@@ -102,7 +102,7 @@ object WorldInitializer {
             season = SeasonState(
                 seasonNumber = 1,
                 seasonStartTick = 0,
-                seasonEndTick = 180,
+                seasonEndTick = 90,
                 startFunds = label.funds,
                 startReputation = label.reputation.mapKeys { it.key.name }
             ),
@@ -132,7 +132,7 @@ object WorldInitializer {
             NeedState(
                 type = needType,
                 value = 0.7f + rng.nextFloat() * 0.3f,
-                decayRate = 0.02f + rng.nextFloat() * 0.03f
+                decayRate = 0.007f + rng.nextFloat() * 0.010f
             )
         }
         return ArtistState(
@@ -175,7 +175,7 @@ object WorldInitializer {
         id = contractId,
         artistId = artistId,
         startDay = 0,
-        expiryDay = 180 + rng.nextInt(181),             // 6-12 months of ticks
+        expiryDay = 60 + rng.nextInt(31),               // 60-90 ticks (spans ~1 season)
         revenueSplit = RevenueSplit(artistPercent = 40 + rng.nextInt(21)),  // 40-60%
         creativeControl = CreativeControl.entries.random(rng)
     )
@@ -250,8 +250,8 @@ object WorldInitializer {
             for (i in 0 until count) {
                 val type = shuffledTypes[i]
                 val id = "deadline:${artistId}:${type.name}:$seasonNumber"
-                // 60-160 ticks: spread across season, biased away from the very start and end.
-                val dueTick = 60 + rng.nextInt(101)
+                // 20-75 ticks: spread across 90-tick season, biased away from the very start and end.
+                val dueTick = 20 + rng.nextInt(56)
                 result[id] = Deadline(id = id, artistId = artistId, type = type, dueTick = dueTick)
             }
         }

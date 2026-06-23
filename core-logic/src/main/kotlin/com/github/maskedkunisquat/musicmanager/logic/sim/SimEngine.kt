@@ -32,6 +32,7 @@ class SimEngine {
         val capabilityEvents = events.filterIsInstance<SimEvent.CapabilityUnlockable>()
         val labelNeedEvents = events.filterIsInstance<SimEvent.LabelNeedUrgent>()
         val wantSurfacedEvents = events.filterIsInstance<SimEvent.WantSurfaced>()
+        val needUrgentEvents = events.filterIsInstance<SimEvent.NeedUrgent>()
         val leadSurfacedEvents = events.filterIsInstance<SimEvent.LeadSurfaced>()
         val missedDeadlineIds = events.filterIsInstance<SimEvent.DeadlineMissed>().map { it.deadlineId }.toSet()
         val surfacedIds = leadSurfacedEvents.map { it.prospectId }.toSet()
@@ -42,14 +43,26 @@ class SimEngine {
                 SimEvent.SeasonEnded(nextWorld.season.seasonNumber, nextWorld.currentDay)
             else null
 
-        val updatedArtists = if (wantSurfacedEvents.isEmpty()) nextWorld.artists else {
-            val stamps = wantSurfacedEvents.groupBy { it.artistId }
-            nextWorld.artists.mapValues { (id, artist) ->
-                val artistWants = stamps[id] ?: return@mapValues artist
-                artist.copy(
-                    wantLastSurfacedAt = artist.wantLastSurfacedAt +
-                        artistWants.associate { it.wantType.name to nextWorld.currentDay }
-                )
+        val updatedArtists = run {
+            val afterWants = if (wantSurfacedEvents.isEmpty()) nextWorld.artists else {
+                val stamps = wantSurfacedEvents.groupBy { it.artistId }
+                nextWorld.artists.mapValues { (id, artist) ->
+                    val artistWants = stamps[id] ?: return@mapValues artist
+                    artist.copy(
+                        wantLastSurfacedAt = artist.wantLastSurfacedAt +
+                            artistWants.associate { it.wantType.name to nextWorld.currentDay }
+                    )
+                }
+            }
+            if (needUrgentEvents.isEmpty()) afterWants else {
+                val stamps = needUrgentEvents.groupBy { it.artistId }
+                afterWants.mapValues { (id, artist) ->
+                    val artistNeeds = stamps[id] ?: return@mapValues artist
+                    artist.copy(
+                        needNotifiedAt = artist.needNotifiedAt +
+                            artistNeeds.associate { it.needType.name to nextWorld.currentDay }
+                    )
+                }
             }
         }
         val finalWorld = nextWorld.copy(

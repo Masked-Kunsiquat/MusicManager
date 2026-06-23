@@ -76,13 +76,6 @@ class SeasonCalendarTest {
     // --- DeadlineApproaching emission ---
 
     @Test
-    fun `DeadlineApproaching fires at 20 ticks before dueTick`() {
-        val world = baseWorld(currentDay = 80, dueTick = 100)
-        val events = generateEvents(world)
-        assertTrue(events.any { it is SimEvent.DeadlineApproaching && (it as SimEvent.DeadlineApproaching).ticksRemaining == 20 })
-    }
-
-    @Test
     fun `DeadlineApproaching fires at 10 ticks before dueTick`() {
         val world = baseWorld(currentDay = 90, dueTick = 100)
         val events = generateEvents(world)
@@ -97,10 +90,10 @@ class SeasonCalendarTest {
     }
 
     @Test
-    fun `DeadlineApproaching does NOT fire at 19 ticks before dueTick`() {
-        val world = baseWorld(currentDay = 81, dueTick = 100)
+    fun `DeadlineApproaching fires at 2 ticks before dueTick`() {
+        val world = baseWorld(currentDay = 98, dueTick = 100)
         val events = generateEvents(world)
-        assertFalse(events.any { it is SimEvent.DeadlineApproaching })
+        assertTrue(events.any { it is SimEvent.DeadlineApproaching && (it as SimEvent.DeadlineApproaching).ticksRemaining == 2 })
     }
 
     @Test
@@ -113,6 +106,13 @@ class SeasonCalendarTest {
     @Test
     fun `DeadlineApproaching does NOT fire at 6 ticks before dueTick`() {
         val world = baseWorld(currentDay = 94, dueTick = 100)
+        val events = generateEvents(world)
+        assertFalse(events.any { it is SimEvent.DeadlineApproaching })
+    }
+
+    @Test
+    fun `DeadlineApproaching does NOT fire at 3 ticks before dueTick`() {
+        val world = baseWorld(currentDay = 97, dueTick = 100)
         val events = generateEvents(world)
         assertFalse(events.any { it is SimEvent.DeadlineApproaching })
     }

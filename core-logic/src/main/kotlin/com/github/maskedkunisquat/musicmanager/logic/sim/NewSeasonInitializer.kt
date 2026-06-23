@@ -27,7 +27,8 @@ object NewSeasonInitializer {
                 // Fresh season, fresh goals — re-derive from dimensions, not carried over.
                 activeWants = WorldInitializer.buildArtistWants(artist.dimensions),
                 lastInteractionDay = 0,
-                wantLastSurfacedAt = emptyMap()
+                wantLastSurfacedAt = emptyMap(),
+                needNotifiedAt = emptyMap()
             )
         }
 
@@ -86,7 +87,7 @@ object NewSeasonInitializer {
         val newSeasonState = SeasonState(
             seasonNumber = newSeasonNumber,
             seasonStartTick = 0,
-            seasonEndTick = 180,
+            seasonEndTick = 90,
             startFunds = newFunds,
             startReputation = newLabel.reputation.mapKeys { it.key.name }
         )
