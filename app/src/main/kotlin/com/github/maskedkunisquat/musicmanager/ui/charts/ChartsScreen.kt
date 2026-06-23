@@ -1,6 +1,7 @@
 package com.github.maskedkunisquat.musicmanager.ui.charts
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -81,6 +82,22 @@ private fun ChartsContent(
             )
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 5.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text("● roster", style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary)
+            Text("↑ rising", style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary)
+            Text("→ holding", style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("↓ falling", style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.secondary)
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
         if (world.chartSnapshot.genreTrends.isEmpty()) {
             Text(

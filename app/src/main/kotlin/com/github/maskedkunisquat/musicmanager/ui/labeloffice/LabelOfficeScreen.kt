@@ -70,13 +70,24 @@ private fun LabelOfficeContent(world: SimWorld, onBack: () -> Unit, onOpenIdenti
         ) {
             SectionHeader("FINANCIAL")
             StatusLine(
+                label = "Balance",
+                value = formatDollars(world.label.funds)
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            val cashScore = LabelNeedEvaluator.cashFlow(world)
+            StatusLine(
                 label = "Cash flow",
-                value = cashFlowLabel(LabelNeedEvaluator.cashFlow(world)),
-                critical = LabelNeedEvaluator.cashFlow(world) < 0.35f
+                value = cashFlowLabel(cashScore),
+                critical = cashScore < 0.35f
             )
             Spacer(modifier = Modifier.height(20.dp))
 
             SectionHeader("ROSTER")
+            StatusLine(
+                label = "Size",
+                value = "${world.label.rosterIds.size} artist${if (world.label.rosterIds.size == 1) "" else "s"}"
+            )
+            Spacer(modifier = Modifier.height(6.dp))
             StatusLine(
                 label = "Diversity",
                 value = rosterLabel(world)
@@ -174,6 +185,11 @@ private fun CapabilityRow(type: CapabilityType, world: SimWorld) {
             }
         )
     }
+}
+
+private fun formatDollars(cents: Long): String {
+    val dollars = cents / 100L
+    return "\$${String.format(java.util.Locale.US, "%,d", dollars)}"
 }
 
 private fun cashFlowLabel(score: Float): String = when {
