@@ -98,7 +98,9 @@ class StubAiProvider : LabelAiProvider {
             contractExpiringProse(name, event.daysRemaining, loyalty, confidence,
                 (event.artistId.hashCode() ushr 1) % 2)
         is SimEvent.WantSurfaced ->
-            wantSurfacedProse(event.wantType, name, loyalty, confidence)
+            wantSurfacedProse(event.wantType, name, loyalty, confidence,
+                world.artists[event.artistId]?.genre ?: "music",
+                event.artistId, world.currentDay)
         is SimEvent.MarketShift -> marketShiftProse(event)
         is SimEvent.IntelDrop -> intelDropProse(event, world)
         is SimEvent.ScoutReport -> scoutReportProse(event, world)
@@ -263,38 +265,100 @@ class StubAiProvider : LabelAiProvider {
         wantType: WantType,
         name: String,
         loyalty: Float,
-        confidence: Float
+        confidence: Float,
+        genre: String,
+        artistId: String,
+        currentDay: Int
     ): Pair<String, String> {
         val h = hedge(confidence)
         val s = signing(name, loyalty)
+        val v = (artistId.hashCode() ushr 1 + currentDay / 20) % 3
         return when (wantType) {
-            WantType.MAJOR_VENUE_TOUR -> Pair(
-                "headline tour — serious question",
-                "${h}I've been talking to some people about a headline run and I think the timing is right. " +
-                "Not a support slot — a real tour, proper venues. I want to know if you're behind this. " +
-                "The momentum exists right now.$s"
-            )
-            WantType.COLLAB_WITH_PRODUCER -> Pair(
-                "producer collab — I have someone in mind",
-                "${h}There's a producer I've been in conversation with and I think it could be something " +
-                "special. Different sound than what we've done — that's the point. Are you in?$s"
-            )
-            WantType.GENRE_EXPERIMENT -> Pair(
-                "re: experimental direction",
-                "${h}I know this might catch you off guard but I need to explore some different territory. " +
-                "Not instead of what we're doing — alongside it. One project, one chance to see where " +
-                "this goes.$s"
-            )
-            WantType.RECORD_ALBUM -> Pair(
-                "album — I'm ready",
-                "${h}I've got enough material for a full record and I think the moment is right. I don't " +
-                "want to keep releasing singles and watching the story go nowhere. Are you?$s"
-            )
-            WantType.INCREASED_ROYALTIES -> Pair(
-                "royalty rate — let's revisit",
-                "${h}The deal made sense when we signed it. A lot has changed. The streams are up, the " +
-                "shows are bigger. I think you know the split needs to reflect where things are now.$s"
-            )
+            WantType.MAJOR_VENUE_TOUR -> {
+                val subjects = listOf(
+                    "headline tour — serious question",
+                    "re: tour routing",
+                    "the $genre live window"
+                )
+                val body = when (v) {
+                    0 -> "${h}I've been talking to some people about a headline run and I think the timing is right. " +
+                         "Not a support slot — a real tour, proper venues. I want to know if you're behind this. " +
+                         "The momentum exists right now.$s"
+                    1 -> "${h}The $genre circuit is active right now and I don't want to miss the window by moving too slow. " +
+                         "I'm not talking about a handful of dates — I mean a real routing, building something. Are you in?$s"
+                    else -> "${h}I don't want to look back at this moment and wonder what we could have built from it. " +
+                            "The live thing is there for us. I want to headline. I want to do it now.$s"
+                }
+                Pair(subjects[v], body)
+            }
+            WantType.COLLAB_WITH_PRODUCER -> {
+                val subjects = listOf(
+                    "producer collab — I have someone in mind",
+                    "re: outside collaboration",
+                    "this came up and I can't ignore it"
+                )
+                val body = when (v) {
+                    0 -> "${h}There's a producer I've been in conversation with and I think it could be something " +
+                         "special. Different sound than what we've done — that's the point. Are you in?$s"
+                    1 -> "${h}This happened organically — I wasn't looking for it. But we got in a room and something " +
+                         "clicked that I haven't felt in a while. I need to see where it goes.$s"
+                    else -> "${h}I need to work with someone outside our world for a minute. Not because something's wrong — " +
+                            "because I want to bring something back that we can't make from inside.$s"
+                }
+                Pair(subjects[v], body)
+            }
+            WantType.GENRE_EXPERIMENT -> {
+                val subjects = listOf(
+                    "re: experimental direction",
+                    "something I need to try",
+                    "$genre isn't the whole story"
+                )
+                val body = when (v) {
+                    0 -> "${h}I know this might catch you off guard but I need to explore some different territory. " +
+                         "Not instead of what we're doing — alongside it. One project, one chance to see where this goes.$s"
+                    1 -> "${h}This isn't a phase. It's where I'm actually going and I'd rather do it with you than have " +
+                         "this conversation somewhere else. I'm not abandoning $genre — I'm adding to it.$s"
+                    else -> "${h}I want to make something I can't fully predict. $genre is home but it's not the ceiling. " +
+                            "One record, controlled experiment, we see what it does.$s"
+                }
+                Pair(subjects[v], body)
+            }
+            WantType.RECORD_ALBUM -> {
+                val subjects = listOf(
+                    "album — I'm ready",
+                    "re: full-length",
+                    "we need to have the album conversation"
+                )
+                val body = when (v) {
+                    0 -> "${h}I've got enough material for a full record and I think the moment is right. I don't " +
+                         "want to keep releasing singles and watching the story go nowhere. Are you?$s"
+                    1 -> "${h}I can't keep adding to this pile — it needs to become something. An album isn't just " +
+                         "more music. It changes what people think we are. I want to make the move.$s"
+                    else -> "${h}The moment exists right now. I don't know if it will in six months. " +
+                            "I've got the material, I've got the direction. What I need is a yes.$s"
+                }
+                Pair(subjects[v], body)
+            }
+            WantType.INCREASED_ROYALTIES -> {
+                val subjects = if (loyalty > 0.6f) listOf(
+                    "royalty rate — let's revisit",
+                    "the split — worth a conversation",
+                    "thinking about where we're headed"
+                ) else listOf(
+                    "royalty rate — we need to talk",
+                    "the deal — this needs to change",
+                    "my rate isn't right and we both know it"
+                )
+                val body = when (v) {
+                    0 -> "${h}The deal made sense when we signed it. A lot has changed. The streams are up, " +
+                         "the shows are bigger. I think you know the split needs to reflect where things are now.$s"
+                    1 -> "${h}The numbers support this conversation — I've looked at them. I'm not coming to you " +
+                         "with a complaint. I'm coming with data. The rate needs to move.$s"
+                    else -> "${h}I want to keep building this. But I need to know the deal we're building on " +
+                            "actually reflects what I'm contributing. Long-term this doesn't work unless we fix it.$s"
+                }
+                Pair(subjects[v], body)
+            }
         }
     }
 
