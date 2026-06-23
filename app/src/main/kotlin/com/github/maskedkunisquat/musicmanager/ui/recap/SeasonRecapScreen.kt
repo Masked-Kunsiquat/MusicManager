@@ -53,7 +53,8 @@ fun SeasonRecapScreen(
             }
         }
 
-        if (summary != null) {
+        val summaryVal = summary
+        if (summaryVal != null) {
             Spacer(modifier = Modifier.height(16.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
             Spacer(modifier = Modifier.height(16.dp))
@@ -61,7 +62,7 @@ fun SeasonRecapScreen(
                 onClick = onStartNewSeason,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("[ START SEASON ${summary!!.seasonNumber + 1} ]")
+                Text("[ START SEASON ${summaryVal.seasonNumber + 1} ]")
             }
         }
     }

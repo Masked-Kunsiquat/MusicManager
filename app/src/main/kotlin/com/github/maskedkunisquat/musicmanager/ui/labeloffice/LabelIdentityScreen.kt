@@ -64,15 +64,16 @@ fun LabelIdentityScreen(viewModel: InboxViewModel, onBack: () -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
+            val identityVal = identity
             when {
-                identity == null -> {
+                identityVal == null -> {
                     Text(
                         text = "...",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                identity!!.genreWeights.isEmpty() -> {
+                identityVal.primaryGenre == null -> {
                     Text(
                         text = "No identity formed yet.",
                         style = MaterialTheme.typography.bodyMedium,
@@ -81,7 +82,7 @@ fun LabelIdentityScreen(viewModel: InboxViewModel, onBack: () -> Unit) {
                 }
                 else -> {
                     IdentityContent(
-                        identity = identity!!,
+                        identity = identityVal,
                         prevSeasonPrimary = prevPrimary,
                         seasonNumber = world.season.seasonNumber
                     )
@@ -97,8 +98,9 @@ private fun IdentityContent(
     prevSeasonPrimary: String?,
     seasonNumber: Int
 ) {
-    // Genre affinity — top 3 by weight
+    // Genre affinity — top 3 positive-weight genres; zero-weight entries (fully passed) are excluded.
     val topGenres = identity.genreWeights.entries
+        .filter { it.value > 0f }
         .sortedByDescending { it.value }
         .take(3)
 

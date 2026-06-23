@@ -130,6 +130,10 @@ class InboxViewModel(
             }.onFailure { e ->
                 Log.e(TAG, "resolveEvent failed for $eventId", e)
             }
+            // Any resolved event may include a lead action (pursue/pass/sign) that changes the
+            // season's genre identity. Invalidate so the next loadLabelIdentity() call refetches.
+            _labelIdentity.value = null
+            _prevSeasonPrimaryGenre.value = null
         }
     }
 
