@@ -61,6 +61,24 @@ fun InboxScreen(
                 color = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.weight(1f))
+            val criticalCount = items.count { urgencyLevel(it.event) == UrgencyLevel.CRITICAL }
+            val urgentCount = items.count { urgencyLevel(it.event) == UrgencyLevel.URGENT }
+            if (criticalCount > 0) {
+                Text(
+                    text = "$criticalCount!!",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+            }
+            if (urgentCount > 0) {
+                Text(
+                    text = "$urgentCount!",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+            }
             Text(
                 text = "${items.size}",
                 style = MaterialTheme.typography.labelSmall,
@@ -77,26 +95,35 @@ fun InboxScreen(
                 modifier = Modifier.padding(24.dp)
             )
         } else {
+            val grouped = items
+                .sortedByDescending { it.dayOfGame }
+                .groupBy { urgencyLevel(it.event) }
             LazyColumn {
-                items(items, key = { it.id }) { item ->
-                    InboxRow(
-                        subject = item.email.subject,
-                        artistName = when (val e = item.event) {
-                            is SimEvent.MarketShift -> e.genre
-                            is SimEvent.IntelDrop -> "industry intel"
-                            is SimEvent.ScoutReport -> world.scouts[e.scoutId]?.name ?: "scout"
-                            is SimEvent.NegotiationRound -> world.prospects[e.prospectId]?.name ?: "prospect"
-                            else -> world.artists[e.artistId]?.name ?: e.artistId.orEmpty()
-                        },
-                        dayOfGame = item.dayOfGame,
-                        isRead = item.isRead,
-                        urgency = urgencyLevel(item.event),
-                        onClick = {
-                            viewModel.markViewed(item.id)
-                            onOpenEmail(item.id)
-                        }
-                    )
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                UrgencyLevel.entries.forEach { level ->
+                    val group = grouped[level] ?: return@forEach
+                    item(key = "header_${level.name}") {
+                        InboxSectionHeader(level = level, count = group.size)
+                    }
+                    items(group, key = { it.id }) { item ->
+                        InboxRow(
+                            subject = item.email.subject,
+                            artistName = when (val e = item.event) {
+                                is SimEvent.MarketShift -> e.genre
+                                is SimEvent.IntelDrop -> "industry intel"
+                                is SimEvent.ScoutReport -> world.scouts[e.scoutId]?.name ?: "scout"
+                                is SimEvent.NegotiationRound -> world.prospects[e.prospectId]?.name ?: "prospect"
+                                else -> world.artists[e.artistId]?.name ?: e.artistId.orEmpty()
+                            },
+                            dayOfGame = item.dayOfGame,
+                            isRead = item.isRead,
+                            urgency = level,
+                            onClick = {
+                                viewModel.markViewed(item.id)
+                                onOpenEmail(item.id)
+                            }
+                        )
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+                    }
                 }
             }
         }
@@ -104,6 +131,34 @@ fun InboxScreen(
 }
 
 private enum class UrgencyLevel { CRITICAL, URGENT, ROUTINE }
+
+@Composable
+private fun InboxSectionHeader(level: UrgencyLevel, count: Int) {
+    val color = when (level) {
+        UrgencyLevel.CRITICAL -> MaterialTheme.colorScheme.error
+        UrgencyLevel.URGENT   -> MaterialTheme.colorScheme.secondary
+        UrgencyLevel.ROUTINE  -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = level.name,
+            style = MaterialTheme.typography.labelSmall,
+            color = color
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = "· $count",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+}
 
 @Composable
 private fun InboxRow(
