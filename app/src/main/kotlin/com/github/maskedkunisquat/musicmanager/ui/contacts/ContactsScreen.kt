@@ -1,5 +1,6 @@
 package com.github.maskedkunisquat.musicmanager.ui.contacts
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,20 +15,32 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.maskedkunisquat.musicmanager.logic.contacts.recencyDescriptor
 import com.github.maskedkunisquat.musicmanager.logic.contacts.toneDescriptor
+import com.github.maskedkunisquat.musicmanager.logic.model.ArtistInteractionEntry
 import com.github.maskedkunisquat.musicmanager.logic.model.ArtistState
+import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.ui.components.RetroButton
 import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxViewModel
 
 @Composable
 fun ContactsScreen(viewModel: InboxViewModel, onBack: () -> Unit) {
     val world by viewModel.world.collectAsStateWithLifecycle()
+    val artistHistories by viewModel.artistHistories.collectAsStateWithLifecycle()
+    var expandedId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(expandedId) {
+        expandedId?.let { viewModel.loadArtistHistory(it) }
+    }
 
     val rosterArtists = world.label.rosterIds
         .mapNotNull { id -> world.artists[id] }
@@ -63,7 +76,14 @@ fun ContactsScreen(viewModel: InboxViewModel, onBack: () -> Unit) {
         } else {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(0.dp)) {
                 items(rosterArtists, key = { it.id }) { artist ->
-                    ContactRow(artist = artist, currentDay = world.currentDay)
+                    val isExpanded = expandedId == artist.id
+                    ContactRow(
+                        artist = artist,
+                        currentDay = world.currentDay,
+                        isExpanded = isExpanded,
+                        history = artistHistories[artist.id],
+                        onToggle = { expandedId = if (isExpanded) null else artist.id }
+                    )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
             }
@@ -72,34 +92,110 @@ fun ContactsScreen(viewModel: InboxViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-private fun ContactRow(artist: ArtistState, currentDay: Int) {
+private fun ContactRow(
+    artist: ArtistState,
+    currentDay: Int,
+    isExpanded: Boolean,
+    history: List<ArtistInteractionEntry>?,
+    onToggle: () -> Unit
+) {
     val daysSince = currentDay - artist.lastInteractionDay
     val recency = recencyDescriptor(daysSince)
     val tone = toneDescriptor(artist.relationshipBalance)
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .clickable(onClick = onToggle)
+            .padding(vertical = 12.dp)
     ) {
-        Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = artist.name,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = artist.genre.uppercase(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
             Text(
-                text = artist.name,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = artist.genre.uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary
+                text = "$recency / $tone",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+
+        if (isExpanded) {
+            Spacer(modifier = Modifier.height(10.dp))
+
+            val lowNeeds = artist.needs.values
+                .filter { it.value < 0.35f }
+                .sortedBy { it.value }
+            if (lowNeeds.isNotEmpty()) {
+                Text(
+                    text = "NEEDS ATTENTION: ${lowNeeds.joinToString(", ") { it.type.shortLabel() }}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            when {
+                history == null -> Text(
+                    text = "loading...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                history.isEmpty() -> Text(
+                    text = "No interactions recorded yet.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                else -> {
+                    Text(
+                        text = "── HISTORY ─────────────────────",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    history.asReversed().forEach { entry ->
+                        HistoryEntry(entry)
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryEntry(entry: ArtistInteractionEntry) {
+    Column {
         Text(
-            text = "$recency / $tone",
+            text = "Day ${entry.day}  ${entry.eventSummary}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = "  → ${entry.choiceMade}",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+}
+
+private fun NeedType.shortLabel(): String = when (this) {
+    NeedType.CREATIVE_FULFILLMENT -> "creative"
+    NeedType.FINANCIAL_SECURITY   -> "money"
+    NeedType.RECOGNITION          -> "recognition"
+    NeedType.BELONGING            -> "belonging"
+    NeedType.AUTONOMY             -> "autonomy"
 }

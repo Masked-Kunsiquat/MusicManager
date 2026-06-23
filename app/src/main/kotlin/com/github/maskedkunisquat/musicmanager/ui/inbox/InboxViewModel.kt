@@ -8,6 +8,7 @@ import com.github.maskedkunisquat.musicmanager.logic.ai.ModelLoadState
 import com.github.maskedkunisquat.musicmanager.logic.inbox.TapeDeckItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.SimRepository
+import com.github.maskedkunisquat.musicmanager.logic.model.ArtistInteractionEntry
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelIdentity
 import com.github.maskedkunisquat.musicmanager.logic.model.SeasonSummary
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
@@ -55,6 +56,14 @@ class InboxViewModel(
     // Keyed by event ID — populated asynchronously so real inference doesn't block composition.
     private val _options = MutableStateFlow<Map<String, List<ResponseOption>>>(emptyMap())
     val options: StateFlow<Map<String, List<ResponseOption>>> = _options.asStateFlow()
+
+    // Keyed by artistId — populated on demand when the player expands a contact row.
+    private val _artistHistories = MutableStateFlow<Map<String, List<ArtistInteractionEntry>>>(emptyMap())
+    val artistHistories: StateFlow<Map<String, List<ArtistInteractionEntry>>> = _artistHistories.asStateFlow()
+
+    // Per-genre ordered trend values reconstructed from MarketShift history; populated once on ChartsScreen open.
+    private val _trendHistory = MutableStateFlow<Map<String, List<Float>>>(emptyMap())
+    val trendHistory: StateFlow<Map<String, List<Float>>> = _trendHistory.asStateFlow()
 
     // Tracks IDs currently being fetched to prevent duplicate coroutine launches on rapid recomposition.
     // ConcurrentHashMap-backed so add/remove are thread-safe if ever called off the main thread.
@@ -117,7 +126,23 @@ class InboxViewModel(
             _seasonSummary.value = null
             _labelIdentity.value = null
             _prevSeasonPrimaryGenre.value = null
+            _trendHistory.value = emptyMap()
             _recapNavigating.value = false
+        }
+    }
+
+    fun loadTrendHistory() {
+        if (_trendHistory.value.isNotEmpty()) return
+        viewModelScope.launch {
+            _trendHistory.value = runCatching { repository.getGenreTrendHistory() }.getOrElse { emptyMap() }
+        }
+    }
+
+    fun loadArtistHistory(artistId: String) {
+        if (_artistHistories.value.containsKey(artistId)) return
+        viewModelScope.launch {
+            val history = runCatching { repository.getArtistHistory(artistId) }.getOrElse { emptyList() }
+            _artistHistories.update { it + (artistId to history) }
         }
     }
 
@@ -134,6 +159,9 @@ class InboxViewModel(
             // season's genre identity. Invalidate so the next loadLabelIdentity() call refetches.
             _labelIdentity.value = null
             _prevSeasonPrimaryGenre.value = null
+            // Clear caches so next open fetches fresh data reflecting the resolved event.
+            _artistHistories.value = emptyMap()
+            _trendHistory.value = emptyMap()
         }
     }
 

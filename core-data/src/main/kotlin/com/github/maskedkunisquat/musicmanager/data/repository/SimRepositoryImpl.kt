@@ -12,18 +12,19 @@ import com.github.maskedkunisquat.musicmanager.data.mapper.toResponseEntity
 import com.github.maskedkunisquat.musicmanager.data.mapper.toSimEventOrNull
 import com.github.maskedkunisquat.musicmanager.data.mapper.toEntity
 import com.github.maskedkunisquat.musicmanager.logic.ai.LabelAiProvider
+import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
 import com.github.maskedkunisquat.musicmanager.logic.inbox.InboxItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.TapeDeckItem
 import com.github.maskedkunisquat.musicmanager.logic.inbox.SimRepository
-import com.github.maskedkunisquat.musicmanager.logic.model.GenreAction
+import com.github.maskedkunisquat.musicmanager.logic.model.ArtistInteractionEntry
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelIdentity
+import com.github.maskedkunisquat.musicmanager.logic.sim.EntityRecord
 import com.github.maskedkunisquat.musicmanager.logic.model.SeasonFacts
 import com.github.maskedkunisquat.musicmanager.logic.model.SeasonSummary
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.github.maskedkunisquat.musicmanager.logic.response.ResponseOption
 import com.github.maskedkunisquat.musicmanager.logic.sim.LabelIdentityEvaluator
 import com.github.maskedkunisquat.musicmanager.logic.sim.NewSeasonInitializer
-import com.github.maskedkunisquat.musicmanager.logic.sim.SIGNED_ARTIST_ID_PREFIX
 import com.github.maskedkunisquat.musicmanager.logic.sim.SeasonSummaryEvaluator
 import com.github.maskedkunisquat.musicmanager.logic.sim.SimEngine
 import com.github.maskedkunisquat.musicmanager.logic.sim.WorldInitializer
@@ -253,60 +254,58 @@ class SimRepositoryImpl(
     }
 
     override suspend fun getLabelIdentity(): LabelIdentity {
-        val entities = currentSeasonEntities()
-        val actions = extractGenreActions(entities)
-        return LabelIdentityEvaluator.evaluate(actions, world.artists.values)
+        val entities = currentSeasonEntities().map { EntityRecord(it.id, it.eventType, it.payload) }
+        val actions = LabelIdentityEvaluator.extractGenreActions(entities, world)
+        val rosterArtists = world.label.rosterIds.mapNotNull { world.artists[it] }
+        return LabelIdentityEvaluator.evaluate(actions, rosterArtists)
     }
 
     override suspend fun getPreviousSeasonPrimaryGenre(): String? {
         val entities = previousSeasonEntities()
         if (entities.isEmpty()) return null
-        val actions = extractGenreActions(entities)
+        val records = entities.map { EntityRecord(it.id, it.eventType, it.payload) }
+        val actions = LabelIdentityEvaluator.extractGenreActions(records, world)
         // Pass empty artist list: only primaryGenre is used by callers; aesthetic (roster-driven)
         // would be wrong here since world.artists reflects the current season.
         return LabelIdentityEvaluator.evaluate(actions, emptyList()).primaryGenre
     }
 
-    // Extracts GenreAction list from current-season response_applied entities.
-    // Genre is resolved by looking up prospectId/artistId in the current world; unknown IDs
-    // are skipped (may occur when old-season prospects have left the pool after a season advance).
-    private fun extractGenreActions(entities: List<EventLogEntity>): List<GenreAction> {
-        val result = mutableListOf<GenreAction>()
-        for (entity in entities) {
-            if (entity.eventType != "response_applied") continue
-            runCatching {
-                val effects = json.parseToJsonElement(entity.payload)
-                    .jsonObject["effects"]?.jsonArray ?: return@runCatching
-                for (e in effects) {
-                    val obj = e.jsonObject
-                    val action: GenreAction? = when (obj["type"]?.jsonPrimitive?.content) {
-                        "pursue_lead" -> obj["prospectId"]?.jsonPrimitive?.content
-                            ?.let { resolveProspectGenre(it) }
-                            ?.let { GenreAction(it, +0.05f) }
-                        "pass_lead" -> obj["prospectId"]?.jsonPrimitive?.content
-                            ?.let { resolveProspectGenre(it) }
-                            ?.let { GenreAction(it, -0.03f) }
-                        "sign_artist" -> obj["prospectId"]?.jsonPrimitive?.content
-                            ?.let { resolveSignedGenre(it) }
-                            ?.let { GenreAction(it, +0.10f) }
-                        else -> null
-                    }
-                    action?.let { result += it }
+    override suspend fun getArtistHistory(artistId: String): List<ArtistInteractionEntry> {
+        // Escape SQLite LIKE wildcards so "signed_" prefixes don't match unintended rows.
+        val escapedId = artistId.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        val resolved = dao.getResolvedForArtist(escapedId)
+        if (resolved.isEmpty()) return emptyList()
+        // Build lookup from originalEventId → optionText from response_applied rows.
+        val optionTextByOriginalId = buildMap<String, String> {
+            for (entity in dao.getResponseEntities()) {
+                runCatching {
+                    val obj = json.parseToJsonElement(entity.payload).jsonObject
+                    val origId = obj["originalEventId"]?.jsonPrimitive?.content ?: return@runCatching
+                    val text = obj["optionText"]?.jsonPrimitive?.content ?: return@runCatching
+                    put(origId, text)
                 }
             }
         }
-        return result
+        return resolved.mapNotNull { event ->
+            val subject = event.emailSubject.ifBlank { return@mapNotNull null }
+            val choice = optionTextByOriginalId[event.id] ?: return@mapNotNull null
+            ArtistInteractionEntry(day = event.dayOfGame, eventSummary = subject, choiceMade = choice)
+        }.sortedBy { it.day }.takeLast(10)
     }
 
-    // Prospects stay in world.prospects even after being pursued/passed, so the lookup is valid
-    // within a season. If the prospect was signed, the new artist carries the same genre.
-    private fun resolveProspectGenre(prospectId: String): String? =
-        world.prospects[prospectId]?.genre
-            ?: world.artists["$SIGNED_ARTIST_ID_PREFIX$prospectId"]?.genre
-
-    private fun resolveSignedGenre(prospectId: String): String? =
-        world.artists["$SIGNED_ARTIST_ID_PREFIX$prospectId"]?.genre
-            ?: world.prospects[prospectId]?.genre
+    override suspend fun getGenreTrendHistory(): Map<String, List<Float>> {
+        val events = dao.getMarketShiftEvents()
+            .mapNotNull { it.toSimEventOrNull() as? SimEvent.MarketShift }
+            .sortedBy { it.dayOfGame }
+        if (events.isEmpty()) return emptyMap()
+        val byGenre = mutableMapOf<String, MutableList<Float>>()
+        for (event in events) {
+            val list = byGenre.getOrPut(event.genre) { mutableListOf() }
+            if (list.isEmpty()) list.add(event.previousTrend)
+            list.add(event.currentTrend)
+        }
+        return byGenre
+    }
 
     override suspend fun startNewSeason() = tickMutex.withLock {
         val seasonEndEntity = dao.getUnresolvedSeasonEnd().firstOrNull() ?: return@withLock

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -26,7 +27,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelAesthetic
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelIdentity
 import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxViewModel
-import java.util.Locale
 
 @Composable
 fun LabelIdentityScreen(viewModel: InboxViewModel, onBack: () -> Unit) {
@@ -79,6 +79,12 @@ fun LabelIdentityScreen(viewModel: InboxViewModel, onBack: () -> Unit) {
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Sign artists to anchor your roster, pursue or pass leads in the tape deck, and respond to market events — your sound takes shape from all of it.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 else -> {
                     IdentityContent(
@@ -98,43 +104,95 @@ private fun IdentityContent(
     prevSeasonPrimary: String?,
     seasonNumber: Int
 ) {
-    // Genre affinity — top 3 positive-weight genres; zero-weight entries (fully passed) are excluded.
+    // Aesthetic headline
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = identity.aesthetic.name,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary
+        )
+        identity.primaryGenre?.let { genre ->
+            Text(
+                text = "  ·  $genre",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+    Spacer(modifier = Modifier.height(4.dp))
+    Text(
+        text = aestheticDescription(identity.aesthetic),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+
+    Spacer(modifier = Modifier.height(16.dp))
+    HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+    Spacer(modifier = Modifier.height(12.dp))
+
+    // Genre affinity — top 3 positive-weight genres
+    Text(
+        text = "GENRE AFFINITY",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(modifier = Modifier.height(8.dp))
     val topGenres = identity.genreWeights.entries
         .filter { it.value > 0f }
         .sortedByDescending { it.value }
         .take(3)
-
     topGenres.forEachIndexed { i, (genre, weight) ->
-        Text(
-            text = "${i + 1}. $genre ${weightBar(weight)} ${String.format(Locale.US, "%.2f", weight)}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        if (i < topGenres.lastIndex) Spacer(modifier = Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = genre,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (i == 0) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = weightBar(weight),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (i == 0) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.outline
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = weightLabel(weight),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(72.dp)
+            )
+        }
+        if (i < topGenres.lastIndex) Spacer(modifier = Modifier.height(6.dp))
     }
 
     Spacer(modifier = Modifier.height(16.dp))
     HorizontalDivider(color = MaterialTheme.colorScheme.outline)
     Spacer(modifier = Modifier.height(12.dp))
 
-    // Focus descriptor
+    // Focus
     val focusLabel = when {
         identity.focusScore > 0.70f -> "FOCUSED"
         identity.focusScore > 0.40f -> "DEVELOPING"
         else -> "SCATTERED"
     }
     Text(
-        text = "Focus: $focusLabel",
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurface
+        text = "FOCUS: $focusLabel",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
     )
-    Spacer(modifier = Modifier.height(6.dp))
-
-    // Aesthetic
+    Spacer(modifier = Modifier.height(4.dp))
     Text(
-        text = "Aesthetic: ${identity.aesthetic.name}",
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurface
+        text = focusImplication(focusLabel, identity.primaryGenre),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
     )
 
     // Season-over-season note
@@ -142,12 +200,33 @@ private fun IdentityContent(
         Spacer(modifier = Modifier.height(16.dp))
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
         Spacer(modifier = Modifier.height(12.dp))
+        val arrow = if (prevSeasonPrimary == identity.primaryGenre) "→" else "↗"
         Text(
-            text = "Last season primary: $prevSeasonPrimary",
-            style = MaterialTheme.typography.bodyMedium,
+            text = "Last season: $prevSeasonPrimary  $arrow  ${identity.primaryGenre ?: "—"}",
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+}
+
+private fun aestheticDescription(aesthetic: LabelAesthetic): String = when (aesthetic) {
+    LabelAesthetic.UNDERGROUND   -> "Distinct niche, loyal audience — not chasing mainstream placement."
+    LabelAesthetic.MAINSTREAM    -> "Broad commercial appeal — high visibility, high competition."
+    LabelAesthetic.EXPERIMENTAL  -> "Volatile and unpredictable — high creative risk, high reward ceiling."
+    LabelAesthetic.ECLECTIC      -> "Genre-fluid roster — versatile but without a defining identity yet."
+}
+
+private fun weightLabel(weight: Float): String = when {
+    weight > 0.70f -> "dominant"
+    weight > 0.50f -> "strong"
+    weight > 0.30f -> "developing"
+    else           -> "exploring"
+}
+
+private fun focusImplication(focusLabel: String, primaryGenre: String?): String = when (focusLabel) {
+    "FOCUSED"    -> "Scouts and intel are biasing toward ${primaryGenre ?: "your primary genre"} this season."
+    "DEVELOPING" -> "Identity is forming — more actions in the same genre will sharpen your focus."
+    else         -> "No clear direction yet — every genre competes for the same attention."
 }
 
 private fun weightBar(weight: Float, blocks: Int = 5): String {
