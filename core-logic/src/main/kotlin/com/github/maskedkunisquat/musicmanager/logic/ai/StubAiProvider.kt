@@ -1,6 +1,7 @@
 package com.github.maskedkunisquat.musicmanager.logic.ai
 
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
+import com.github.maskedkunisquat.musicmanager.logic.model.ArtistInteractionEntry
 import com.github.maskedkunisquat.musicmanager.logic.model.ArtistState
 import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.CreativeControl
@@ -46,7 +47,7 @@ class StubAiProvider : LabelAiProvider {
 
     private fun LabelAesthetic.label(): String = name.lowercase()
 
-    override suspend fun generateEmail(event: SimEvent, world: SimWorld): GeneratedEmail {
+    override suspend fun generateEmail(event: SimEvent, world: SimWorld, history: List<ArtistInteractionEntry>): GeneratedEmail {
         val artist = world.artists[event.artistId]
         val artistName = artist?.name ?: "your artist"
         val loyalty = artist?.dimensions?.loyalty ?: 0.5f

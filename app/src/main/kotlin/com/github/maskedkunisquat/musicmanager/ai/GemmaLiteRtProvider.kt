@@ -9,7 +9,11 @@ import com.github.maskedkunisquat.musicmanager.logic.ai.ModelDownloader
 import com.github.maskedkunisquat.musicmanager.logic.ai.ModelLoadState
 import com.github.maskedkunisquat.musicmanager.logic.ai.StubAiProvider
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
+import com.github.maskedkunisquat.musicmanager.logic.model.ArtistInteractionEntry
 import com.github.maskedkunisquat.musicmanager.logic.model.ArtistState
+import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
+import com.github.maskedkunisquat.musicmanager.logic.model.DeadlineType
+import com.github.maskedkunisquat.musicmanager.logic.model.LabelNeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.NeedType
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
 import com.google.ai.edge.litertlm.Backend
@@ -131,16 +135,20 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
         }
     }
 
-    override suspend fun generateEmail(event: SimEvent, world: SimWorld): GeneratedEmail {
+    override suspend fun generateEmail(
+        event: SimEvent,
+        world: SimWorld,
+        history: List<ArtistInteractionEntry>
+    ): GeneratedEmail {
         val eng = engineLock.readLock().run { lock(); try { engine } finally { unlock() } }
-        if (eng == null) return stub.generateEmail(event, world)
+        if (eng == null) return stub.generateEmail(event, world, history)
 
         val artist = world.artists[event.artistId]
         return withContext(Dispatchers.IO) {
-            runCatching { infer(eng, event, artist, world) }
+            runCatching { infer(eng, event, artist, world, history) }
                 .getOrElse { e ->
                     Log.w(TAG, "Inference error — stub fallback: ${e.message}")
-                    stub.generateEmail(event, world)
+                    stub.generateEmail(event, world, history)
                 }
         }
     }
@@ -149,12 +157,14 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
         eng: Engine,
         event: SimEvent,
         artist: ArtistState?,
-        world: SimWorld
+        world: SimWorld,
+        history: List<ArtistInteractionEntry>
     ): GeneratedEmail {
-        val fallback = stub.generateEmail(event, world)
-        val config = ConversationConfig(systemInstruction = Contents.of(systemInstruction(fallback.options.size)))
+        val fallback = stub.generateEmail(event, world, history)
+        val isArtistEmail = artist != null || event is SimEvent.NegotiationRound
+        val config = ConversationConfig(systemInstruction = Contents.of(systemInstruction(fallback.options.size, isArtistEmail)))
         val raw = eng.createConversation(config).use { conv ->
-            conv.sendMessage(buildPrompt(event, artist, fallback.options.size))
+            conv.sendMessage(buildPrompt(event, artist, world, history, fallback.options.size))
                 .contents.contents
                 .filterIsInstance<Content.Text>()
                 .joinToString("") { it.text }
@@ -199,9 +209,13 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
         }
     }
 
-    private fun systemInstruction(optionCount: Int): String {
+    private fun systemInstruction(optionCount: Int, isArtistEmail: Boolean): String {
+        val persona = if (isArtistEmail)
+            "You are a music artist writing an email to your label manager."
+        else
+            "You are a music industry professional writing to a label manager."
         val optionSlots = (1..optionCount).joinToString(", ") { "\"...\"" }
-        return "You are a music artist writing emails to your label manager. " +
+        return "$persona " +
             "Respond with ONLY a JSON object — no other text, no markdown, no code fences:\n" +
             "{\"subject\": \"...\", \"body\": \"...\", \"options\": [$optionSlots]}\n" +
             "subject: 5-10 words, all lowercase, no terminal punctuation. " +
@@ -209,42 +223,149 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
             "options: exactly $optionCount short action phrases (5-10 words each) the label manager could offer in response."
     }
 
-    private fun buildPrompt(event: SimEvent, artist: ArtistState?, optionCount: Int = 3): String = buildString {
-        val name = artist?.name ?: "the artist"
-        val genre = artist?.genre ?: "indie"
-        append("You are $name, a $genre music artist.\n\n")
+    private fun buildPrompt(
+        event: SimEvent,
+        artist: ArtistState?,
+        world: SimWorld,
+        history: List<ArtistInteractionEntry>,
+        optionCount: Int = 3
+    ): String = buildString {
+        // Roster artist header — only when the event maps to a known roster artist.
+        if (artist != null) append("You are ${artist.name}, a ${artist.genre} music artist.\n\n")
 
         when (event) {
             is SimEvent.NeedUrgent -> {
                 val topic = when (event.needType) {
                     NeedType.CREATIVE_FULFILLMENT -> "creative fulfillment"
-                    NeedType.FINANCIAL_SECURITY -> "financial security"
-                    NeedType.RECOGNITION -> "feeling recognized and visible"
-                    NeedType.BELONGING -> "feeling connected and belonging"
-                    NeedType.AUTONOMY -> "creative autonomy"
+                    NeedType.FINANCIAL_SECURITY   -> "financial security"
+                    NeedType.RECOGNITION          -> "feeling recognized and visible"
+                    NeedType.BELONGING            -> "feeling connected and belonging"
+                    NeedType.AUTONOMY             -> "creative autonomy"
                 }
                 append("Write an email about your need for $topic — it's been neglected")
-                if (event.currentValue < 0.20f) append(". This has become urgent")
+                if (event.currentValue < 0.20f) append(". This is now urgent")
                 append(".\n\n")
             }
             is SimEvent.ContractExpiring -> {
                 append("Write an email about your contract renewal. About ${event.daysRemaining} in-game days remain.\n\n")
+                val balance = artist?.relationshipBalance ?: 0f
+                when {
+                    balance > 0.5f  -> append("The relationship has been strong — your tone is warm but pragmatic. ")
+                    balance < -0.3f -> append("There have been real tensions. Tread carefully. ")
+                }
             }
             is SimEvent.WantSurfaced -> {
                 val want = event.wantType.name.lowercase(Locale.ROOT).replace('_', ' ')
-                append("Write an email to your label manager about your desire to $want.\n\n")
+                append("Write an email about your strong desire to $want.\n\n")
             }
-            else -> Unit
+            is SimEvent.RenewalOpened -> {
+                append("Write an email opening contract renewal talks")
+                if (event.round > 1) append(" (this is round ${event.round} of ongoing discussions)")
+                append(".\n\n")
+                val balance = artist?.relationshipBalance ?: 0f
+                when {
+                    balance > 0.5f  -> append("Your working relationship has been solid — approach this positively. ")
+                    balance < -0.3f -> append("There have been real tensions. You want resolution but you're wary. ")
+                    else            -> append("The relationship is professional. You want a fair deal. ")
+                }
+            }
+            is SimEvent.NegotiationRound -> {
+                val prospect = world.prospects[event.prospectId]
+                val pName = prospect?.name ?: "an unsigned artist"
+                val pGenre = prospect?.genre ?: "indie"
+                append("You are $pName, a $pGenre artist in round ${event.round} of signing negotiations with a label.\n\n")
+                val score = prospect?.signabilityScore ?: 0.5f
+                when {
+                    score >= 0.7f -> append("You're genuinely interested in this label. Write about what would seal the deal. ")
+                    score <= 0.3f -> append("You have other offers and aren't easily convinced. Write skeptically about your terms. ")
+                    else          -> append("You're curious but not yet committed. Write about what you need to feel confident. ")
+                }
+            }
+            is SimEvent.DeadlineApproaching -> {
+                val deadlineDesc = when (event.type) {
+                    DeadlineType.ALBUM_RELEASE -> "album release"
+                    DeadlineType.TOUR_BOOKING  -> "tour booking"
+                    DeadlineType.PRESS_CYCLE   -> "press cycle"
+                }
+                val urgencyDesc = when {
+                    event.ticksRemaining <= 5  -> "critically close — you need an answer now"
+                    event.ticksRemaining <= 10 -> "coming up fast and you're getting anxious"
+                    else                       -> "approaching and you want to get ahead of it"
+                }
+                append("Write an email about your $deadlineDesc deadline, which is $urgencyDesc (${event.ticksRemaining} days remaining).\n\n")
+            }
+            is SimEvent.DeadlineMissed -> {
+                val deadlineDesc = when (event.type) {
+                    DeadlineType.ALBUM_RELEASE -> "album release"
+                    DeadlineType.TOUR_BOOKING  -> "tour booking"
+                    DeadlineType.PRESS_CYCLE   -> "press cycle"
+                }
+                append("Write an email reacting to a missed $deadlineDesc deadline. Express how this affects you and what should happen now.\n\n")
+            }
+            is SimEvent.LabelNeedUrgent -> {
+                append("You are a music industry business advisor writing to a label manager.\n\n")
+                val issue = when (event.needType) {
+                    LabelNeedType.CASH_FLOW       -> "the label's cash flow is under strain and needs immediate attention"
+                    LabelNeedType.GENRE_DIVERSITY -> "the label's roster is too genre-concentrated and limiting growth"
+                }
+                append("Write a concise memo flagging that $issue.\n\n")
+            }
+            is SimEvent.CapabilityUnlockable -> {
+                append("You are a music industry contact writing to a label manager.\n\n")
+                val pitch = when (event.type) {
+                    CapabilityType.PUBLICIST        -> "bringing on a dedicated publicist"
+                    CapabilityType.IN_HOUSE_BOOKING -> "building an in-house booking operation"
+                    CapabilityType.VIDEO_PRODUCTION -> "investing in video production capability"
+                }
+                append("Write an email pitching the idea of $pitch as the label's next strategic move.\n\n")
+            }
+            is SimEvent.RivalSigning -> {
+                append("You are a music industry contact writing to a label manager.\n\n")
+                val context = if (event.wasPlayerTarget) "a prospect your label was actively pursuing" else "a new signing from the unsigned pool"
+                append("Write a brief message flagging that ${event.rivalName} just signed ${event.prospectName} (${event.genre}), $context.\n\n")
+            }
+            is SimEvent.RivalPoach -> {
+                append("You are a music industry contact writing to a label manager.\n\n")
+                append("Write a message informing them that ${event.artistName} has left to sign with ${event.rivalName}. Keep it factual and direct.\n\n")
+            }
+            is SimEvent.MarketShift -> {
+                append("You are a music market analyst writing to a label manager.\n\n")
+                val direction = if (event.currentTrend > event.previousTrend) "rising" else "declining"
+                val delta = event.currentTrend - event.previousTrend
+                val intensity = if (delta > 0.15f || delta < -0.15f) "significantly" else "noticeably"
+                append("Write a brief market update: ${event.genre} is $intensity $direction (current trend: ${"%.2f".format(event.currentTrend)}).\n\n")
+            }
+            is SimEvent.IntelDrop -> {
+                append("You are a music industry scout writing to a label manager.\n\n")
+                append("Write a short message passing along this intel about ${event.genre}: \"${event.headline}\".\n\n")
+            }
+            is SimEvent.ScoutReport -> {
+                append("You are a music scout filing a report for your label manager.\n\n")
+                val prospect = world.prospects[event.prospectId]
+                val pName = prospect?.name ?: "an unsigned artist"
+                val pGenre = prospect?.genre ?: "indie"
+                val score = prospect?.signabilityScore ?: 0.5f
+                val tier = when {
+                    score >= 0.7f -> "a standout find — genuinely buzzing right now"
+                    score >= 0.4f -> "interesting but still developing"
+                    else          -> "raw, but with potential worth tracking"
+                }
+                append("Write a scout report about $pName, a $pGenre artist. Your read: $tier.\n\n")
+            }
+            is SimEvent.LeadSurfaced,
+            is SimEvent.SeasonEnded -> Unit
         }
 
-        append("Provide exactly $optionCount options.\n\n")
+        append("Provide exactly $optionCount response options.\n")
+
+        // Artist dimensions — only for events with a matched roster artist.
         val dims = artist?.dimensions
         if (dims != null) {
-            append("Communication style: ")
+            append("\nCommunication style: ")
             when {
-                dims.confidence < 0.35f -> append("you tend to hedge and second-guess yourself. ")
+                dims.confidence < 0.35f -> append("you hedge and second-guess yourself. ")
                 dims.confidence > 0.65f -> append("you are direct and assertive. ")
-                else -> append("you are measured and professional. ")
+                else                    -> append("you are measured and professional. ")
             }
             when {
                 dims.loyalty < 0.35f -> append("Your relationship with the label feels strained. ")
@@ -253,6 +374,14 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
             when {
                 dims.volatility > 0.65f -> append("You express emotions openly.")
                 dims.volatility < 0.35f -> append("You are composed and restrained.")
+            }
+        }
+
+        // Interaction history — only for roster artist events; last 3 to keep prompt tight.
+        if (history.isNotEmpty() && artist != null) {
+            append("\n\nRecent history with this label:\n")
+            history.takeLast(3).forEach { entry ->
+                append("- ${entry.eventSummary}: label responded \"${entry.choiceMade}\"\n")
             }
         }
     }

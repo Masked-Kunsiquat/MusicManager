@@ -128,9 +128,8 @@ class SimRepositoryImpl(
         result.events
             .filter { it.eventSignature() !in queued }
             .forEach { event ->
-                // Phase 2: pass the world snapshot at the time of the event, not the post-tick world.
-                // Needs/dimensions don't tick yet so this is benign in Phase 1.
-                val email = aiProvider.generateEmail(event, world)
+                val history = event.artistId?.let { getArtistHistory(it) } ?: emptyList()
+                val email = aiProvider.generateEmail(event, world, history)
                 dao.insert(event.toEntity(email))
             }
         // Persist world after events are in the DB. If killed between these two writes the world
@@ -369,7 +368,8 @@ class SimRepositoryImpl(
         // Pre-compute entities outside the transaction — AI inference must not run inside it.
         val responseEntity = option.toResponseEntity(eventId, world.currentDay)
         val injectedEntities = injectedEvents.map { event ->
-            event.toEntity(aiProvider.generateEmail(event, world))
+            val history = event.artistId?.let { getArtistHistory(it) } ?: emptyList()
+            event.toEntity(aiProvider.generateEmail(event, world, history))
         }
         dao.resolveWithFollowUps(eventId, option.id, now, responseEntity, injectedEntities)
     }
