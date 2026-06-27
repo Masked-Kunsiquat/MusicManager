@@ -85,11 +85,12 @@ class InboxViewModel(
         }
     }
 
-    fun initializeWorld(labelName: String) {
+    fun initializeWorld(labelName: String, onSuccess: () -> Unit = {}) {
         viewModelScope.launch {
             modelLoadState.first { it != ModelLoadState.LOADING && it != ModelLoadState.DOWNLOADING }
             repository.initializeWorld(labelName)
             _world.value = repository.world
+            onSuccess()
         }
     }
 

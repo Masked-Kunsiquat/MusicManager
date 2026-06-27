@@ -48,7 +48,7 @@ class TickWorker(
     companion object {
         private const val PREFS_NAME = "tick_prefs"
         private const val KEY_LAST_TICKED_AT = "last_ticked_at"
-        const val TICK_INTERVAL_MS = 60 * 60 * 1000L   // 1h per in-game day (90 ticks ≈ 3.75 real days)
+        const val TICK_INTERVAL_MS = 60 * 60 * 1000L   // 1h per tick (season = 90 ticks ≈ 3.75 real days)
         private const val MAX_CATCHUP_TICKS = 24        // cap at 24 hours of catchup (24 × 60min)
     }
 }

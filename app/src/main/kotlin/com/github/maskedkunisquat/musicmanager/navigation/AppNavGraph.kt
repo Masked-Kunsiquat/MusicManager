@@ -56,10 +56,11 @@ fun AppNavGraph(
         composable(Route.ONBOARDING) {
             OnboardingScreen(
                 onConfirm = { name ->
-                    viewModel.initializeWorld(name)
-                    navController.navigate(Route.HOME) {
-                        popUpTo(Route.ONBOARDING) { inclusive = true }
-                        launchSingleTop = true
+                    viewModel.initializeWorld(name) {
+                        navController.navigate(Route.HOME) {
+                            popUpTo(Route.ONBOARDING) { inclusive = true }
+                            launchSingleTop = true
+                        }
                     }
                 }
             )

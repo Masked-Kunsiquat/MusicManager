@@ -244,10 +244,11 @@ class SimRepositoryImpl(
         val trimmed = name.trim()
         if (trimmed.isBlank()) return@withLock
         val cost = labelRenameCost(world.label)
+        if (world.label.funds < cost) return@withLock
         world = world.copy(
             label = world.label.copy(
                 name = trimmed,
-                funds = (world.label.funds - cost).coerceAtLeast(0L)
+                funds = world.label.funds - cost
             )
         )
         withContext(Dispatchers.IO) { saveWorld(world) }
