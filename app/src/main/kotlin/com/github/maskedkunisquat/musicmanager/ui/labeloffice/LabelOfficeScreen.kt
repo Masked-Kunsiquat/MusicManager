@@ -165,7 +165,7 @@ private fun LabelNameSection(world: SimWorld, onRenameLabel: (String) -> Unit) {
     } else {
         val cost = labelRenameCost(world.label)
         val canAfford = world.label.funds >= cost
-        val canConfirm = draft.isNotBlank() && canAfford && draft.trim() != world.label.name
+        val canConfirm = draft.trim().isNotBlank() && canAfford && draft.trim() != world.label.name
 
         val confirm = {
             if (canConfirm) {

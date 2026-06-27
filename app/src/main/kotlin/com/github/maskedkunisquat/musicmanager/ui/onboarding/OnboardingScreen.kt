@@ -31,7 +31,7 @@ import com.github.maskedkunisquat.musicmanager.ui.theme.RetroTheme
 @Composable
 fun OnboardingScreen(onConfirm: (String) -> Unit) {
     var name by remember { mutableStateOf("") }
-    val canConfirm = name.isNotBlank()
+    val canConfirm = name.trim().isNotBlank()
 
     val confirm = {
         if (canConfirm) onConfirm(name.trim())
