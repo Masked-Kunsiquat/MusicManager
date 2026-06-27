@@ -4,10 +4,10 @@ import com.github.maskedkunisquat.musicmanager.logic.model.MarketState
 import kotlin.random.Random
 
 // Per-tick drift applied to each genre trend. Chosen so a trend starting at 0.5f
-// takes ~25 ticks (≈4 real days at 160 min/tick) to reach an extreme against
-// mean-reversion — slow enough to feel macro, fast enough to matter in a 20-day arc.
-private const val BASE_DRIFT = 0.04f
-private const val REVERSION_STRENGTH = 0.02f  // fraction of distance pulled toward 0.5f per tick
+// takes ~30 ticks (≈30 real hours at 60 min/tick) to reach an extreme against
+// mean-reversion — slow enough to feel macro, fast enough to matter in a 3.75-day arc.
+private const val BASE_DRIFT = 0.015f
+private const val REVERSION_STRENGTH = 0.008f  // fraction of distance pulled toward 0.5f per tick
 private const val EXTREME_THRESHOLD_HIGH = 0.7f
 private const val EXTREME_THRESHOLD_LOW = 0.3f
 

@@ -18,12 +18,14 @@ import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxScreen
 import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxViewModel
 import com.github.maskedkunisquat.musicmanager.ui.labeloffice.LabelIdentityScreen
 import com.github.maskedkunisquat.musicmanager.ui.labeloffice.LabelOfficeScreen
+import com.github.maskedkunisquat.musicmanager.ui.onboarding.OnboardingScreen
 import com.github.maskedkunisquat.musicmanager.ui.press.PressScreen
 import com.github.maskedkunisquat.musicmanager.ui.recap.SeasonRecapScreen
 import com.github.maskedkunisquat.musicmanager.ui.tapedeck.TapeDeckScreen
 import com.github.maskedkunisquat.musicmanager.ui.press.PressViewModel
 
 object Route {
+    const val ONBOARDING = "onboarding"
     const val HOME = "home"
     const val INBOX = "inbox"
     const val CHARTS = "charts"
@@ -49,7 +51,20 @@ fun AppNavGraph(
         if (showRecap) navController.navigate(Route.SEASON_RECAP) { launchSingleTop = true }
     }
 
-    NavHost(navController = navController, startDestination = Route.HOME) {
+    val startDestination = if (viewModel.isWorldInitialized) Route.HOME else Route.ONBOARDING
+    NavHost(navController = navController, startDestination = startDestination) {
+        composable(Route.ONBOARDING) {
+            OnboardingScreen(
+                onConfirm = { name ->
+                    viewModel.initializeWorld(name) {
+                        navController.navigate(Route.HOME) {
+                            popUpTo(Route.ONBOARDING) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
+                }
+            )
+        }
         composable(Route.HOME) {
             HomeScreen(
                 onOpenInbox = { navController.navigate(Route.INBOX) },

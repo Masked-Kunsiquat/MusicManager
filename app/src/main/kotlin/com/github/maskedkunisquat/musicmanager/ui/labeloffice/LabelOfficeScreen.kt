@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -15,11 +17,18 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -27,6 +36,7 @@ import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.LabelState
 import com.github.maskedkunisquat.musicmanager.logic.model.ReputationCommunity
 import com.github.maskedkunisquat.musicmanager.logic.model.SimWorld
+import com.github.maskedkunisquat.musicmanager.logic.model.labelRenameCost
 import com.github.maskedkunisquat.musicmanager.logic.sim.LabelNeedEvaluator
 import com.github.maskedkunisquat.musicmanager.ui.components.RetroButton
 import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxViewModel
@@ -35,11 +45,21 @@ import com.github.maskedkunisquat.musicmanager.ui.theme.RetroTheme
 @Composable
 fun LabelOfficeScreen(viewModel: InboxViewModel, onBack: () -> Unit, onOpenIdentity: () -> Unit) {
     val world by viewModel.world.collectAsStateWithLifecycle()
-    LabelOfficeContent(world = world, onBack = onBack, onOpenIdentity = onOpenIdentity)
+    LabelOfficeContent(
+        world = world,
+        onBack = onBack,
+        onOpenIdentity = onOpenIdentity,
+        onRenameLabel = viewModel::renameLabel
+    )
 }
 
 @Composable
-private fun LabelOfficeContent(world: SimWorld, onBack: () -> Unit, onOpenIdentity: () -> Unit) {
+private fun LabelOfficeContent(
+    world: SimWorld,
+    onBack: () -> Unit,
+    onOpenIdentity: () -> Unit,
+    onRenameLabel: (String) -> Unit
+) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -68,6 +88,8 @@ private fun LabelOfficeContent(world: SimWorld, onBack: () -> Unit, onOpenIdenti
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
+            LabelNameSection(world = world, onRenameLabel = onRenameLabel)
+            Spacer(modifier = Modifier.height(20.dp))
             SectionHeader("FINANCIAL")
             StatusLine(
                 label = "Balance",
@@ -106,6 +128,95 @@ private fun LabelOfficeContent(world: SimWorld, onBack: () -> Unit, onOpenIdenti
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("IDENTITY >")
+            }
+        }
+    }
+}
+
+@Composable
+private fun LabelNameSection(world: SimWorld, onRenameLabel: (String) -> Unit) {
+    var editing by remember { mutableStateOf(false) }
+    var draft by remember { mutableStateOf("") }
+
+    SectionHeader("LABEL NAME")
+
+    if (!editing) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = world.label.name,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            RetroButton(
+                onClick = {
+                    draft = world.label.name
+                    editing = true
+                },
+                filled = false,
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text("RENAME", style = MaterialTheme.typography.labelSmall)
+            }
+        }
+    } else {
+        val cost = labelRenameCost(world.label)
+        val canAfford = world.label.funds >= cost
+        val canConfirm = draft.trim().isNotBlank() && canAfford && draft.trim() != world.label.name
+
+        val confirm = {
+            if (canConfirm) {
+                onRenameLabel(draft.trim())
+                editing = false
+            }
+        }
+
+        OutlinedTextField(
+            value = draft,
+            onValueChange = { draft = it },
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                color = MaterialTheme.colorScheme.onSurface
+            ),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                cursorColor = MaterialTheme.colorScheme.primary
+            ),
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.Words,
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(onDone = { confirm() }),
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "Cost: ${formatDollars(cost)}${if (!canAfford) " — insufficient funds" else ""}",
+            style = MaterialTheme.typography.labelSmall,
+            color = if (canAfford) MaterialTheme.colorScheme.onSurfaceVariant
+                    else MaterialTheme.colorScheme.secondary
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        Row(modifier = Modifier.fillMaxWidth()) {
+            RetroButton(
+                onClick = confirm,
+                filled = true,
+                enabled = canConfirm,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("CONFIRM", style = MaterialTheme.typography.labelSmall)
+            }
+            Spacer(modifier = Modifier.padding(start = 8.dp))
+            RetroButton(
+                onClick = { editing = false },
+                filled = false,
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("CANCEL", style = MaterialTheme.typography.labelSmall)
             }
         }
     }
@@ -259,6 +370,7 @@ private fun LabelOfficePreview() {
     RetroTheme {
         LabelOfficeContent(
             onOpenIdentity = {},
+            onRenameLabel = {},
             world = SimWorld(
                 seed = 1L,
                 currentDay = 42,
@@ -278,6 +390,7 @@ private fun LabelOfficePreview() {
                     funds = 3_200_000L,
                     reputation = ReputationCommunity.entries.associateWith { 0.35f },
                     rosterIds = setOf("a1", "a2"),
+                    name = "Dark Wolves Records",
                     capabilities = setOf(CapabilityType.PUBLICIST)
                 ),
                 market = com.github.maskedkunisquat.musicmanager.logic.model.MarketState(emptyMap()),

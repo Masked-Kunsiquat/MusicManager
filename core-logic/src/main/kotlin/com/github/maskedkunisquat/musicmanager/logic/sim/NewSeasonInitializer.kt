@@ -27,7 +27,8 @@ object NewSeasonInitializer {
                 // Fresh season, fresh goals — re-derive from dimensions, not carried over.
                 activeWants = WorldInitializer.buildArtistWants(artist.dimensions),
                 lastInteractionDay = 0,
-                wantLastSurfacedAt = emptyMap()
+                wantLastSurfacedAt = emptyMap(),
+                needNotifiedAt = emptyMap()
             )
         }
 
@@ -50,14 +51,15 @@ object NewSeasonInitializer {
             intelCache = emptyMap()
         )
 
-        // --- Prospects: fresh pool from the new seed ---
+        // --- Prospects: fresh pool from the new seed, unique adjectives per season ---
         val prospectCount = 6 + rng.nextInt(5)  // 6-10
+        val nextName = WorldInitializer.namePicker(rng)
         val newProspects = (0 until prospectCount).associate { i ->
             val id = "prospect_${newSeed}_$i"
-            id to WorldInitializer.buildProspect(id, rng)
+            id to WorldInitializer.buildProspect(id, nextName(), rng)
         } + run {
             val id = "prospect_${newSeed}_whale"
-            mapOf(id to WorldInitializer.buildUnsignableProspect(id, rng))
+            mapOf(id to WorldInitializer.buildUnsignableProspect(id, nextName(), rng))
         }
 
         // --- Rivals: fresh from new seed (talent landscape shifts each season) ---
@@ -85,7 +87,7 @@ object NewSeasonInitializer {
         val newSeasonState = SeasonState(
             seasonNumber = newSeasonNumber,
             seasonStartTick = 0,
-            seasonEndTick = 180,
+            seasonEndTick = 90,
             startFunds = newFunds,
             startReputation = newLabel.reputation.mapKeys { it.key.name }
         )

@@ -11,7 +11,7 @@ import com.github.maskedkunisquat.musicmanager.worker.TickWorker
  * Debug-only: force a tick catchup immediately.
  *   adb shell am broadcast -a com.github.maskedkunisquat.DEBUG_TICK \
  *       -p com.github.maskedkunisquat.musicmanager
- * Resets last_ticked_at to 0 so TickWorker computes maximum catchup (9 ticks).
+ * Resets last_ticked_at to 0 so TickWorker computes maximum catchup (24 ticks).
  */
 class DebugTickReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {

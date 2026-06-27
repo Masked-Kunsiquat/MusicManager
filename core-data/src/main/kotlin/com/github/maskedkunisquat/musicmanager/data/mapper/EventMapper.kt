@@ -27,7 +27,7 @@ const val EVENT_TYPE_RIVAL_POACH = "rival_poach"
 // per contract, per genre shift, or per scout/prospect pair.
 fun SimEvent.eventSignature(): String = when (this) {
     is SimEvent.NeedUrgent -> "need_urgent:$artistId:${needType.name}"
-    is SimEvent.ContractExpiring -> "contract_expiring:$contractId"
+    is SimEvent.ContractExpiring -> "contract_expiring:$contractId:$daysRemaining"
     is SimEvent.WantSurfaced -> "want_surfaced:$artistId:${wantType.name}"
     is SimEvent.MarketShift -> "market_shift:$genre:$dayOfGame"
     is SimEvent.IntelDrop -> "intel_drop:$genre:$dayOfGame"

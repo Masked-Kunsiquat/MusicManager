@@ -166,8 +166,8 @@ class BroadcastMechanicTest {
     @Test
     fun `WantSurfaced emitted once cadence window has expired`() {
         val want = Want(WantType.RECORD_ALBUM, urgency = 0.9f, expiryDay = null)
-        // currentDay=10, lastSurfaced=5 → gap=5 which is NOT < 5 → emitted
-        val a = artist(activeWants = listOf(want), wantLastSurfacedAt = mapOf("RECORD_ALBUM" to 5))
+        // currentDay=10, lastSurfaced=-2 → gap=12 which is NOT < 12 → emitted
+        val a = artist(activeWants = listOf(want), wantLastSurfacedAt = mapOf("RECORD_ALBUM" to -2))
         val w = world(a)
         assertNotNull("Expected WantSurfaced emitted after cadence window",
             generateEvents(w).filterIsInstance<SimEvent.WantSurfaced>()

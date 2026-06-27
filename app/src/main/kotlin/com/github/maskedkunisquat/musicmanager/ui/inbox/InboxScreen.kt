@@ -245,7 +245,11 @@ private fun urgencyLevel(event: SimEvent): UrgencyLevel = when (event) {
         else                       -> UrgencyLevel.ROUTINE
     }
     is SimEvent.DeadlineMissed   -> UrgencyLevel.CRITICAL
-    is SimEvent.ContractExpiring -> if (event.daysRemaining <= 7) UrgencyLevel.URGENT else UrgencyLevel.ROUTINE
+    is SimEvent.ContractExpiring -> when {
+        event.daysRemaining <= 5  -> UrgencyLevel.CRITICAL
+        event.daysRemaining <= 10 -> UrgencyLevel.URGENT
+        else                      -> UrgencyLevel.ROUTINE
+    }
     is SimEvent.LabelNeedUrgent  -> UrgencyLevel.URGENT
     is SimEvent.RivalPoach       -> UrgencyLevel.URGENT
     else                         -> UrgencyLevel.ROUTINE

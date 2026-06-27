@@ -30,7 +30,7 @@ class NewSeasonInitializerTest {
     private fun baseWorld(
         funds: Long = 100_000_00L,
         artistBalance: Float = 0.6f,
-        contractExpiryDay: Int = 220  // 40 ticks past season end
+        contractExpiryDay: Int = 130  // 40 ticks past season end
     ): SimWorld {
         val artist = ArtistState(
             id = artistId,
@@ -57,7 +57,7 @@ class NewSeasonInitializerTest {
         )
         return SimWorld(
             seed = 42L,
-            currentDay = 180,
+            currentDay = 90,
             artists = mapOf(artistId to artist),
             label = LabelState(
                 funds = funds,
@@ -68,7 +68,7 @@ class NewSeasonInitializerTest {
             ),
             market = MarketState(genreTrends = mapOf("indie-rock" to 0.8f, "pop" to 0.3f)),
             contracts = mapOf(contractId to contract),
-            season = SeasonState(seasonNumber = 1, seasonStartTick = 0, seasonEndTick = 180)
+            season = SeasonState(seasonNumber = 1, seasonStartTick = 0, seasonEndTick = 90)
         )
     }
 
@@ -123,21 +123,21 @@ class NewSeasonInitializerTest {
 
     @Test
     fun `contract expiryDay is rebased to new season start`() {
-        // contract expires at tick 220, season ends at 180 → 40 ticks remaining → expiryDay=40
-        val next = NewSeasonInitializer.advance(baseWorld(contractExpiryDay = 220))
+        // contract expires at tick 130, season ends at 90 → 40 ticks remaining → expiryDay=40
+        val next = NewSeasonInitializer.advance(baseWorld(contractExpiryDay = 130))
         assertEquals(40, next.contracts[contractId]!!.expiryDay)
     }
 
     @Test
     fun `lapsed contract gets grace period of 1 tick`() {
-        // contract already expired (expiryDay = 160, before season end at 180)
-        val next = NewSeasonInitializer.advance(baseWorld(contractExpiryDay = 160))
+        // contract already expired (expiryDay = 70, before season end at 90)
+        val next = NewSeasonInitializer.advance(baseWorld(contractExpiryDay = 70))
         assertEquals(1, next.contracts[contractId]!!.expiryDay)
     }
 
     @Test
     fun `rebased contract startDay is 0`() {
-        val next = NewSeasonInitializer.advance(baseWorld(contractExpiryDay = 220))
+        val next = NewSeasonInitializer.advance(baseWorld(contractExpiryDay = 130))
         assertEquals(0, next.contracts[contractId]!!.startDay)
     }
 

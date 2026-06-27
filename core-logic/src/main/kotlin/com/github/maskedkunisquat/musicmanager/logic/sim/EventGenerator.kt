@@ -14,17 +14,22 @@ import kotlin.math.abs
 import kotlin.random.Random
 
 private const val NEED_URGENT_THRESHOLD = 0.3f
-private const val CONTRACT_EXPIRY_WARNING_DAYS = 30
-private const val MARKET_SHIFT_THRESHOLD = 0.08f
+// Suppress repeated need warnings for this many ticks after a notification fires (~15 real hours).
+private const val NEED_URGENT_COOLDOWN = 15
+// Contract expiry warnings fire at exactly these tick thresholds — one email per threshold.
+private val CONTRACT_EXPIRY_THRESHOLDS = setOf(20, 10, 5)
+private const val MARKET_SHIFT_THRESHOLD = 0.03f
+// At most this many market shift events per tick — suppresses noise when all genres move together.
+private const val MARKET_SHIFT_MAX_PER_TICK = 2
 private const val INTEL_BASE_CHANCE = 0.25f
 // Probability that an IntelDrop targets a roster genre (vs. a random market genre).
 private const val INTEL_ROSTER_GENRE_WEIGHT = 0.70f
-// Re-offer a deferred capability after this many ticks (~2.2 real days).
+// Re-offer a deferred capability after this many ticks (~20 real hours).
 private const val CAPABILITY_NOTICE_COOLDOWN = 20
-// Suppress repeated label-need warnings for this many ticks (~27 real hours).
+// Suppress repeated label-need warnings for this many ticks (~10 real hours).
 private const val LABEL_NEED_COOLDOWN = 10
-// Minimum ticks before the same want re-surfaces for the same artist.
-private const val WANT_RESURFACE_COOLDOWN = 5
+// Minimum ticks before the same want re-surfaces for the same artist (~12 real hours).
+private const val WANT_RESURFACE_COOLDOWN = 12
 // Tape deck: how often leads surface, cap of concurrent visible leads.
 private const val LEAD_SURFACE_INTERVAL = 3
 private const val LEAD_SURFACE_CAP = 3
@@ -75,6 +80,10 @@ internal fun generateEvents(
 private fun needEvents(artist: ArtistState, day: Int): List<SimEvent> =
     artist.needs.values
         .filter { it.value < NEED_URGENT_THRESHOLD }
+        .filter { need ->
+            val lastNoticed = artist.needNotifiedAt[need.type.name]
+            lastNoticed == null || day - lastNoticed >= NEED_URGENT_COOLDOWN
+        }
         .map { need ->
             SimEvent.NeedUrgent(
                 artistId = artist.id,
@@ -88,7 +97,7 @@ private fun contractEvents(artist: ArtistState, world: SimWorld): List<SimEvent>
     val contractId = artist.contractId ?: return emptyList()
     val contract = world.contracts[contractId] ?: return emptyList()
     val daysRemaining = contract.expiryDay - world.currentDay
-    if (daysRemaining !in 1..CONTRACT_EXPIRY_WARNING_DAYS) return emptyList()
+    if (daysRemaining !in CONTRACT_EXPIRY_THRESHOLDS) return emptyList()
     return listOf(
         SimEvent.ContractExpiring(
             artistId = artist.id,
@@ -118,15 +127,14 @@ private fun wantEvents(artist: ArtistState, day: Int): List<SimEvent> =
 private fun marketShiftEvents(world: SimWorld, previousMarket: MarketState): List<SimEvent> =
     world.market.genreTrends.mapNotNull { (genre, currentTrend) ->
         val previousTrend = previousMarket.genreTrends[genre] ?: return@mapNotNull null
-        if (abs(currentTrend - previousTrend) >= MARKET_SHIFT_THRESHOLD) {
-            SimEvent.MarketShift(
-                genre = genre,
-                previousTrend = previousTrend,
-                currentTrend = currentTrend,
-                dayOfGame = world.currentDay
-            )
+        val delta = abs(currentTrend - previousTrend)
+        if (delta >= MARKET_SHIFT_THRESHOLD) {
+            delta to SimEvent.MarketShift(genre, previousTrend, currentTrend, world.currentDay)
         } else null
     }
+        .sortedByDescending { it.first }
+        .take(MARKET_SHIFT_MAX_PER_TICK)
+        .map { it.second }
 
 private fun intelDropEvents(world: SimWorld, rng: Random, labelIdentity: LabelIdentity? = null): List<SimEvent> {
     if (rng.nextFloat() > INTEL_BASE_CHANCE) return emptyList()
@@ -207,7 +215,7 @@ private fun leadSurfacedEvents(world: SimWorld): List<SimEvent> {
     }
 }
 
-private val DEADLINE_APPROACHING_THRESHOLDS = setOf(20, 10, 5)
+private val DEADLINE_APPROACHING_THRESHOLDS = setOf(10, 5, 2)
 
 private fun deadlineEvents(world: SimWorld): List<SimEvent> = buildList {
     for ((_, deadline) in world.deadlines) {

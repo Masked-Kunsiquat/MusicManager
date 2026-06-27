@@ -57,8 +57,8 @@ class EventGeneratorTest {
 
     @Test
     fun `MarketShift not emitted when movement is below THRESHOLD`() {
-        val previous = MarketState(mapOf("indie-rock" to 0.47f))
-        val current = world(genreTrends = mapOf("indie-rock" to 0.50f))  // delta = 0.03f < 0.08f
+        val previous = MarketState(mapOf("indie-rock" to 0.48f))
+        val current = world(genreTrends = mapOf("indie-rock" to 0.50f))  // delta = 0.02f < 0.03f
         val events = generateEvents(current, previous)
         assertTrue(events.none { it is SimEvent.MarketShift })
     }

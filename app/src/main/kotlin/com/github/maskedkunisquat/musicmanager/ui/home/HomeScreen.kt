@@ -47,7 +47,7 @@ fun HomeScreen(
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "DASHBOARD",
+            text = world.label.name.uppercase(),
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.primary
         )

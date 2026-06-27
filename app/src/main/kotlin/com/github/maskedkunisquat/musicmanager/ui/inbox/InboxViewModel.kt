@@ -69,14 +69,39 @@ class InboxViewModel(
     // ConcurrentHashMap-backed so add/remove are thread-safe if ever called off the main thread.
     private val inFlightOptions: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
+    val isWorldInitialized: Boolean = repository.isWorldInitialized
+
     init {
+        if (repository.isWorldInitialized) {
+            viewModelScope.launch {
+                // Seed once the engine settles. initialize() sets LOADING eagerly before
+                // launching the background job, so this correctly waits for READY (Gemma)
+                // or IDLE/ERROR (model not downloaded or failed — stub fallback).
+                // DOWNLOADING is excluded too: model is on the wire, not usable yet.
+                modelLoadState.first { it != ModelLoadState.LOADING && it != ModelLoadState.DOWNLOADING }
+                repository.initializeIfEmpty(days = 2)
+                _world.value = repository.world
+            }
+        }
+    }
+
+    fun initializeWorld(labelName: String, onSuccess: () -> Unit = {}) {
         viewModelScope.launch {
-            // Seed once the engine settles. initialize() sets LOADING eagerly before
-            // launching the background job, so this correctly waits for READY (Gemma)
-            // or IDLE/ERROR (model not downloaded or failed — stub fallback).
-            // DOWNLOADING is excluded too: model is on the wire, not usable yet.
             modelLoadState.first { it != ModelLoadState.LOADING && it != ModelLoadState.DOWNLOADING }
-            repository.initializeIfEmpty(days = 2)
+            runCatching {
+                repository.initializeWorld(labelName)
+                _world.value = repository.world
+            }.onSuccess {
+                onSuccess()
+            }.onFailure { e ->
+                Log.e(TAG, "initializeWorld failed", e)
+            }
+        }
+    }
+
+    fun renameLabel(name: String) {
+        viewModelScope.launch {
+            repository.renameLabel(name)
             _world.value = repository.world
         }
     }

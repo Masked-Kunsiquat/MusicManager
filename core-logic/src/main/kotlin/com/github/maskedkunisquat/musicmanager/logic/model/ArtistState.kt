@@ -17,5 +17,7 @@ data class ArtistState(
     // WantType.name → day the want was last surfaced; prevents re-surfacing within cooldown window.
     val wantLastSurfacedAt: Map<String, Int> = emptyMap(),
     // Day of the last player-resolved event touching this artist; drives recency descriptor.
-    val lastInteractionDay: Int = 0
+    val lastInteractionDay: Int = 0,
+    // NeedType.name → day the need was last notified; prevents re-emission within cooldown window.
+    val needNotifiedAt: Map<String, Int> = emptyMap()
 )

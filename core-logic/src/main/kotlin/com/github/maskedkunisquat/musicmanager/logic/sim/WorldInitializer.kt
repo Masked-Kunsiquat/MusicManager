@@ -27,8 +27,18 @@ object WorldInitializer {
 
     private const val CENTS_PER_DOLLAR = 100L
     private val GENRES = listOf("indie-rock", "pop", "hip-hop", "electronic", "folk", "r&b")
-    private val ADJECTIVES = listOf("Young", "Dark", "Golden", "Wild", "Restless", "Silent", "Bright", "New")
-    private val NOUNS = listOf("Lions", "Birds", "Waves", "Stars", "Flowers", "Rivers", "Tides", "Ghosts")
+    private val ADJECTIVES = listOf(
+        "Young", "Dark", "Golden", "Wild", "Restless", "Silent", "Bright", "Pale",
+        "Hollow", "Tender", "Velvet", "Neon", "Strange", "Heavy", "Distant", "Lucid",
+        "Coastal", "Scattered", "Faded", "Stolen", "Electric", "Bare", "Slow", "Soft",
+        "Scarlet", "Cold", "Tired", "Narrow"
+    )
+    private val NOUNS = listOf(
+        "Lions", "Birds", "Waves", "Stars", "Flowers", "Rivers", "Tides", "Ghosts",
+        "Sparks", "Roads", "Echoes", "Horses", "Mirrors", "Teeth", "Radio", "Hours",
+        "Towers", "Wolves", "Saints", "Wires", "Shadows", "Embers", "Glass", "Smoke",
+        "Clocks", "Trails", "Bones", "Doors"
+    )
     private val SCOUT_FIRST = listOf("Marcus", "Nina", "Dara", "Leon", "Priya", "Eli", "Tanya", "Jax")
     private val SCOUT_LAST = listOf("Cross", "Webb", "Reid", "Park", "Osei", "Vance", "Cole", "Marsh")
     private val RIVAL_NAMES = listOf("Mercury Sound", "Parallax Records", "Horizon Group", "Crestfall", "Vertex Label", "Meridian Music")
@@ -41,27 +51,28 @@ object WorldInitializer {
         "r&b"        to listOf("late-night smooth r&b", "neo-soul warmth", "gospel-tinged r&b", "bedroom r&b haze")
     )
 
-    fun initializeWorld(seed: Long): SimWorld {
+    fun initializeWorld(seed: Long, labelName: String = "Unnamed Label"): SimWorld {
         val rng = Random(seed)
         val artistCount = 3 + rng.nextInt(3) // 3-5
+        val nextName = namePicker(rng)
 
         val contracts = mutableMapOf<String, Contract>()
         val artists = (0 until artistCount).associate { i ->
             val artistId = "artist_${seed}_$i"
             val contractId = "contract_${seed}_$i"
             contracts[contractId] = buildContract(artistId, contractId, rng)
-            artistId to buildArtist(artistId, contractId, rng)
+            artistId to buildArtist(artistId, nextName(), contractId, rng)
         }
 
         val prospectCount = 6 + rng.nextInt(5) // 6-10
         val prospects = (0 until prospectCount).associate { i ->
             val id = "prospect_${seed}_$i"
-            id to buildProspect(id, rng)
+            id to buildProspect(id, nextName(), rng)
         } + run {
             // One permanently unsignable prospect per world -- high signabilityScore so scouts
             // surface them often, but SignArtist always bounces. Intended as a recurring tease.
             val id = "prospect_${seed}_whale"
-            mapOf(id to buildUnsignableProspect(id, rng))
+            mapOf(id to buildUnsignableProspect(id, nextName(), rng))
         }
 
         // Two scouts, staggered by half the report interval so reports don't burst together.
@@ -76,7 +87,7 @@ object WorldInitializer {
         }
 
         val deadlines = buildDeadlines(artists.keys, rng, seasonNumber = 1)
-        val label = buildLabel(artists.keys.toSet(), rng)
+        val label = buildLabel(artists.keys.toSet(), rng, labelName)
 
         return SimWorld(
             seed = seed,
@@ -91,7 +102,7 @@ object WorldInitializer {
             season = SeasonState(
                 seasonNumber = 1,
                 seasonStartTick = 0,
-                seasonEndTick = 180,
+                seasonEndTick = 90,
                 startFunds = label.funds,
                 startReputation = label.reputation.mapKeys { it.key.name }
             ),
@@ -99,8 +110,17 @@ object WorldInitializer {
         )
     }
 
-    private fun buildArtist(id: String, contractId: String, rng: Random): ArtistState {
-        val name = "${ADJECTIVES.random(rng)} ${NOUNS.random(rng)}"
+    // Returns a function that vends unique-adjective names for one world-generation pass.
+    // Adjectives are drawn without replacement so no two names in the same world share
+    // a first word. Both lists are shuffled from the seed, so results are deterministic.
+    internal fun namePicker(rng: Random): () -> String {
+        val adjs = ADJECTIVES.shuffled(rng)
+        val nouns = NOUNS.shuffled(rng)
+        var idx = 0
+        return { "${adjs[idx % adjs.size]} ${nouns[idx++ % nouns.size]}" }
+    }
+
+    private fun buildArtist(id: String, name: String, contractId: String, rng: Random): ArtistState {
         val genre = GENRES.random(rng)
         val dimensions = ArtistDimensions(
             confidence = rng.nextFloat(),
@@ -112,7 +132,7 @@ object WorldInitializer {
             NeedState(
                 type = needType,
                 value = 0.7f + rng.nextFloat() * 0.3f,
-                decayRate = 0.02f + rng.nextFloat() * 0.03f
+                decayRate = 0.007f + rng.nextFloat() * 0.010f
             )
         }
         return ArtistState(
@@ -155,15 +175,16 @@ object WorldInitializer {
         id = contractId,
         artistId = artistId,
         startDay = 0,
-        expiryDay = 180 + rng.nextInt(181),             // 6-12 months of ticks
+        expiryDay = 60 + rng.nextInt(31),               // 60-90 ticks (spans ~1 season)
         revenueSplit = RevenueSplit(artistPercent = 40 + rng.nextInt(21)),  // 40-60%
         creativeControl = CreativeControl.entries.random(rng)
     )
 
-    private fun buildLabel(rosterIds: Set<String>, rng: Random): LabelState = LabelState(
+    private fun buildLabel(rosterIds: Set<String>, rng: Random, name: String = "Unnamed Label"): LabelState = LabelState(
         funds = rng.nextLong(50_000 * CENTS_PER_DOLLAR, 100_000 * CENTS_PER_DOLLAR),
         reputation = ReputationCommunity.entries.associateWith { 0.3f + rng.nextFloat() * 0.2f },
         rosterIds = rosterIds,
+        name = name,
         tasteVector = GENRES.associateWith { 0.5f }
     )
 
@@ -171,8 +192,7 @@ object WorldInitializer {
         genreTrends = GENRES.associateWith { rng.nextFloat() }
     )
 
-    internal fun buildProspect(id: String, rng: Random): ProspectState {
-        val name = "${ADJECTIVES.random(rng)} ${NOUNS.random(rng)}"
+    internal fun buildProspect(id: String, name: String, rng: Random): ProspectState {
         val genre = GENRES.random(rng)
         val dims = ArtistDimensions(
             confidence = rng.nextFloat(),
@@ -190,8 +210,7 @@ object WorldInitializer {
             signabilityScore = signabilityScore, demo = demo)
     }
 
-    internal fun buildUnsignableProspect(id: String, rng: Random): ProspectState {
-        val name = "${ADJECTIVES.random(rng)} ${NOUNS.random(rng)}"
+    internal fun buildUnsignableProspect(id: String, name: String, rng: Random): ProspectState {
         val genre = GENRES.random(rng)
         val dims = ArtistDimensions(
             confidence = 0.7f + rng.nextFloat() * 0.3f,
@@ -232,8 +251,8 @@ object WorldInitializer {
             for (i in 0 until count) {
                 val type = shuffledTypes[i]
                 val id = "deadline:${artistId}:${type.name}:$seasonNumber"
-                // 60-160 ticks: spread across season, biased away from the very start and end.
-                val dueTick = 60 + rng.nextInt(101)
+                // 20-75 ticks: spread across 90-tick season, biased away from the very start and end.
+                val dueTick = 20 + rng.nextInt(56)
                 result[id] = Deadline(id = id, artistId = artistId, type = type, dueTick = dueTick)
             }
         }

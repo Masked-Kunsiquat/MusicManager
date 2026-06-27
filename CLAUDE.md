@@ -94,11 +94,12 @@ and only re-runs inference for pre-migration rows or deserialization failures.
 There is no Hilt/WorkerFactory. `TickWorker` casts `applicationContext` directly.
 Don't introduce a custom `WorkerFactory` just to inject — the cast is intentional.
 
-**1 tick = 160 min (2h 40min). WorkManager fires every hour.**
+**1 tick = 60 min (1h). WorkManager fires every hour.**
 `TickWorker` uses elapsed-time logic (SharedPreferences `last_ticked_at`) rather
-than "one fire = one tick". Catchup is capped at 9 ticks (≈ 24h) to avoid flooding
+than "one fire = one tick". Catchup is capped at 24 ticks (≈ 24h) to avoid flooding
 the inbox after a long absence. `TICK_INTERVAL_MS` is the source of truth — don't
-hardcode 160 min elsewhere. A 180-tick contract expires in ~20 real days.
+hardcode 60 min elsewhere. Season = 90 ticks ≈ 3.75 real days. Contracts expire
+in 60–90 ticks (≈ 2.5–3.75 real days).
 
 ---
 
