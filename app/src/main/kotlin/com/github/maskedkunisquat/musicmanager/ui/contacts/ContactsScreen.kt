@@ -82,7 +82,9 @@ fun ContactsScreen(viewModel: InboxViewModel, onBack: () -> Unit) {
                         currentDay = world.currentDay,
                         isExpanded = isExpanded,
                         history = artistHistories[artist.id],
-                        onToggle = { expandedId = if (isExpanded) null else artist.id }
+                        canCheckIn = viewModel.canCheckIn(artist.id),
+                        onToggle = { expandedId = if (isExpanded) null else artist.id },
+                        onCheckIn = { viewModel.checkInWithArtist(artist.id) }
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 }
@@ -97,7 +99,9 @@ private fun ContactRow(
     currentDay: Int,
     isExpanded: Boolean,
     history: List<ArtistInteractionEntry>?,
-    onToggle: () -> Unit
+    canCheckIn: Boolean,
+    onToggle: () -> Unit,
+    onCheckIn: () -> Unit
 ) {
     val daysSince = currentDay - artist.lastInteractionDay
     val recency = recencyDescriptor(daysSince)
@@ -171,6 +175,14 @@ private fun ContactRow(
                         Spacer(modifier = Modifier.height(6.dp))
                     }
                 }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+            RetroButton(
+                onClick = onCheckIn,
+                enabled = canCheckIn
+            ) {
+                Text(if (canCheckIn) "REACH OUT" else "RECENTLY CONTACTED")
             }
         }
     }

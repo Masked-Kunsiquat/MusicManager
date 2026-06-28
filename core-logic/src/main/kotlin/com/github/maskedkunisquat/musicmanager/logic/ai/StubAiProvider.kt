@@ -1,6 +1,7 @@
 package com.github.maskedkunisquat.musicmanager.logic.ai
 
 import com.github.maskedkunisquat.musicmanager.logic.event.SimEvent
+import com.github.maskedkunisquat.musicmanager.logic.model.ArtistInteractionEntry
 import com.github.maskedkunisquat.musicmanager.logic.model.ArtistState
 import com.github.maskedkunisquat.musicmanager.logic.model.CapabilityType
 import com.github.maskedkunisquat.musicmanager.logic.model.CreativeControl
@@ -46,13 +47,18 @@ class StubAiProvider : LabelAiProvider {
 
     private fun LabelAesthetic.label(): String = name.lowercase()
 
-    override suspend fun generateEmail(event: SimEvent, world: SimWorld): GeneratedEmail {
+    override suspend fun generateEmail(event: SimEvent, world: SimWorld, history: List<ArtistInteractionEntry>): GeneratedEmail {
         val artist = world.artists[event.artistId]
         val artistName = artist?.name ?: "your artist"
         val loyalty = artist?.dimensions?.loyalty ?: 0.5f
         val confidence = artist?.dimensions?.confidence ?: 0.5f
         val volatility = artist?.dimensions?.volatility ?: 0.5f
-        val (subject, body) = prose(event, artistName, loyalty, confidence, volatility, world)
+        // CheckIn prose is history-aware (ongoing conversation); other events derive context from state alone.
+        val (subject, body) = if (event is SimEvent.CheckIn) {
+            checkInProse(event, world, history)
+        } else {
+            prose(event, artistName, loyalty, confidence, volatility, world)
+        }
         return GeneratedEmail(subject = subject, body = body, options = options(event, world))
     }
 
@@ -110,6 +116,7 @@ class StubAiProvider : LabelAiProvider {
         is SimEvent.CapabilityUnlockable -> capabilityUnlockableProse(event)
         is SimEvent.RivalSigning -> rivalSigningProse(event)
         is SimEvent.LeadSurfaced -> Pair("", "")  // TapeDeck only -- no email rendered
+        is SimEvent.CheckIn -> checkInProse(event, world)
         is SimEvent.RivalPoach -> rivalPoachProse(event)
         is SimEvent.DeadlineApproaching -> deadlineApproachingProse(event, world)
         is SimEvent.DeadlineMissed -> deadlineMissedProse(event, world)
@@ -379,6 +386,7 @@ class StubAiProvider : LabelAiProvider {
             is SimEvent.CapabilityUnlockable -> capabilityUnlockableOptions(event)
             is SimEvent.RivalSigning -> rivalSigningOptions(event)
             is SimEvent.LeadSurfaced -> leadSurfacedOptions(event)
+            is SimEvent.CheckIn -> checkInOptions(event, world)
             is SimEvent.RivalPoach -> rivalPoachOptions(event)
             is SimEvent.DeadlineApproaching -> deadlineApproachingOptions(event, world)
             is SimEvent.DeadlineMissed -> deadlineMissedOptions(event, world)
@@ -930,6 +938,64 @@ class StubAiProvider : LabelAiProvider {
                 )
             }
         }
+
+    // --- Check-in (player-initiated outreach) ---
+
+    private fun checkInProse(event: SimEvent.CheckIn, world: SimWorld, history: List<ArtistInteractionEntry> = emptyList()): Pair<String, String> {
+        val artist = world.artists[event.artistId]
+        val name = artist?.name ?: "your artist"
+        val loyalty = artist?.dimensions?.loyalty ?: 0.5f
+        val genre = artist?.genre ?: "music"
+        val s = signing(name, loyalty)
+        val lowestNeed = artist?.needs?.values?.minByOrNull { it.value }
+        val needRef = when {
+            lowestNeed != null && lowestNeed.value < 0.3f -> when (lowestNeed.type) {
+                NeedType.CREATIVE_FULFILLMENT -> " I've been craving some real creative space lately."
+                NeedType.FINANCIAL_SECURITY   -> " Things have been tighter than I'd like financially."
+                NeedType.RECOGNITION          -> " I've had some thoughts about visibility I'd love to talk through."
+                NeedType.BELONGING            -> " Glad you reached out — been feeling a bit disconnected."
+                NeedType.AUTONOMY             -> " There's some creative direction stuff I'd love to get into."
+            }
+            else -> ""
+        }
+        // If the label previously committed real resources, acknowledge the follow-through.
+        val historyRef = history.lastOrNull()?.takeIf {
+            "invest" in it.choiceMade.lowercase() || "resources" in it.choiceMade.lowercase()
+        }?.let { " Glad you've been putting real effort in." } ?: ""
+        return when {
+            loyalty >= 0.65f -> Pair(
+                "re: checking in",
+                "Hey — really good to hear from you.$needRef$historyRef The $genre work is coming together and I'm feeling " +
+                "good about the direction. Would love to connect and talk through where things are headed.$s"
+            )
+            loyalty >= 0.35f -> Pair(
+                "hey",
+                "Thanks for checking in.$needRef$historyRef Things are moving — nothing major to flag, just heads down on the " +
+                "work. Let me know if there's anything specific you wanted to get into.$s"
+            )
+            else -> Pair(
+                "got your message",
+                "Got your message.$needRef$historyRef Working through some things. Keeping my head down for now but it's good " +
+                "to know you're still paying attention.$s"
+            )
+        }
+    }
+
+    private fun checkInOptions(event: SimEvent.CheckIn, world: SimWorld): List<ResponseOption> {
+        val a = event.artistId
+        val lowestNeed = world.artists[a]?.needs?.values?.minByOrNull { it.value }
+        return buildList {
+            add(option("$a:checkin_ack", "Good to hear it — let's keep the momentum going",
+                listOf(RC(a, +0.04f))))
+            if (lowestNeed != null && lowestNeed.value < 0.50f) {
+                add(option("$a:checkin_invest", "Let's put some real resources into this cycle",
+                    listOf(NC(a, lowestNeed.type, +0.12f), RC(a, +0.06f)),
+                    cost = 500 * CENTS))
+            }
+            add(option("$a:checkin_meetup", "Set up a proper sit-down soon",
+                listOf(RC(a, +0.08f))))
+        }
+    }
 
     private fun option(id: String, text: String, effects: List<StateEffect>, cost: Long = 0L) =
         ResponseOption(id = id, text = text, effects = effects, costFunds = cost)

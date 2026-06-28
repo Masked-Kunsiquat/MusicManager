@@ -28,6 +28,7 @@ import com.github.maskedkunisquat.musicmanager.logic.sim.LabelIdentityEvaluator
 import com.github.maskedkunisquat.musicmanager.logic.sim.NewSeasonInitializer
 import com.github.maskedkunisquat.musicmanager.logic.sim.SeasonSummaryEvaluator
 import com.github.maskedkunisquat.musicmanager.logic.sim.SimEngine
+import com.github.maskedkunisquat.musicmanager.logic.sim.PASS_LEAD_COOLDOWN
 import com.github.maskedkunisquat.musicmanager.logic.sim.WorldInitializer
 import com.github.maskedkunisquat.musicmanager.logic.sim.applyResponse
 import kotlinx.coroutines.Dispatchers
@@ -59,6 +60,9 @@ class SimRepositoryImpl(
     private val tickMutex = Mutex()
     private var startupChecksRan = false
     private val json = Json { ignoreUnknownKeys = true }
+
+    // Must match EventGenerator.LEAD_SURFACE_CAP — controls how many leads can be on the deck.
+    private companion object { const val MAX_SURFACED_LEADS = 3 }
 
     override fun observeUnresolved(): Flow<List<InboxItem>> =
         dao.observeUnresolved().map { entities -> entities.mapNotNull { it.toInboxItemOrNull() } }
@@ -128,9 +132,8 @@ class SimRepositoryImpl(
         result.events
             .filter { it.eventSignature() !in queued }
             .forEach { event ->
-                // Phase 2: pass the world snapshot at the time of the event, not the post-tick world.
-                // Needs/dimensions don't tick yet so this is benign in Phase 1.
-                val email = aiProvider.generateEmail(event, world)
+                val history = event.artistId?.let { getArtistHistory(it) } ?: emptyList()
+                val email = aiProvider.generateEmail(event, world, history)
                 dao.insert(event.toEntity(email))
             }
         // Persist world after events are in the DB. If killed between these two writes the world
@@ -358,6 +361,36 @@ class SimRepositoryImpl(
         dao.markResolved(seasonEndEntity.id, "season_advanced", now)
     }
 
+    override suspend fun checkInWithArtist(artistId: String) = tickMutex.withLock {
+        if (artistId !in world.label.rosterIds) return@withLock
+        val artist = world.artists[artistId] ?: return@withLock
+        if (world.currentDay - artist.lastInteractionDay < SimEvent.CheckIn.COOLDOWN_TICKS) return@withLock
+        val sig = "check_in:$artistId"
+        val hasPending = dao.getUnresolved()
+            .mapNotNull { it.toSimEventOrNull() }
+            .any { it.eventSignature() == sig }
+        if (hasPending) return@withLock
+        val event = SimEvent.CheckIn(artistId, world.currentDay)
+        val history = getArtistHistory(artistId)
+        val email = aiProvider.generateEmail(event, world, history)
+        dao.insert(event.toEntity(email))
+    }
+
+    override suspend fun requestLead(prospectId: String) = tickMutex.withLock {
+        if (prospectId !in world.prospects) return@withLock
+        if (prospectId in world.surfacedLeads) return@withLock
+        if (prospectId in world.unavailableProspects) return@withLock
+        if (prospectId in world.activeNegotiations) return@withLock
+        if (world.passedLeads[prospectId]?.let { world.currentDay - it < PASS_LEAD_COOLDOWN } == true) return@withLock
+        if (world.surfacedLeads.size >= MAX_SURFACED_LEADS) return@withLock
+        val event = SimEvent.LeadSurfaced(prospectId, world.currentDay)
+        // Generate email before mutating world so a failure leaves state unchanged.
+        val email = aiProvider.generateEmail(event, world)
+        world = world.copy(surfacedLeads = world.surfacedLeads + prospectId)
+        withContext(Dispatchers.IO) { saveWorld(world) }
+        dao.insert(event.toEntity(email))
+    }
+
     override suspend fun resolveEvent(eventId: String, option: ResponseOption) = tickMutex.withLock {
         val (newWorld, injectedEvents) = applyResponse(world, option)
         world = newWorld
@@ -368,8 +401,27 @@ class SimRepositoryImpl(
         val now = System.currentTimeMillis()
         // Pre-compute entities outside the transaction — AI inference must not run inside it.
         val responseEntity = option.toResponseEntity(eventId, world.currentDay)
+        // responseEntity isn't in the DB yet when getArtistHistory() runs, so follow-up emails
+        // would miss the choice that triggered them. Synthesize an entry and prepend it for
+        // any follow-up that targets the same artist as the original event.
+        val originalEvent = dao.getById(eventId)
+        val originalArtistId = originalEvent?.toSimEventOrNull()?.artistId
+        val currentChoiceEntry = if (originalEvent != null && originalArtistId != null) {
+            val subject = originalEvent.emailSubject.ifBlank { null }
+            if (subject != null) ArtistInteractionEntry(
+                day = world.currentDay,
+                eventSummary = subject,
+                choiceMade = option.text
+            ) else null
+        } else null
         val injectedEntities = injectedEvents.map { event ->
-            event.toEntity(aiProvider.generateEmail(event, world))
+            val baseHistory = event.artistId?.let { getArtistHistory(it) } ?: emptyList()
+            val history = if (currentChoiceEntry != null && event.artistId == originalArtistId) {
+                baseHistory + currentChoiceEntry
+            } else {
+                baseHistory
+            }
+            event.toEntity(aiProvider.generateEmail(event, world, history))
         }
         dao.resolveWithFollowUps(eventId, option.id, now, responseEntity, injectedEntities)
     }
