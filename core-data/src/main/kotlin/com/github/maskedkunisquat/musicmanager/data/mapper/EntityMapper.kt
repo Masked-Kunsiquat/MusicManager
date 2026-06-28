@@ -128,6 +128,10 @@ fun EventLogEntity.toSimEventOrNull(): SimEvent? = try {
             seasonNumber = json["seasonNumber"]!!.jsonPrimitive.int,
             dayOfGame = dayOfGame
         )
+        "check_in" -> SimEvent.CheckIn(
+            artistId = json["artistId"]!!.jsonPrimitive.content,
+            dayOfGame = dayOfGame
+        )
         else -> null
     }
 } catch (_: Exception) {

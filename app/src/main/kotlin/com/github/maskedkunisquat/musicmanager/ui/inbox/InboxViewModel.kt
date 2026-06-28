@@ -123,6 +123,21 @@ class InboxViewModel(
         _world.value = repository.world
     }
 
+    fun checkInWithArtist(artistId: String) {
+        viewModelScope.launch {
+            runCatching { repository.checkInWithArtist(artistId) }
+                .onFailure { e -> Log.e(TAG, "checkInWithArtist failed for $artistId", e) }
+        }
+    }
+
+    fun requestLead(prospectId: String) {
+        viewModelScope.launch {
+            runCatching { repository.requestLead(prospectId) }
+                .onSuccess { _world.value = repository.world }
+                .onFailure { e -> Log.e(TAG, "requestLead failed for $prospectId", e) }
+        }
+    }
+
     fun markViewed(eventId: String) {
         viewModelScope.launch { repository.markViewed(eventId) }
     }

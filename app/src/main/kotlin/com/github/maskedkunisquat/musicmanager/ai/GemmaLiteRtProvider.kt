@@ -352,6 +352,26 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
                 }
                 append("Write a scout report about $pName, a $pGenre artist. Your read: $tier.\n\n")
             }
+            is SimEvent.CheckIn -> {
+                append("Write a casual reply to your label manager who just reached out to check in on you.\n\n")
+                val balance = artist?.relationshipBalance ?: 0f
+                when {
+                    balance > 0.3f  -> append("The relationship is solid — your tone is warm and genuine. ")
+                    balance < -0.2f -> append("The relationship has been strained. Keep your reply brief and measured. ")
+                    else            -> append("Be professional but real. ")
+                }
+                val lowestNeed = artist?.needs?.values?.minByOrNull { it.value }
+                if (lowestNeed != null && lowestNeed.value < 0.3f) {
+                    val topic = when (lowestNeed.type) {
+                        NeedType.CREATIVE_FULFILLMENT -> "needing more creative space"
+                        NeedType.FINANCIAL_SECURITY   -> "the financial situation being tight"
+                        NeedType.RECOGNITION          -> "wanting more visibility and press coverage"
+                        NeedType.BELONGING            -> "feeling a bit disconnected from the label"
+                        NeedType.AUTONOMY             -> "wanting more control over creative direction"
+                    }
+                    append("Mention that $topic has been on your mind.\n\n")
+                }
+            }
             is SimEvent.LeadSurfaced,
             is SimEvent.SeasonEnded -> Unit
         }

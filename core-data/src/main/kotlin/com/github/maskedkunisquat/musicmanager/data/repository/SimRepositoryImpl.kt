@@ -60,6 +60,9 @@ class SimRepositoryImpl(
     private var startupChecksRan = false
     private val json = Json { ignoreUnknownKeys = true }
 
+    // Must match EventGenerator.LEAD_SURFACE_CAP — controls how many leads can be on the deck.
+    private companion object { const val MAX_SURFACED_LEADS = 3 }
+
     override fun observeUnresolved(): Flow<List<InboxItem>> =
         dao.observeUnresolved().map { entities -> entities.mapNotNull { it.toInboxItemOrNull() } }
 
@@ -355,6 +358,31 @@ class SimRepositoryImpl(
             withContext(Dispatchers.IO) { saveWorld(world) }
         }
         dao.markResolved(seasonEndEntity.id, "season_advanced", now)
+    }
+
+    override suspend fun checkInWithArtist(artistId: String) = tickMutex.withLock {
+        if (artistId !in world.label.rosterIds) return@withLock
+        val sig = "check_in:$artistId"
+        val hasPending = dao.getUnresolved()
+            .mapNotNull { it.toSimEventOrNull() }
+            .any { it.eventSignature() == sig }
+        if (hasPending) return@withLock
+        val event = SimEvent.CheckIn(artistId, world.currentDay)
+        val history = getArtistHistory(artistId)
+        val email = aiProvider.generateEmail(event, world, history)
+        dao.insert(event.toEntity(email))
+    }
+
+    override suspend fun requestLead(prospectId: String) = tickMutex.withLock {
+        if (prospectId !in world.prospects) return@withLock
+        if (prospectId in world.surfacedLeads) return@withLock
+        if (prospectId in world.unavailableProspects) return@withLock
+        if (world.surfacedLeads.size >= MAX_SURFACED_LEADS) return@withLock
+        val event = SimEvent.LeadSurfaced(prospectId, world.currentDay)
+        world = world.copy(surfacedLeads = world.surfacedLeads + prospectId)
+        withContext(Dispatchers.IO) { saveWorld(world) }
+        val email = aiProvider.generateEmail(event, world)
+        dao.insert(event.toEntity(email))
     }
 
     override suspend fun resolveEvent(eventId: String, option: ResponseOption) = tickMutex.withLock {

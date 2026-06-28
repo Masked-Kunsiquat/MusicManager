@@ -42,6 +42,7 @@ fun SimEvent.eventSignature(): String = when (this) {
     is SimEvent.DeadlineApproaching -> "deadline_approaching:$deadlineId:$ticksRemaining"
     is SimEvent.DeadlineMissed -> "deadline_missed:$deadlineId"
     is SimEvent.SeasonEnded -> "season_ended:$seasonNumber"
+    is SimEvent.CheckIn -> "check_in:$artistId"
 }
 
 fun SimEvent.toEntity(email: GeneratedEmail): EventLogEntity = EventLogEntity(
@@ -213,6 +214,7 @@ private fun SimEvent.eventTypeKey(): String = when (this) {
     is SimEvent.DeadlineApproaching -> EVENT_TYPE_DEADLINE_APPROACHING
     is SimEvent.DeadlineMissed -> EVENT_TYPE_DEADLINE_MISSED
     is SimEvent.SeasonEnded -> EVENT_TYPE_SEASON_ENDED
+    is SimEvent.CheckIn -> "check_in"
 }
 
 private fun SimEvent.toPayloadJson(): String = when (this) {
@@ -290,5 +292,8 @@ private fun SimEvent.toPayloadJson(): String = when (this) {
     }
     is SimEvent.SeasonEnded -> buildJsonObject {
         put("seasonNumber", seasonNumber)
+    }
+    is SimEvent.CheckIn -> buildJsonObject {
+        put("artistId", artistId)
     }
 }.toString()

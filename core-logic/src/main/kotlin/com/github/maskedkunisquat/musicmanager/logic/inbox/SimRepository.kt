@@ -35,4 +35,10 @@ interface SimRepository {
     // Returns per-genre ordered list of trend values reconstructed from MarketShift event history.
     // Each list is chronological (earliest first), starting with the trend before the first shift.
     suspend fun getGenreTrendHistory(): Map<String, List<Float>>
+    // Player-initiated: inserts a CheckIn event for the artist into the inbox.
+    // No-op if there's already an unresolved check-in for this artist.
+    suspend fun checkInWithArtist(artistId: String)
+    // Player-initiated: surfaces a prospect to the tape deck without waiting for a tick.
+    // No-op if the prospect is already surfaced, unavailable, or the tape deck is full.
+    suspend fun requestLead(prospectId: String)
 }
