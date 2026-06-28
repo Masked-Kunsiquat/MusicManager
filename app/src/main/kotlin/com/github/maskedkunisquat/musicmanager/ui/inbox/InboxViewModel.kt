@@ -119,6 +119,10 @@ class InboxViewModel(
         }
     }
 
+    fun refreshWorld() {
+        _world.value = repository.world
+    }
+
     fun markViewed(eventId: String) {
         viewModelScope.launch { repository.markViewed(eventId) }
     }

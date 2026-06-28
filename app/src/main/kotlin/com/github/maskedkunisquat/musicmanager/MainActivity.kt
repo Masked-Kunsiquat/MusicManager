@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import com.github.maskedkunisquat.musicmanager.navigation.AppNavGraph
 import com.github.maskedkunisquat.musicmanager.ui.device.DeviceScreen
@@ -15,6 +16,7 @@ import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxViewModelFactory
 import com.github.maskedkunisquat.musicmanager.ui.press.PressViewModel
 import com.github.maskedkunisquat.musicmanager.ui.press.PressViewModelFactory
 import com.github.maskedkunisquat.musicmanager.ui.theme.RetroTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -35,9 +37,10 @@ class MainActivity : ComponentActivity() {
             RetroTheme {
                 val app = application as AppApplication
                 val modelLoadState by app.aiProvider.modelLoadState.collectAsStateWithLifecycle()
+                val world by inboxViewModel.world.collectAsStateWithLifecycle()
                 val navController = rememberNavController()
                 DeviceScreen(
-                    labelName = "Untitled Label",
+                    labelName = world.label.name,
                     modelLoadState = modelLoadState,
                     onDownloadModel = { app.aiProvider.downloadModel(app.modelDownloader) }
                 ) {
@@ -48,6 +51,15 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val app = application as AppApplication
+        lifecycleScope.launch {
+            app.runCatchupIfDue()
+            inboxViewModel.refreshWorld()
         }
     }
 }
