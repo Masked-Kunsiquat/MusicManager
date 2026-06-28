@@ -398,10 +398,16 @@ class GemmaLiteRtProvider(private val context: Context) : LabelAiProvider {
         }
 
         // Interaction history — only for roster artist events; last 3 to keep prompt tight.
+        // Sanitize persisted strings: strip newlines and normalize quotes so they cannot
+        // inject instruction-like text into the model prompt.
         if (history.isNotEmpty() && artist != null) {
             append("\n\nRecent history with this label:\n")
             history.takeLast(3).forEach { entry ->
-                append("- ${entry.eventSummary}: label responded \"${entry.choiceMade}\"\n")
+                val summary = entry.eventSummary
+                    .replace('\n', ' ').replace('\r', ' ').replace('"', '\'').take(80)
+                val choice = entry.choiceMade
+                    .replace('\n', ' ').replace('\r', ' ').replace('"', '\'').take(60)
+                append("- $summary: label responded \"$choice\"\n")
             }
         }
     }

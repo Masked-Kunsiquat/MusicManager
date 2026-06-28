@@ -395,8 +395,26 @@ class SimRepositoryImpl(
         val now = System.currentTimeMillis()
         // Pre-compute entities outside the transaction — AI inference must not run inside it.
         val responseEntity = option.toResponseEntity(eventId, world.currentDay)
+        // responseEntity isn't in the DB yet when getArtistHistory() runs, so follow-up emails
+        // would miss the choice that triggered them. Synthesize an entry and prepend it for
+        // any follow-up that targets the same artist as the original event.
+        val originalEvent = dao.getById(eventId)
+        val originalArtistId = originalEvent?.toSimEventOrNull()?.artistId
+        val currentChoiceEntry = if (originalArtistId != null) {
+            val subject = originalEvent.emailSubject.ifBlank { null }
+            if (subject != null) ArtistInteractionEntry(
+                day = world.currentDay,
+                eventSummary = subject,
+                choiceMade = option.text
+            ) else null
+        } else null
         val injectedEntities = injectedEvents.map { event ->
-            val history = event.artistId?.let { getArtistHistory(it) } ?: emptyList()
+            val baseHistory = event.artistId?.let { getArtistHistory(it) } ?: emptyList()
+            val history = if (currentChoiceEntry != null && event.artistId == originalArtistId) {
+                baseHistory + currentChoiceEntry
+            } else {
+                baseHistory
+            }
             event.toEntity(aiProvider.generateEmail(event, world, history))
         }
         dao.resolveWithFollowUps(eventId, option.id, now, responseEntity, injectedEntities)
