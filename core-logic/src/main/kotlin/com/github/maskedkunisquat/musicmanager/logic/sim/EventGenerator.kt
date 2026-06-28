@@ -33,7 +33,7 @@ private const val WANT_RESURFACE_COOLDOWN = 12
 // Tape deck: how often leads surface, cap of concurrent visible leads.
 private const val LEAD_SURFACE_INTERVAL = 3
 private const val LEAD_SURFACE_CAP = 3
-private const val PASS_LEAD_COOLDOWN = 10
+const val PASS_LEAD_COOLDOWN = 10
 private const val WATCH_LEAD_RESURFACE_COOLDOWN = 5
 
 private val LABEL_NEED_THRESHOLDS = mapOf(

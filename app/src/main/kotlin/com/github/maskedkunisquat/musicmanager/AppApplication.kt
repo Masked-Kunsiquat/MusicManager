@@ -15,8 +15,12 @@ import com.github.maskedkunisquat.musicmanager.logic.inbox.SimRepository
 import com.github.maskedkunisquat.musicmanager.logic.sim.SimEngine
 import com.github.maskedkunisquat.musicmanager.worker.TickWorker
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class AppApplication : Application() {
+
+    private val catchupMutex = Mutex()
 
     val aiProvider: GemmaLiteRtProvider by lazy { GemmaLiteRtProvider(this) }
 
@@ -47,15 +51,16 @@ class AppApplication : Application() {
     }
 
     // Shared tick execution logic — called by TickWorker (background) and onResume (foreground).
-    // Reads the elapsed-realtime checkpoint, computes ticks due, and advances the sim.
-    suspend fun runCatchupIfDue() {
+    // The mutex ensures only one caller processes ticks at a time so ticksElapsed is never
+    // double-counted if both paths run concurrently (e.g. WorkManager fires during an active session).
+    suspend fun runCatchupIfDue() = catchupMutex.withLock {
         val prefs = getSharedPreferences(TICK_PREFS, MODE_PRIVATE)
         val now = SystemClock.elapsedRealtime()
         val lastTickedAt = prefs.getLong(KEY_LAST_TICKED_AT, -1L)
 
         if (lastTickedAt == -1L || now < lastTickedAt) {
             prefs.edit().putLong(KEY_LAST_TICKED_AT, now).apply()
-            return
+            return@withLock
         }
 
         val ticksElapsed = ((now - lastTickedAt) / TickWorker.TICK_INTERVAL_MS)

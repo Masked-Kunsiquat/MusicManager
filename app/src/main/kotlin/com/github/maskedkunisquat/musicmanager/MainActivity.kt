@@ -16,6 +16,7 @@ import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxViewModelFactory
 import com.github.maskedkunisquat.musicmanager.ui.press.PressViewModel
 import com.github.maskedkunisquat.musicmanager.ui.press.PressViewModelFactory
 import com.github.maskedkunisquat.musicmanager.ui.theme.RetroTheme
+import android.util.Log
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -58,8 +59,17 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         val app = application as AppApplication
         lifecycleScope.launch {
-            app.runCatchupIfDue()
-            inboxViewModel.refreshWorld()
+            try {
+                app.runCatchupIfDue()
+            } catch (e: Exception) {
+                Log.w(TAG, "Tick catchup failed on resume", e)
+            } finally {
+                inboxViewModel.refreshWorld()
+            }
         }
+    }
+
+    companion object {
+        private const val TAG = "MainActivity"
     }
 }

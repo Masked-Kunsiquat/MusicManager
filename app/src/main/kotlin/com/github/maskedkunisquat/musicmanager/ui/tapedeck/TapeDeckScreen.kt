@@ -27,8 +27,6 @@ import com.github.maskedkunisquat.musicmanager.logic.response.StateEffect
 import com.github.maskedkunisquat.musicmanager.ui.components.RetroButton
 import com.github.maskedkunisquat.musicmanager.ui.inbox.InboxViewModel
 
-// Must match EventGenerator.PASS_LEAD_COOLDOWN.
-private const val PASS_LEAD_COOLDOWN = 10
 // Must match SimRepositoryImpl.MAX_SURFACED_LEADS.
 private const val MAX_SURFACED_LEADS = 3
 
@@ -36,15 +34,7 @@ private const val MAX_SURFACED_LEADS = 3
 fun TapeDeckScreen(viewModel: InboxViewModel, onBack: () -> Unit) {
     val world by viewModel.world.collectAsStateWithLifecycle()
     val leads by viewModel.activeSurfacedLeads.collectAsStateWithLifecycle()
-
-    val browsePool = world.prospects.values
-        .filter { p ->
-            p.id !in world.surfacedLeads &&
-            p.id !in world.unavailableProspects &&
-            p.id !in world.activeNegotiations &&
-            (world.passedLeads[p.id].let { it == null || world.currentDay - it >= PASS_LEAD_COOLDOWN })
-        }
-        .sortedByDescending { it.signabilityScore }
+    val browsePool by viewModel.browsableLeads.collectAsStateWithLifecycle()
 
     val deckFull = world.surfacedLeads.size >= MAX_SURFACED_LEADS
 

@@ -134,5 +134,7 @@ sealed class SimEvent {
     data class CheckIn(
         override val artistId: String,
         override val dayOfGame: Int
-    ) : SimEvent()
+    ) : SimEvent() {
+        companion object { const val COOLDOWN_TICKS = 3 }
+    }
 }

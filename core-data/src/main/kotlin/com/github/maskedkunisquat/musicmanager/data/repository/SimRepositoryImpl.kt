@@ -28,6 +28,7 @@ import com.github.maskedkunisquat.musicmanager.logic.sim.LabelIdentityEvaluator
 import com.github.maskedkunisquat.musicmanager.logic.sim.NewSeasonInitializer
 import com.github.maskedkunisquat.musicmanager.logic.sim.SeasonSummaryEvaluator
 import com.github.maskedkunisquat.musicmanager.logic.sim.SimEngine
+import com.github.maskedkunisquat.musicmanager.logic.sim.PASS_LEAD_COOLDOWN
 import com.github.maskedkunisquat.musicmanager.logic.sim.WorldInitializer
 import com.github.maskedkunisquat.musicmanager.logic.sim.applyResponse
 import kotlinx.coroutines.Dispatchers
@@ -362,6 +363,8 @@ class SimRepositoryImpl(
 
     override suspend fun checkInWithArtist(artistId: String) = tickMutex.withLock {
         if (artistId !in world.label.rosterIds) return@withLock
+        val artist = world.artists[artistId] ?: return@withLock
+        if (world.currentDay - artist.lastInteractionDay < SimEvent.CheckIn.COOLDOWN_TICKS) return@withLock
         val sig = "check_in:$artistId"
         val hasPending = dao.getUnresolved()
             .mapNotNull { it.toSimEventOrNull() }
@@ -377,11 +380,14 @@ class SimRepositoryImpl(
         if (prospectId !in world.prospects) return@withLock
         if (prospectId in world.surfacedLeads) return@withLock
         if (prospectId in world.unavailableProspects) return@withLock
+        if (prospectId in world.activeNegotiations) return@withLock
+        if (world.passedLeads[prospectId]?.let { world.currentDay - it < PASS_LEAD_COOLDOWN } == true) return@withLock
         if (world.surfacedLeads.size >= MAX_SURFACED_LEADS) return@withLock
         val event = SimEvent.LeadSurfaced(prospectId, world.currentDay)
+        // Generate email before mutating world so a failure leaves state unchanged.
+        val email = aiProvider.generateEmail(event, world)
         world = world.copy(surfacedLeads = world.surfacedLeads + prospectId)
         withContext(Dispatchers.IO) { saveWorld(world) }
-        val email = aiProvider.generateEmail(event, world)
         dao.insert(event.toEntity(email))
     }
 
@@ -400,7 +406,7 @@ class SimRepositoryImpl(
         // any follow-up that targets the same artist as the original event.
         val originalEvent = dao.getById(eventId)
         val originalArtistId = originalEvent?.toSimEventOrNull()?.artistId
-        val currentChoiceEntry = if (originalArtistId != null) {
+        val currentChoiceEntry = if (originalEvent != null && originalArtistId != null) {
             val subject = originalEvent.emailSubject.ifBlank { null }
             if (subject != null) ArtistInteractionEntry(
                 day = world.currentDay,

@@ -53,7 +53,12 @@ class StubAiProvider : LabelAiProvider {
         val loyalty = artist?.dimensions?.loyalty ?: 0.5f
         val confidence = artist?.dimensions?.confidence ?: 0.5f
         val volatility = artist?.dimensions?.volatility ?: 0.5f
-        val (subject, body) = prose(event, artistName, loyalty, confidence, volatility, world)
+        // CheckIn prose is history-aware (ongoing conversation); other events derive context from state alone.
+        val (subject, body) = if (event is SimEvent.CheckIn) {
+            checkInProse(event, world, history)
+        } else {
+            prose(event, artistName, loyalty, confidence, volatility, world)
+        }
         return GeneratedEmail(subject = subject, body = body, options = options(event, world))
     }
 
@@ -936,7 +941,7 @@ class StubAiProvider : LabelAiProvider {
 
     // --- Check-in (player-initiated outreach) ---
 
-    private fun checkInProse(event: SimEvent.CheckIn, world: SimWorld): Pair<String, String> {
+    private fun checkInProse(event: SimEvent.CheckIn, world: SimWorld, history: List<ArtistInteractionEntry> = emptyList()): Pair<String, String> {
         val artist = world.artists[event.artistId]
         val name = artist?.name ?: "your artist"
         val loyalty = artist?.dimensions?.loyalty ?: 0.5f
@@ -953,20 +958,24 @@ class StubAiProvider : LabelAiProvider {
             }
             else -> ""
         }
+        // If the label previously committed real resources, acknowledge the follow-through.
+        val historyRef = history.lastOrNull()?.takeIf {
+            "invest" in it.choiceMade.lowercase() || "resources" in it.choiceMade.lowercase()
+        }?.let { " Glad you've been putting real effort in." } ?: ""
         return when {
             loyalty >= 0.65f -> Pair(
                 "re: checking in",
-                "Hey — really good to hear from you.$needRef The $genre work is coming together and I'm feeling " +
+                "Hey — really good to hear from you.$needRef$historyRef The $genre work is coming together and I'm feeling " +
                 "good about the direction. Would love to connect and talk through where things are headed.$s"
             )
             loyalty >= 0.35f -> Pair(
                 "hey",
-                "Thanks for checking in.$needRef Things are moving — nothing major to flag, just heads down on the " +
+                "Thanks for checking in.$needRef$historyRef Things are moving — nothing major to flag, just heads down on the " +
                 "work. Let me know if there's anything specific you wanted to get into.$s"
             )
             else -> Pair(
                 "got your message",
-                "Got your message.$needRef Working through some things. Keeping my head down for now but it's good " +
+                "Got your message.$needRef$historyRef Working through some things. Keeping my head down for now but it's good " +
                 "to know you're still paying attention.$s"
             )
         }
